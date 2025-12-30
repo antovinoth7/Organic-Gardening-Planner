@@ -134,11 +134,30 @@ export default function CalendarScreen() {
 
     setLoading(true);
     try {
+      // Calculate the actual due date based on preferred time
+      const dueDate = new Date(startDate);
+      
+      // Apply preferred time if selected
+      if (preferredTime === 'morning') {
+        dueDate.setHours(8, 0, 0, 0); // 8:00 AM
+      } else if (preferredTime === 'afternoon') {
+        dueDate.setHours(14, 0, 0, 0); // 2:00 PM
+      } else if (preferredTime === 'evening') {
+        dueDate.setHours(18, 0, 0, 0); // 6:00 PM
+      }
+      
+      // Ensure the due date is not in the past
+      const now = new Date();
+      if (dueDate < now) {
+        // If the calculated time is in the past, set it to tomorrow at that time
+        dueDate.setDate(dueDate.getDate() + 1);
+      }
+      
       await createTaskTemplate({
         task_type: taskType,
         plant_id: selectedPlant || null,
         frequency_days: frequency,
-        next_due_at: startDate.toISOString(),
+        next_due_at: dueDate.toISOString(),
         enabled: true,
         preferred_time: preferredTime,
       });

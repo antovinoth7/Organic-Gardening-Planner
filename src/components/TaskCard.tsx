@@ -8,6 +8,7 @@ interface TaskCardProps {
   plantName: string;
   onMarkDone: () => void;
   isOverdue?: boolean;
+  disabled?: boolean;
 }
 
 const taskIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
@@ -24,7 +25,7 @@ const taskColors: Record<string, string> = {
   repot: '#4CAF50',
 };
 
-export default function TaskCard({ task, plantName, onMarkDone, isOverdue }: TaskCardProps) {
+export default function TaskCard({ task, plantName, onMarkDone, isOverdue, disabled }: TaskCardProps) {
   const color = taskColors[task.task_type] || '#666';
   const icon = taskIcons[task.task_type] || 'ellipse';
 
@@ -44,7 +45,12 @@ export default function TaskCard({ task, plantName, onMarkDone, isOverdue }: Tas
         )}
       </View>
 
-      <TouchableOpacity style={[styles.button, { backgroundColor: color }]} onPress={onMarkDone}>
+      <TouchableOpacity 
+        style={[styles.button, { backgroundColor: color }, disabled && styles.buttonDisabled]} 
+        onPress={onMarkDone}
+        disabled={disabled}
+        activeOpacity={disabled ? 1 : 0.7}
+      >
         <Ionicons name="checkmark" size={20} color="#fff" />
       </TouchableOpacity>
     </View>
@@ -101,5 +107,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
 });

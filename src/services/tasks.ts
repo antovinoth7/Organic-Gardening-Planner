@@ -54,7 +54,10 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
 
-  const today = new Date().toISOString();
+  // Get today's date range (start and end of day)
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
   
   try {
     // Simplified query without orderBy to avoid composite index requirement
@@ -72,15 +75,26 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
       next_due_at: doc.data().next_due_at?.toDate?.()?.toISOString() || doc.data().next_due_at
     })) as TaskTemplate[];
     
-    // Filter and sort in-memory
-    tasks = tasks.filter(task => task.next_due_at && task.next_due_at <= today);
+    // Filter tasks: include overdue tasks and tasks due today
+    tasks = tasks.filter(task => {
+      if (!task.next_due_at) return false;
+      const dueDate = new Date(task.next_due_at);
+      // Show tasks that are overdue or due today
+      return dueDate <= todayEnd;
+    });
+    
     tasks.sort((a, b) => a.next_due_at.localeCompare(b.next_due_at));
     
     return tasks;
   } catch (error) {
     console.warn('Failed to fetch from Firestore, using cached data:', error);
     const cachedTasks = await getData<TaskTemplate>(KEYS.TASKS);
-    const filtered = cachedTasks.filter(task => task.enabled && task.next_due_at && task.next_due_at <= today);
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const filtered = cachedTasks.filter(task => {
+      if (!task.enabled || !task.next_due_at) return false;
+      const dueDate = new Date(task.next_due_at);
+      return dueDate <= todayEnd;
+    });
     filtered.sort((a, b) => a.next_due_at.localeCompare(b.next_due_at));
     return filtered;
   }

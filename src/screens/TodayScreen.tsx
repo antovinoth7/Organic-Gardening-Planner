@@ -15,6 +15,7 @@ export default function TodayScreen({ navigation }: any) {
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<TaskTemplate | null>(null);
   const [skipReason, setSkipReason] = useState('');
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
@@ -48,12 +49,17 @@ export default function TodayScreen({ navigation }: any) {
   }, []);
 
   const handleMarkDone = async (task: TaskTemplate) => {
+    if (completingTaskId) return; // Prevent multiple clicks
+    
+    setCompletingTaskId(task.id);
     try {
       await markTaskDone(task);
       Alert.alert('Success', 'Task marked as done! 🎉');
       loadData();
     } catch (error: any) {
       Alert.alert('Error', error.message);
+    } finally {
+      setCompletingTaskId(null);
     }
   };
 
@@ -303,6 +309,7 @@ export default function TodayScreen({ navigation }: any) {
                 plantName={getPlantName(task.plant_id)}
                 onMarkDone={() => handleMarkDone(task)}
                 isOverdue
+                disabled={completingTaskId === task.id}
               />
               <View style={styles.quickActions}>
                 <TouchableOpacity 
@@ -342,6 +349,7 @@ export default function TodayScreen({ navigation }: any) {
                 task={task}
                 plantName={getPlantName(task.plant_id)}
                 onMarkDone={() => handleMarkDone(task)}
+                disabled={completingTaskId === task.id}
               />
               <View style={styles.quickActions}>
                 <TouchableOpacity 
