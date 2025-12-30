@@ -33,6 +33,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
   const [harvestQuantity, setHarvestQuantity] = useState(editEntry?.harvest_quantity?.toString() || '');
   const [harvestUnit, setHarvestUnit] = useState(editEntry?.harvest_unit || 'pieces');
   const [harvestQuality, setHarvestQuality] = useState<'excellent' | 'good' | 'fair' | 'poor'>(editEntry?.harvest_quality || 'good');
+  const [harvestNotes, setHarvestNotes] = useState(editEntry?.harvest_notes || '');
 
   useEffect(() => {
     loadPlants();
@@ -107,6 +108,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
         harvest_quantity: entryType === 'harvest' ? parseFloat(harvestQuantity) : null,
         harvest_unit: entryType === 'harvest' ? harvestUnit : null,
         harvest_quality: entryType === 'harvest' ? harvestQuality : null,
+        harvest_notes: entryType === 'harvest' ? harvestNotes : null,
       };
 
       if (isEditing && editEntry) {
@@ -302,6 +304,17 @@ export default function JournalFormScreen({ navigation, route }: any) {
                 </TouchableOpacity>
               ))}
             </View>
+            
+            <Text style={styles.label}>Storage / Notes</Text>
+            <TextInput
+              style={styles.harvestNotesInput}
+              placeholder="Storage method, taste notes, etc. (optional)"
+              value={harvestNotes}
+              onChangeText={setHarvestNotes}
+              multiline
+              numberOfLines={2}
+              textAlignVertical="top"
+            />
           </View>
         )}
 
@@ -556,5 +569,14 @@ const styles = StyleSheet.create({
   },
   qualityButtonTextActive: {
     color: '#2e7d32',
+  },
+  harvestNotesInput: {
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 8,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    minHeight: 60,
   },
 });

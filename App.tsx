@@ -53,9 +53,35 @@ const AppTabs = () => (
     })}
   >
     <Tab.Screen name="Home" component={TodayScreen} />
-    <Tab.Screen name="Plants" component={PlantStack} />
+    <Tab.Screen 
+      name="Plants" 
+      component={PlantStack}
+      listeners={({ navigation }) => ({
+        tabPress: (e) => {
+          e.preventDefault();
+          // Always reset to the root of Plants stack when tab is pressed
+          navigation.navigate('Plants', { 
+            screen: 'PlantsList',
+            params: {},
+          });
+        },
+      })}
+    />
     <Tab.Screen name="Care Plan" component={CalendarScreen} />
-    <Tab.Screen name="Journal" component={JournalStack} />
+    <Tab.Screen 
+      name="Journal" 
+      component={JournalStack}
+      listeners={({ navigation }) => ({
+        tabPress: (e) => {
+          e.preventDefault();
+          // Always reset to the root of Journal stack when tab is pressed
+          navigation.navigate('Journal', { 
+            screen: 'JournalList',
+            params: {},
+          });
+        },
+      })}
+    />
     <Tab.Screen name="Settings" component={SettingsScreen} />
   </Tab.Navigator>
 );

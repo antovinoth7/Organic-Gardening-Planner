@@ -163,7 +163,11 @@ export default function CalendarScreen() {
   };
 
   const applyFrequencyPreset = (days: number, label: string) => {
-    setFrequencyDays(days.toString());
+    try {
+      setFrequencyDays(days.toString());
+    } catch (error) {
+      console.error('Error setting frequency:', error);
+    }
   };
 
   // Get tasks for today and upcoming week
@@ -654,13 +658,14 @@ export default function CalendarScreen() {
                     selectedValue={taskType}
                     onValueChange={setTaskType}
                     style={styles.picker}
+                    itemStyle={styles.pickerItem}
                   >
-                    <Picker.Item label="💧 Water" value="water" />
-                    <Picker.Item label="🌱 Fertilize" value="fertilise" />
-                    <Picker.Item label="✂️ Prune" value="prune" />
-                    <Picker.Item label="🪴 Repot" value="repot" />
-                    <Picker.Item label="🧴 Spray (Pesticide/Neem)" value="spray" />
-                    <Picker.Item label="🍂 Mulch" value="mulch" />
+                    <Picker.Item label="💧 Water" value="water" color="#333" />
+                    <Picker.Item label="🌱 Fertilize" value="fertilise" color="#333" />
+                    <Picker.Item label="✂️ Prune" value="prune" color="#333" />
+                    <Picker.Item label="🪴 Repot" value="repot" color="#333" />
+                    <Picker.Item label="🧴 Spray (Pesticide/Neem)" value="spray" color="#333" />
+                    <Picker.Item label="🍂 Mulch" value="mulch" color="#333" />
                   </Picker>
                 </View>
 
@@ -670,10 +675,11 @@ export default function CalendarScreen() {
                     selectedValue={selectedPlant}
                     onValueChange={setSelectedPlant}
                     style={styles.picker}
+                    itemStyle={styles.pickerItem}
                   >
-                    <Picker.Item label="General Task" value="" />
+                    <Picker.Item label="General Task" value="" color="#333" />
                     {plants.map(plant => (
-                      <Picker.Item key={plant.id} label={plant.name} value={plant.id} />
+                      <Picker.Item key={plant.id} label={plant.name} value={plant.id} color="#333" />
                     ))}
                   </Picker>
                 </View>
@@ -734,28 +740,56 @@ export default function CalendarScreen() {
                 {/* Quick Presets */}
                 <View style={styles.presets}>
                   <TouchableOpacity 
-                    style={styles.presetButton}
+                    style={[
+                      styles.presetButton,
+                      frequencyDays === '1' && styles.presetButtonActive
+                    ]}
                     onPress={() => applyFrequencyPreset(1, 'Daily')}
+                    activeOpacity={0.7}
                   >
-                    <Text style={styles.presetText}>Daily</Text>
+                    <Text style={[
+                      styles.presetText,
+                      frequencyDays === '1' && styles.presetTextActive
+                    ]}>Daily</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
-                    style={styles.presetButton}
+                    style={[
+                      styles.presetButton,
+                      frequencyDays === '7' && styles.presetButtonActive
+                    ]}
                     onPress={() => applyFrequencyPreset(7, 'Weekly')}
+                    activeOpacity={0.7}
                   >
-                    <Text style={styles.presetText}>Weekly</Text>
+                    <Text style={[
+                      styles.presetText,
+                      frequencyDays === '7' && styles.presetTextActive
+                    ]}>Weekly</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
-                    style={styles.presetButton}
+                    style={[
+                      styles.presetButton,
+                      frequencyDays === '14' && styles.presetButtonActive
+                    ]}
                     onPress={() => applyFrequencyPreset(14, 'Bi-weekly')}
+                    activeOpacity={0.7}
                   >
-                    <Text style={styles.presetText}>Bi-weekly</Text>
+                    <Text style={[
+                      styles.presetText,
+                      frequencyDays === '14' && styles.presetTextActive
+                    ]}>Bi-weekly</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
-                    style={styles.presetButton}
+                    style={[
+                      styles.presetButton,
+                      frequencyDays === '30' && styles.presetButtonActive
+                    ]}
                     onPress={() => applyFrequencyPreset(30, 'Monthly')}
+                    activeOpacity={0.7}
                   >
-                    <Text style={styles.presetText}>Monthly</Text>
+                    <Text style={[
+                      styles.presetText,
+                      frequencyDays === '30' && styles.presetTextActive
+                    ]}>Monthly</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -881,11 +915,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 24,
+    paddingHorizontal: 16,
     paddingTop: 48,
+    paddingBottom: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#e0e0e0',
   },
   headerTitle: {
     fontSize: 24,
@@ -1084,9 +1119,11 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    paddingBottom: 120,
   },
   section: {
     padding: 16,
+    paddingBottom: 16,
   },
   selectedDateHeader: {
     flexDirection: 'row',
@@ -1306,9 +1343,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 16,
     overflow: 'hidden',
+    minHeight: 56,
   },
   picker: {
-    height: 50,
+    height: 56,
+    color: '#333',
+  },
+  pickerItem: {
+    fontSize: 16,
+    color: '#333',
   },
   input: {
     backgroundColor: '#f5f5f5',
@@ -1369,14 +1412,21 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: '#f5f5f5',
     borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  presetButtonActive: {
+    backgroundColor: '#e8f5e9',
     borderColor: '#2e7d32',
   },
   presetText: {
     fontSize: 12,
-    color: '#2e7d32',
+    color: '#666',
     fontWeight: '600',
+  },
+  presetTextActive: {
+    color: '#2e7d32',
   },
   preview: {
     backgroundColor: '#f0f4ff',

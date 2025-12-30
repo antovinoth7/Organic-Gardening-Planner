@@ -103,9 +103,10 @@ export interface JournalEntry {
   photo_urls: string[];
   // Legacy field for backward compatibility
   photo_url?: string | null;
-  // Harvest-specific fields
+  // Enhanced Harvest tracking fields
   harvest_quantity?: number | null;
-  harvest_unit?: string | null;
+  harvest_unit?: string | null; // 'kg', 'g', 'lbs', 'pieces', 'bunches'
   harvest_quality?: 'excellent' | 'good' | 'fair' | 'poor' | null;
+  harvest_notes?: string | null; // Storage method, taste notes, etc.
   created_at: string;
 }

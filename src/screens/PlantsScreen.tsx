@@ -6,7 +6,7 @@ import PlantCard from '../components/PlantCard';
 import { Ionicons } from '@expo/vector-icons';
 
 type FilterCategory = 'type' | 'health' | 'space' | 'sunlight' | 'water' | 'location';
-type FilterType = 'all' | 'crops' | 'trees';
+type FilterType = 'all' | PlantType;
 type SortOption = 'name' | 'newest' | 'oldest' | 'health' | 'age';
 
 interface ActiveFilters {
@@ -98,10 +98,8 @@ export default function PlantsScreen({ navigation }: any) {
       );
     }
 
-    if (filters.type === 'crops') {
-      filtered = filtered.filter(p => ['vegetable', 'herb', 'flower'].includes(p.plant_type));
-    } else if (filters.type === 'trees') {
-      filtered = filtered.filter(p => ['fruit_tree', 'timber_tree', 'coconut_tree'].includes(p.plant_type));
+    if (filters.type !== 'all') {
+      filtered = filtered.filter(p => p.plant_type === filters.type);
     }
 
     if (filters.health !== 'all') {
@@ -209,20 +207,12 @@ export default function PlantsScreen({ navigation }: any) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>My Plants</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity 
-            style={styles.sortButton}
-            onPress={() => setShowSortMenu(!showSortMenu)}
-          >
-            <Ionicons name="swap-vertical" size={22} color="#2e7d32" />
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.addButton}
-            onPress={() => navigation.navigate('PlantForm')}
-          >
-            <Ionicons name="add" size={24} color="#fff" />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity 
+          style={styles.sortButton}
+          onPress={() => setShowSortMenu(!showSortMenu)}
+        >
+          <Ionicons name="swap-vertical" size={22} color="#2e7d32" />
+        </TouchableOpacity>
       </View>
 
       {/* Sort Menu */}
@@ -295,7 +285,7 @@ export default function PlantsScreen({ navigation }: any) {
             onPress={() => setActiveCategory('type')}
           >
             <Ionicons name="apps" size={16} color={activeCategory === 'type' ? '#2e7d32' : '#666'} />
-            <Text style={[styles.categoryText, activeCategory === 'type' && styles.categoryTextActive]}>Type</Text>
+            <Text style={[styles.categoryText, activeCategory === 'type' && styles.categoryTextActive]}>Plant Type</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.categoryChip, activeCategory === 'health' && styles.categoryChipActive]}
@@ -337,15 +327,6 @@ export default function PlantsScreen({ navigation }: any) {
             <Text style={[styles.categoryText, activeCategory === 'location' && styles.categoryTextActive]}>Location</Text>
             {(filters.parentLocation !== '' || filters.childLocation !== '') && <View style={styles.activeDot} />}
           </TouchableOpacity>
-          {hasActiveFilters() && (
-            <TouchableOpacity 
-              style={styles.clearButton}
-              onPress={clearAllFilters}
-            >
-              <Ionicons name="close-circle" size={16} color="#f44336" />
-              <Text style={styles.clearText}>Clear</Text>
-            </TouchableOpacity>
-          )}
         </ScrollView>
       </View>
 
@@ -360,16 +341,46 @@ export default function PlantsScreen({ navigation }: any) {
                 <Text style={[styles.filterText, filters.type === 'all' && styles.filterTextActive]}>All</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={[styles.filterChip, filters.type === 'crops' && styles.filterChipActive]}
-                onPress={() => updateFilter('type', 'crops')}
+                style={[styles.filterChip, filters.type === 'vegetable' && styles.filterChipActive]}
+                onPress={() => updateFilter('type', 'vegetable')}
               >
-                <Text style={[styles.filterText, filters.type === 'crops' && styles.filterTextActive]}>🥕 Crops</Text>
+                <Text style={[styles.filterText, filters.type === 'vegetable' && styles.filterTextActive]}>🥕 Vegetable</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={[styles.filterChip, filters.type === 'trees' && styles.filterChipActive]}
-                onPress={() => updateFilter('type', 'trees')}
+                style={[styles.filterChip, filters.type === 'herb' && styles.filterChipActive]}
+                onPress={() => updateFilter('type', 'herb')}
               >
-                <Text style={[styles.filterText, filters.type === 'trees' && styles.filterTextActive]}>🌳 Trees</Text>
+                <Text style={[styles.filterText, filters.type === 'herb' && styles.filterTextActive]}>🌿 Herb</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.filterChip, filters.type === 'flower' && styles.filterChipActive]}
+                onPress={() => updateFilter('type', 'flower')}
+              >
+                <Text style={[styles.filterText, filters.type === 'flower' && styles.filterTextActive]}>🌸 Flower</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.filterChip, filters.type === 'fruit_tree' && styles.filterChipActive]}
+                onPress={() => updateFilter('type', 'fruit_tree')}
+              >
+                <Text style={[styles.filterText, filters.type === 'fruit_tree' && styles.filterTextActive]}>🍎 Fruit Tree</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.filterChip, filters.type === 'timber_tree' && styles.filterChipActive]}
+                onPress={() => updateFilter('type', 'timber_tree')}
+              >
+                <Text style={[styles.filterText, filters.type === 'timber_tree' && styles.filterTextActive]}>🌳 Timber Tree</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.filterChip, filters.type === 'coconut_tree' && styles.filterChipActive]}
+                onPress={() => updateFilter('type', 'coconut_tree')}
+              >
+                <Text style={[styles.filterText, filters.type === 'coconut_tree' && styles.filterTextActive]}>🥥 Coconut Tree</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.filterChip, filters.type === 'shrub' && styles.filterChipActive]}
+                onPress={() => updateFilter('type', 'shrub')}
+              >
+                <Text style={[styles.filterText, filters.type === 'shrub' && styles.filterTextActive]}>🪴 Shrub</Text>
               </TouchableOpacity>
             </>
           )}
@@ -554,6 +565,15 @@ export default function PlantsScreen({ navigation }: any) {
         <Text style={styles.resultsText}>
           {displayedPlants.length} of {filteredPlants.length} plants
         </Text>
+        {hasActiveFilters() && (
+          <TouchableOpacity 
+            style={styles.clearFiltersButton}
+            onPress={clearAllFilters}
+          >
+            <Ionicons name="close-circle" size={18} color="#f44336" />
+            <Text style={styles.clearFiltersText}>Clear Filters</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <FlatList
@@ -600,6 +620,14 @@ export default function PlantsScreen({ navigation }: any) {
         windowSize={5}
         removeClippedSubviews={true}
       />
+
+      {/* Floating Action Button */}
+      <TouchableOpacity 
+        style={styles.fab}
+        onPress={() => navigation.navigate('PlantForm')}
+      >
+        <Ionicons name="add" size={28} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -613,19 +641,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 24,
+    paddingHorizontal: 16,
     paddingTop: 48,
+    paddingBottom: 16,
     backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#333',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
   },
   sortButton: {
     width: 40,
@@ -635,13 +661,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#2e7d32',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   searchWrapper: {
     flexDirection: 'row',
@@ -740,19 +774,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#2e7d32',
     marginLeft: 4,
   },
-  clearButton: {
+  clearFiltersButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 20,
     backgroundColor: '#ffebee',
     borderWidth: 1,
     borderColor: '#f44336',
-    marginLeft: 4,
     gap: 4,
   },
-  clearText: {
+  clearFiltersText: {
     fontSize: 12,
     color: '#f44336',
     fontWeight: '600',
@@ -804,6 +837,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   resultsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
     backgroundColor: '#fafafa',
@@ -815,6 +851,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
+    paddingBottom: 120,
   },
   loadingMore: {
     flexDirection: 'row',

@@ -45,7 +45,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
   const [name, setName] = useState('');
   const [plantType, setPlantType] = useState<PlantType>('vegetable');
   const [plantVariety, setPlantVariety] = useState('');
-  const [spaceType, setSpaceType] = useState<SpaceType>('pot');
+  const [spaceType, setSpaceType] = useState<SpaceType>('ground');
   const [location, setLocation] = useState('');
   const [parentLocation, setParentLocation] = useState('');
   const [childLocation, setChildLocation] = useState('');
@@ -66,8 +66,8 @@ export default function PlantFormScreen({ route, navigation }: any) {
   const [sunlight, setSunlight] = useState<SunlightLevel>('full_sun');
   const [soilType, setSoilType] = useState<SoilType>('potting_mix');
   const [waterRequirement, setWaterRequirement] = useState<WaterRequirement>('medium');
-  const [wateringFrequency, setWateringFrequency] = useState('3');
-  const [fertilisingFrequency, setFertilisingFrequency] = useState('14');
+  const [wateringFrequency, setWateringFrequency] = useState('');
+  const [fertilisingFrequency, setFertilisingFrequency] = useState('');
   const [preferredFertiliser, setPreferredFertiliser] = useState<FertiliserType>('compost');
   const [mulchingUsed, setMulchingUsed] = useState(false);
   const [healthStatus, setHealthStatus] = useState<HealthStatus>('healthy');
@@ -666,16 +666,16 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
         <View style={styles.spaceTypeContainer}>
           <TouchableOpacity
-            style={[styles.spaceTypeButton, spaceType === 'pot' && styles.spaceTypeActive]}
-            onPress={() => setSpaceType('pot')}
+            style={[styles.spaceTypeButton, spaceType === 'ground' && styles.spaceTypeActive]}
+            onPress={() => setSpaceType('ground')}
           >
             <Ionicons 
-              name="cube-outline" 
+              name="earth" 
               size={20} 
-              color={spaceType === 'pot' ? '#2e7d32' : '#999'} 
+              color={spaceType === 'ground' ? '#2e7d32' : '#999'} 
             />
-            <Text style={[styles.spaceTypeText, spaceType === 'pot' && styles.spaceTypeTextActive]}>
-              Pot
+            <Text style={[styles.spaceTypeText, spaceType === 'ground' && styles.spaceTypeTextActive]}>
+              Ground
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -692,16 +692,16 @@ export default function PlantFormScreen({ route, navigation }: any) {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.spaceTypeButton, spaceType === 'ground' && styles.spaceTypeActive]}
-            onPress={() => setSpaceType('ground')}
+            style={[styles.spaceTypeButton, spaceType === 'pot' && styles.spaceTypeActive]}
+            onPress={() => setSpaceType('pot')}
           >
             <Ionicons 
-              name="earth" 
+              name="cube-outline" 
               size={20} 
-              color={spaceType === 'ground' ? '#2e7d32' : '#999'} 
+              color={spaceType === 'pot' ? '#2e7d32' : '#999'} 
             />
-            <Text style={[styles.spaceTypeText, spaceType === 'ground' && styles.spaceTypeTextActive]}>
-              Ground
+            <Text style={[styles.spaceTypeText, spaceType === 'pot' && styles.spaceTypeTextActive]}>
+              Pot
             </Text>
           </TouchableOpacity>
         </View>
@@ -833,7 +833,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
         )}
 
         {/* Pest & Disease History */}
-        <View style={styles.sectionHeader}>
+        <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionHeaderText}>🐛 Pest & Disease History</Text>
           <TouchableOpacity 
             style={styles.addPestButton}
@@ -1280,7 +1280,7 @@ const styles = StyleSheet.create({
     color: '#2e7d32',
     fontWeight: '600',
   },
-  sectionHeader: {
+  sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

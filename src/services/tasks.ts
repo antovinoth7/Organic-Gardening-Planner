@@ -57,26 +57,32 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
   const today = new Date().toISOString();
   
   try {
+    // Simplified query without orderBy to avoid composite index requirement
     const q = query(
       collection(db, TASKS_COLLECTION),
       where('user_id', '==', user.uid),
-      where('enabled', '==', true),
-      orderBy('next_due_at', 'asc')
+      where('enabled', '==', true)
     );
     
     const snapshot = await getDocs(q);
-    const tasks = snapshot.docs.map(doc => ({
+    let tasks = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
       created_at: doc.data().created_at?.toDate?.()?.toISOString() || doc.data().created_at,
       next_due_at: doc.data().next_due_at?.toDate?.()?.toISOString() || doc.data().next_due_at
     })) as TaskTemplate[];
     
-    return tasks.filter(task => task.next_due_at && task.next_due_at <= today);
+    // Filter and sort in-memory
+    tasks = tasks.filter(task => task.next_due_at && task.next_due_at <= today);
+    tasks.sort((a, b) => a.next_due_at.localeCompare(b.next_due_at));
+    
+    return tasks;
   } catch (error) {
     console.warn('Failed to fetch from Firestore, using cached data:', error);
     const cachedTasks = await getData<TaskTemplate>(KEYS.TASKS);
-    return cachedTasks.filter(task => task.enabled && task.next_due_at && task.next_due_at <= today);
+    const filtered = cachedTasks.filter(task => task.enabled && task.next_due_at && task.next_due_at <= today);
+    filtered.sort((a, b) => a.next_due_at.localeCompare(b.next_due_at));
+    return filtered;
   }
 };
 
@@ -167,28 +173,33 @@ export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {
   if (!user) throw new Error('Not authenticated');
 
   try {
-    let q = query(
-      collection(db, TASK_LOGS_COLLECTION),
-      where('user_id', '==', user.uid),
-      orderBy('done_at', 'desc')
-    );
-
+    let q;
+    
     if (templateId) {
+      // Query with template filter - no orderBy to avoid composite index
       q = query(
         collection(db, TASK_LOGS_COLLECTION),
         where('user_id', '==', user.uid),
-        where('template_id', '==', templateId),
-        orderBy('done_at', 'desc')
+        where('template_id', '==', templateId)
+      );
+    } else {
+      // Query all user's logs - no orderBy to avoid composite index
+      q = query(
+        collection(db, TASK_LOGS_COLLECTION),
+        where('user_id', '==', user.uid)
       );
     }
 
     const snapshot = await getDocs(q);
-    const logs = snapshot.docs.map(doc => ({
+    let logs = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
       done_at: doc.data().done_at?.toDate?.()?.toISOString() || doc.data().done_at,
       created_at: doc.data().created_at?.toDate?.()?.toISOString() || doc.data().created_at
     })) as TaskLog[];
+    
+    // Sort in-memory by done_at descending
+    logs.sort((a, b) => new Date(b.done_at).getTime() - new Date(a.done_at).getTime());
     
     // Cache locally
     await setData(KEYS.TASK_LOGS, logs);
@@ -197,7 +208,9 @@ export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {
   } catch (error) {
     console.warn('Failed to fetch from Firestore, using cached data:', error);
     const cachedLogs = await getData<TaskLog>(KEYS.TASK_LOGS);
-    return templateId ? cachedLogs.filter(log => log.template_id === templateId) : cachedLogs;
+    let filtered = templateId ? cachedLogs.filter(log => log.template_id === templateId) : cachedLogs;
+    filtered.sort((a, b) => new Date(b.done_at).getTime() - new Date(a.done_at).getTime());
+    return filtered;
   }
 };
 

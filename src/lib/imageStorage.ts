@@ -186,7 +186,12 @@ export const takePhoto = async (): Promise<string | null> => {
  * @returns Size in bytes
  */
 export const getImageStorageSize = async (): Promise<number> => {
+  // On web, we can't calculate storage size
+  if (Platform.OS === 'web') return 0;
+  
   try {
+    if (!IMAGES_DIR) return 0;
+    
     const dirInfo = await FileSystem.getInfoAsync(IMAGES_DIR);
     if (!dirInfo.exists) return 0;
     
@@ -212,8 +217,13 @@ export const getImageStorageSize = async (): Promise<number> => {
  * @returns Array of image URIs
  */
 export const getAllImageUris = async (): Promise<string[]> => {
+  // On web, we can't list images from local storage
+  if (Platform.OS === 'web') return [];
+  
   try {
     await initImageStorage();
+    if (!IMAGES_DIR) return [];
+    
     const files = await FileSystem.readDirectoryAsync(IMAGES_DIR);
     return files.map(file => `${IMAGES_DIR}${file}`);
   } catch (error) {

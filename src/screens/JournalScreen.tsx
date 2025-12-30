@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,16 +8,33 @@ import {
   RefreshControl,
   Alert,
   Image,
+  TextInput,
+  Modal,
+  Dimensions,
 } from 'react-native';
 import { getJournalEntries, deleteJournalEntry } from '../services/journal';
 import { getPlants } from '../services/plants';
 import { JournalEntry, Plant } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
 
+const { width } = Dimensions.get('window');
+
 export default function JournalScreen({ navigation }: any) {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [selectedPlant, setSelectedPlant] = useState<string | null>(null);
+  const [dateFilter, setDateFilter] = useState<'all' | 'week' | 'month' | 'year'>('all');
+  
+  // View mode state
+  const [viewMode, setViewMode] = useState<'list' | 'gallery'>('list');
+  
+  // Gallery modal state
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
@@ -61,6 +78,99 @@ export default function JournalScreen({ navigation }: any) {
       </View>
     );
   };
+  
+  // Calculate statistics
+  const stats = useMemo(() => {
+    const totalHarvests = entries.filter(e => e.entry_type === 'harvest').length;
+    const totalIssues = entries.filter(e => e.entry_type === 'issue').length;
+    
+    const harvestsByPlant: Record<string, number> = {};
+    let totalWeight = 0;
+    
+    entries.forEach(entry => {
+      if (entry.entry_type === 'harvest') {
+        const plantName = getPlantName(entry.plant_id) || 'Unknown';
+        harvestsByPlant[plantName] = (harvestsByPlant[plantName] || 0) + 1;
+        
+        if (entry.harvest_quantity) {
+          // Convert to kg for totals
+          let weight = entry.harvest_quantity;
+          if (entry.harvest_unit === 'g') weight = weight / 1000;
+          else if (entry.harvest_unit === 'lbs') weight = weight * 0.453592;
+          totalWeight += weight;
+        }
+      }
+    });
+    
+    const topPlant = Object.entries(harvestsByPlant).sort((a, b) => b[1] - a[1])[0];
+    
+    return {
+      totalEntries: entries.length,
+      totalHarvests,
+      totalIssues,
+      totalWeight: Math.round(totalWeight * 10) / 10,
+      topPlant: topPlant ? topPlant[0] : null,
+      topPlantCount: topPlant ? topPlant[1] : 0,
+    };
+  }, [entries, plants]);
+  
+  // Filter and search entries
+  const filteredEntries = useMemo(() => {
+    let filtered = [...entries];
+    
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(entry => {
+        const plantName = getPlantName(entry.plant_id)?.toLowerCase() || '';
+        const content = entry.content.toLowerCase();
+        return plantName.includes(query) || content.includes(query);
+      });
+    }
+    
+    // Type filter
+    if (selectedType) {
+      filtered = filtered.filter(e => e.entry_type === selectedType);
+    }
+    
+    // Plant filter
+    if (selectedPlant) {
+      filtered = filtered.filter(e => e.plant_id === selectedPlant);
+    }
+    
+    // Date filter
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      const filterDate = new Date();
+      
+      if (dateFilter === 'week') {
+        filterDate.setDate(now.getDate() - 7);
+      } else if (dateFilter === 'month') {
+        filterDate.setMonth(now.getMonth() - 1);
+      } else if (dateFilter === 'year') {
+        filterDate.setFullYear(now.getFullYear() - 1);
+      }
+      
+      filtered = filtered.filter(e => new Date(e.created_at) >= filterDate);
+    }
+    
+    return filtered;
+  }, [entries, searchQuery, selectedType, selectedPlant, dateFilter, plants]);
+  
+  // Get all photos for gallery view
+  const allPhotos = useMemo(() => {
+    const photos: { uri: string; entryId: string; date: string }[] = [];
+    filteredEntries.forEach(entry => {
+      entry.photo_urls?.forEach(uri => {
+        photos.push({
+          uri,
+          entryId: entry.id,
+          date: entry.created_at,
+        });
+      });
+    });
+    return photos;
+  }, [filteredEntries]);
 
   const handleDelete = async (id: string) => {
     Alert.alert(
@@ -87,90 +197,294 @@ export default function JournalScreen({ navigation }: any) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Garden Journal</Text>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={() => navigation.navigate('JournalForm')}
-        >
-          <Ionicons name="add" size={24} color="#fff" />
-        </TouchableOpacity>
+        <View style={styles.headerTop}>
+          <Text style={styles.title}>Garden Journal</Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={[styles.viewToggle, viewMode === 'list' && styles.viewToggleActive]}
+              onPress={() => setViewMode('list')}
+            >
+              <Ionicons name="list" size={20} color={viewMode === 'list' ? '#fff' : '#666'} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.viewToggle, viewMode === 'gallery' && styles.viewToggleActive]}
+              onPress={() => setViewMode('gallery')}
+            >
+              <Ionicons name="grid" size={20} color={viewMode === 'gallery' ? '#fff' : '#666'} />
+            </TouchableOpacity>
+          </View>
+        </View>
+        
+        {/* Statistics Dashboard */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsScroll}>
+          <View style={styles.statCard}>
+            <Ionicons name="document-text" size={20} color="#2e7d32" />
+            <Text style={styles.statNumber}>{stats.totalEntries}</Text>
+            <Text style={styles.statLabel}>Entries</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Ionicons name="basket" size={20} color="#ff9800" />
+            <Text style={styles.statNumber}>{stats.totalHarvests}</Text>
+            <Text style={styles.statLabel}>Harvests</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Ionicons name="scale" size={20} color="#4caf50" />
+            <Text style={styles.statNumber}>{stats.totalWeight}</Text>
+            <Text style={styles.statLabel}>kg Total</Text>
+          </View>
+          {stats.topPlant && (
+            <View style={styles.statCard}>
+              <Ionicons name="trophy" size={20} color="#ffc107" />
+              <Text style={styles.statNumber}>{stats.topPlantCount}</Text>
+              <Text style={styles.statLabel}>{stats.topPlant}</Text>
+            </View>
+          )}
+          <View style={styles.statCard}>
+            <Ionicons name="alert-circle" size={20} color="#f44336" />
+            <Text style={styles.statNumber}>{stats.totalIssues}</Text>
+            <Text style={styles.statLabel}>Issues</Text>
+          </View>
+        </ScrollView>
+        
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search entries..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery !== '' && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color="#666" />
+            </TouchableOpacity>
+          )}
+        </View>
+        
+        {/* Filter Chips */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
+          <TouchableOpacity 
+            style={[styles.filterChip, dateFilter === 'week' && styles.filterChipActive]}
+            onPress={() => setDateFilter(dateFilter === 'week' ? 'all' : 'week')}
+          >
+            <Text style={[styles.filterChipText, dateFilter === 'week' && styles.filterChipTextActive]}>
+              This Week
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.filterChip, dateFilter === 'month' && styles.filterChipActive]}
+            onPress={() => setDateFilter(dateFilter === 'month' ? 'all' : 'month')}
+          >
+            <Text style={[styles.filterChipText, dateFilter === 'month' && styles.filterChipTextActive]}>
+              This Month
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.filterChip, selectedType === 'harvest' && styles.filterChipActive]}
+            onPress={() => setSelectedType(selectedType === 'harvest' ? null : 'harvest')}
+          >
+            <Ionicons name="basket" size={14} color={selectedType === 'harvest' ? '#fff' : '#666'} />
+            <Text style={[styles.filterChipText, selectedType === 'harvest' && styles.filterChipTextActive]}>
+              Harvest
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.filterChip, selectedType === 'observation' && styles.filterChipActive]}
+            onPress={() => setSelectedType(selectedType === 'observation' ? null : 'observation')}
+          >
+            <Ionicons name="eye" size={14} color={selectedType === 'observation' ? '#fff' : '#666'} />
+            <Text style={[styles.filterChipText, selectedType === 'observation' && styles.filterChipTextActive]}>
+              Observation
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.filterChip, selectedType === 'issue' && styles.filterChipActive]}
+            onPress={() => setSelectedType(selectedType === 'issue' ? null : 'issue')}
+          >
+            <Ionicons name="alert-circle" size={14} color={selectedType === 'issue' ? '#fff' : '#666'} />
+            <Text style={[styles.filterChipText, selectedType === 'issue' && styles.filterChipTextActive]}>
+              Issue
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.filterChip, selectedType === 'milestone' && styles.filterChipActive]}
+            onPress={() => setSelectedType(selectedType === 'milestone' ? null : 'milestone')}
+          >
+            <Ionicons name="flag" size={14} color={selectedType === 'milestone' ? '#fff' : '#666'} />
+            <Text style={[styles.filterChipText, selectedType === 'milestone' && styles.filterChipTextActive]}>
+              Milestone
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
-      <ScrollView 
-        style={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={loadData} />
-        }
-      >
-        {entries.map(entry => {
-          const plantName = getPlantName(entry.plant_id);
-          const date = new Date(entry.created_at).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-          });
+      {viewMode === 'list' ? (
+        <ScrollView 
+          style={styles.content}
+          refreshControl={
+            <RefreshControl refreshing={loading} onRefresh={loadData} />
+          }
+        >
+          {filteredEntries.map(entry => {
+            const plantName = getPlantName(entry.plant_id);
+            const date = new Date(entry.created_at).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            });
 
-          return (
-            <TouchableOpacity 
-              key={entry.id} 
-              style={styles.card}
-              activeOpacity={0.7}
-              onPress={() => navigation.navigate('JournalForm', { entry })}
-            >
-              {entry.photo_urls && entry.photo_urls.length > 0 && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
-                  {entry.photo_urls.map((photoUrl, idx) => (
-                    <Image key={idx} source={{ uri: photoUrl }} style={styles.photo} />
-                  ))}
-                </ScrollView>
-              )}
-              <View style={styles.cardContent}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.headerLeft}>
-                    <Text style={styles.date}>{date}</Text>
-                    {getEntryTypeIcon(entry.entry_type)}
-                  </View>
-                  <View style={styles.headerRight}>
-                    <TouchableOpacity 
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        navigation.navigate('JournalForm', { entry });
-                      }}
-                      style={styles.iconButton}
-                    >
-                      <Ionicons name="pencil-outline" size={20} color="#2e7d32" />
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleDelete(entry.id);
-                      }}
-                      style={styles.iconButton}
-                    >
-                      <Ionicons name="trash-outline" size={20} color="#f44336" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                {plantName && (
-                  <View style={styles.plantTag}>
-                    <Ionicons name="leaf" size={12} color="#2e7d32" />
-                    <Text style={styles.plantTagText}>{plantName}</Text>
-                  </View>
+            return (
+              <TouchableOpacity 
+                key={entry.id} 
+                style={styles.card}
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate('JournalForm', { entry })}
+              >
+                {entry.photo_urls && entry.photo_urls.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
+                    {entry.photo_urls.map((photoUrl, idx) => (
+                      <TouchableOpacity key={idx} onPress={() => setSelectedImage(photoUrl)}>
+                        <Image source={{ uri: photoUrl }} style={styles.photo} />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 )}
-                <Text style={styles.content}>{entry.content}</Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
+                <View style={styles.cardContent}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <Text style={styles.date}>{date}</Text>
+                      {getEntryTypeIcon(entry.entry_type)}
+                    </View>
+                    <View style={styles.headerRight}>
+                      <TouchableOpacity 
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          navigation.navigate('JournalForm', { entry });
+                        }}
+                        style={styles.iconButton}
+                      >
+                        <Ionicons name="pencil-outline" size={20} color="#2e7d32" />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDelete(entry.id);
+                        }}
+                        style={styles.iconButton}
+                      >
+                        <Ionicons name="trash-outline" size={20} color="#f44336" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  {plantName && (
+                    <View style={styles.plantTag}>
+                      <Ionicons name="leaf" size={12} color="#2e7d32" />
+                      <Text style={styles.plantTagText}>{plantName}</Text>
+                    </View>
+                  )}
+                  
+                  {/* Harvest Details */}
+                  {entry.entry_type === 'harvest' && entry.harvest_quantity && (
+                    <View style={styles.harvestDetails}>
+                      <View style={styles.harvestBadge}>
+                        <Ionicons name="scale-outline" size={16} color="#ff9800" />
+                        <Text style={styles.harvestText}>
+                          {entry.harvest_quantity} {entry.harvest_unit || 'units'}
+                        </Text>
+                      </View>
+                      {entry.harvest_quality && (
+                        <View style={[styles.qualityBadge, styles[`quality${entry.harvest_quality}`]]}>
+                          <Text style={styles.qualityText}>
+                            {entry.harvest_quality.toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                  
+                  <Text style={styles.contentText}>{entry.content}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
 
-        {entries.length === 0 && !loading && (
-          <View style={styles.emptyState}>
-            <Ionicons name="book-outline" size={64} color="#ccc" />
-            <Text style={styles.emptyText}>No journal entries yet</Text>
-            <Text style={styles.emptySubtext}>Start documenting your garden journey</Text>
+          {filteredEntries.length === 0 && !loading && (
+            <View style={styles.emptyState}>
+              <Ionicons name="book-outline" size={64} color="#ccc" />
+              <Text style={styles.emptyText}>
+                {searchQuery || selectedType || selectedPlant || dateFilter !== 'all' 
+                  ? 'No entries match your filters' 
+                  : 'No journal entries yet'}
+              </Text>
+              <Text style={styles.emptySubtext}>
+                {searchQuery || selectedType || selectedPlant || dateFilter !== 'all'
+                  ? 'Try adjusting your filters'
+                  : 'Start documenting your garden journey'}
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      ) : (
+        <ScrollView 
+          style={styles.content}
+          refreshControl={
+            <RefreshControl refreshing={loading} onRefresh={loadData} />
+          }
+        >
+          <View style={styles.galleryGrid}>
+            {allPhotos.map((photo, idx) => (
+              <TouchableOpacity 
+                key={idx} 
+                style={styles.galleryItem}
+                onPress={() => setSelectedImage(photo.uri)}
+              >
+                <Image source={{ uri: photo.uri }} style={styles.galleryImage} />
+              </TouchableOpacity>
+            ))}
           </View>
-        )}
-      </ScrollView>
+          
+          {allPhotos.length === 0 && !loading && (
+            <View style={styles.emptyState}>
+              <Ionicons name="images-outline" size={64} color="#ccc" />
+              <Text style={styles.emptyText}>No photos yet</Text>
+              <Text style={styles.emptySubtext}>Add photos to your journal entries</Text>
+            </View>
+          )}
+        </ScrollView>
+      )}
+      
+      {/* Floating Action Button */}
+      <TouchableOpacity 
+        style={styles.fab}
+        onPress={() => navigation.navigate('JournalForm')}
+      >
+        <Ionicons name="add" size={28} color="#fff" />
+      </TouchableOpacity>
+
+      {/* Image Modal */}
+      <Modal
+        visible={selectedImage !== null}
+        transparent={true}
+        onRequestClose={() => setSelectedImage(null)}
+      >
+        <View style={styles.modalContainer}>
+          <TouchableOpacity 
+            style={styles.modalClose}
+            onPress={() => setSelectedImage(null)}
+          >
+            <Ionicons name="close" size={32} color="#fff" />
+          </TouchableOpacity>
+          {selectedImage && (
+            <Image 
+              source={{ uri: selectedImage }} 
+              style={styles.modalImage}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -181,29 +495,123 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   header: {
+    backgroundColor: '#fff',
+    paddingTop: 48,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 24,
-    paddingTop: 48,
-    backgroundColor: '#fff',
+    marginBottom: 16,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#333',
   },
-  addButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  viewToggle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  viewToggleActive: {
+    backgroundColor: '#2e7d32',
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#2e7d32',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  statsScroll: {
+    marginBottom: 12,
+  },
+  statCard: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    padding: 12,
+    marginRight: 12,
+    alignItems: 'center',
+    minWidth: 80,
+  },
+  statNumber: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 4,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+  },
+  filtersScroll: {
+    marginBottom: 8,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+    gap: 4,
+  },
+  filterChipActive: {
+    backgroundColor: '#2e7d32',
+  },
+  filterChipText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  filterChipTextActive: {
+    color: '#fff',
   },
   content: {
     flex: 1,
     padding: 16,
+    paddingBottom: 120,
   },
   card: {
     backgroundColor: '#fff',
@@ -272,6 +680,66 @@ const styles = StyleSheet.create({
     color: '#2e7d32',
     marginLeft: 4,
   },
+  harvestDetails: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  harvestBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff3e0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  harvestText: {
+    fontSize: 12,
+    color: '#ff9800',
+    fontWeight: '600',
+  },
+  qualityBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  qualityexcellent: {
+    backgroundColor: '#e8f5e9',
+  },
+  qualitygood: {
+    backgroundColor: '#e3f2fd',
+  },
+  qualityfair: {
+    backgroundColor: '#fff3e0',
+  },
+  qualitypoor: {
+    backgroundColor: '#ffebee',
+  },
+  qualityText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#666',
+  },
+  contentText: {
+    fontSize: 15,
+    color: '#333',
+    lineHeight: 22,
+  },
+  galleryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  galleryItem: {
+    width: (width - 36) / 3,
+    height: (width - 36) / 3,
+  },
+  galleryImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#e8f5e9',
+  },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -288,5 +756,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginTop: 4,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalClose: {
+    position: 'absolute',
+    top: 48,
+    right: 16,
+    zIndex: 10,
+  },
+  modalImage: {
+    width: width,
+    height: width,
   },
 });
