@@ -11,13 +11,20 @@ import {
   KeyboardAvoidingView,
   Platform,
   BackHandler,
+  Modal,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { getPlant, createPlant, updatePlant, savePlantImage } from '../services/plants';
-import { Plant, SpaceType, PlantType, SunlightLevel, SoilType, WaterRequirement, HealthStatus, FertiliserType } from '../types/database.types';
+import { Plant, SpaceType, PlantType, SunlightLevel, SoilType, WaterRequirement, HealthStatus, FertiliserType, PestDiseaseRecord } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
+import { 
+  calculateExpectedHarvestDate, 
+  getCompanionSuggestions, 
+  getCommonPests, 
+  getCommonDiseases 
+} from '../utils/plantHelpers';
 
 const PLANT_VARIETIES: Record<PlantType, string[]> = {
   vegetable: ['Tomato', 'Carrot', 'Lettuce', 'Cabbage', 'Broccoli', 'Cucumber', 'Pepper', 'Eggplant', 'Spinach', 'Radish', 'Potato', 'Onion', 'Garlic', 'Beans', 'Peas'],
@@ -29,6 +36,10 @@ const PLANT_VARIETIES: Record<PlantType, string[]> = {
   shrub: ['Hibiscus', 'Bougainvillea', 'Jasmine', 'Azalea', 'Gardenia', 'Lavender', 'Boxwood', 'Holly'],
 };
 
+const PARENT_LOCATIONS = ['Mangarai', 'Velliavilai Home', 'Velliavilai Near Pond', 'Palappallam'];
+
+const CHILD_LOCATIONS = ['North', 'South', 'East', 'West', 'North-East', 'North-West', 'South-East', 'South-West', 'Center', 'Front', 'Back'];
+
 export default function PlantFormScreen({ route, navigation }: any) {
   const { plantId } = route.params || {};
   const [name, setName] = useState('');
@@ -36,6 +47,8 @@ export default function PlantFormScreen({ route, navigation }: any) {
   const [plantVariety, setPlantVariety] = useState('');
   const [spaceType, setSpaceType] = useState<SpaceType>('pot');
   const [location, setLocation] = useState('');
+  const [parentLocation, setParentLocation] = useState('');
+  const [childLocation, setChildLocation] = useState('');
   const [bedName, setBedName] = useState('');
   const [potSize, setPotSize] = useState('');
   const [variety, setVariety] = useState('');
@@ -58,6 +71,19 @@ export default function PlantFormScreen({ route, navigation }: any) {
   const [preferredFertiliser, setPreferredFertiliser] = useState<FertiliserType>('compost');
   const [mulchingUsed, setMulchingUsed] = useState(false);
   const [healthStatus, setHealthStatus] = useState<HealthStatus>('healthy');
+  
+  // New features
+  const [companionPlants, setCompanionPlants] = useState<string[]>([]);
+  const [expectedHarvestDate, setExpectedHarvestDate] = useState('');
+  const [pestDiseaseHistory, setPestDiseaseHistory] = useState<PestDiseaseRecord[]>([]);
+  const [showCompanionSuggestions, setShowCompanionSuggestions] = useState(false);
+  const [showPestDiseaseModal, setShowPestDiseaseModal] = useState(false);
+  const [currentPestDisease, setCurrentPestDisease] = useState<PestDiseaseRecord>({
+    type: 'pest',
+    name: '',
+    occurredAt: new Date().toISOString().split('T')[0],
+    resolved: false,
+  });
   
   // Track if form has been modified
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -83,7 +109,38 @@ export default function PlantFormScreen({ route, navigation }: any) {
   }, [name, plantType, plantVariety, spaceType, location, bedName, potSize, variety,
       plantingDate, harvestSeason, harvestStartDate, harvestEndDate, notes, photoUri,
       sunlight, soilType, waterRequirement, wateringFrequency, fertilisingFrequency,
-      preferredFertiliser, mulchingUsed, healthStatus]);
+      preferredFertiliser, mulchingUsed, healthStatus, companionPlants, expectedHarvestDate, pestDiseaseHistory]);
+
+  // Auto-calculate expected harvest date when plant variety or planting date changes
+  useEffect(() => {
+    if (plantVariety && plantingDate) {
+      const calculatedDate = calculateExpectedHarvestDate(plantVariety, plantingDate, plantType);
+      if (calculatedDate) {
+        setExpectedHarvestDate(calculatedDate);
+      }
+    }
+  }, [plantVariety, plantingDate, plantType]);
+
+  // Update companion plant suggestions when plant variety changes
+  useEffect(() => {
+    if (plantVariety) {
+      const suggestions = getCompanionSuggestions(plantVariety);
+      if (suggestions.length > 0 && companionPlants.length === 0) {
+        setShowCompanionSuggestions(true);
+      }
+    }
+  }, [plantVariety]);
+
+  // Combine parent and child locations
+  useEffect(() => {
+    if (parentLocation && childLocation) {
+      setLocation(`${parentLocation} - ${childLocation}`);
+    } else if (parentLocation) {
+      setLocation(parentLocation);
+    } else {
+      setLocation('');
+    }
+  }, [parentLocation, childLocation]);
 
   // Handle back button press
   useEffect(() => {
@@ -118,20 +175,30 @@ export default function PlantFormScreen({ route, navigation }: any) {
       return; // Don't show alert if save is in progress
     }
     
+    // Reset immediately to prevent duplicate alerts
+    setHasUnsavedChanges(false);
+    
     Alert.alert(
       'Discard Changes?',
       'You have unsaved changes. Are you sure you want to discard them?',
       [
-        { text: 'Keep Editing', style: 'cancel' },
+        { 
+          text: 'Keep Editing', 
+          style: 'cancel',
+          onPress: () => {
+            // Re-enable if user cancels
+            setHasUnsavedChanges(true);
+          }
+        },
         {
           text: 'Discard',
           style: 'destructive',
           onPress: () => {
-            setHasUnsavedChanges(false);
             navigation.goBack();
           },
         },
-      ]
+      ],
+      { cancelable: false }
     );
   };
 
@@ -144,6 +211,17 @@ export default function PlantFormScreen({ route, navigation }: any) {
         setPlantVariety(plant.plant_variety || '');
         setSpaceType(plant.space_type);
         setLocation(plant.location);
+        
+        // Parse location into parent and child
+        const locationParts = plant.location.split(' - ');
+        if (locationParts.length === 2) {
+          setParentLocation(locationParts[0]);
+          setChildLocation(locationParts[1]);
+        } else {
+          setParentLocation('');
+          setChildLocation('');
+        }
+        
         setBedName(plant.bed_name || '');
         setPotSize(plant.pot_size || '');
         setVariety(plant.variety || '');
@@ -162,6 +240,11 @@ export default function PlantFormScreen({ route, navigation }: any) {
         setPreferredFertiliser(plant.preferred_fertiliser || 'compost');
         setMulchingUsed(plant.mulching_used || false);
         setHealthStatus(plant.health_status || 'healthy');
+        
+        // Load new fields
+        setCompanionPlants(plant.companion_plants || []);
+        setExpectedHarvestDate(plant.expected_harvest_date || '');
+        setPestDiseaseHistory(plant.pest_disease_history || []);
         
         // Mark initial data as loaded after a short delay
         setTimeout(() => {
@@ -258,6 +341,10 @@ export default function PlantFormScreen({ route, navigation }: any) {
         preferred_fertiliser: preferredFertiliser,
         mulching_used: mulchingUsed,
         health_status: healthStatus,
+        // New fields
+        companion_plants: companionPlants.length > 0 ? companionPlants : null,
+        expected_harvest_date: expectedHarvestDate || null,
+        pest_disease_history: pestDiseaseHistory.length > 0 ? pestDiseaseHistory : null,
       };
 
       // Add harvest dates only for fruit trees
@@ -304,7 +391,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
         <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
           {photoUri ? (
             <Image source={{ uri: photoUri }} style={styles.photo} />
@@ -638,13 +725,172 @@ export default function PlantFormScreen({ route, navigation }: any) {
           />
         )}
 
-        <TextInput
-          style={styles.input}
-          placeholder="Location *"
-          value={location}
-          onChangeText={setLocation}
-          placeholderTextColor="#999"
-        />
+        <Text style={styles.label}>Location *</Text>
+        <View style={styles.pickerContainer}>
+          <Picker
+            selectedValue={parentLocation}
+            onValueChange={(value) => {
+              setParentLocation(value);
+              // Reset child location when parent changes
+              if (!value) setChildLocation('');
+            }}
+            style={styles.picker}
+          >
+            <Picker.Item label="Select Main Location" value="" />
+            {PARENT_LOCATIONS.map(loc => (
+              <Picker.Item key={loc} label={loc} value={loc} />
+            ))}
+          </Picker>
+        </View>
+
+        {parentLocation !== '' && (
+          <>
+            <Text style={styles.label}>Direction / Section</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={childLocation}
+                onValueChange={setChildLocation}
+                style={styles.picker}
+              >
+                <Picker.Item label="Select Direction" value="" />
+                {CHILD_LOCATIONS.map(loc => (
+                  <Picker.Item key={loc} label={loc} value={loc} />
+                ))}
+              </Picker>
+            </View>
+          </>
+        )}
+
+        {location && (
+          <View style={styles.locationPreview}>
+            <Ionicons name="location" size={16} color="#2e7d32" />
+            <Text style={styles.locationPreviewText}>{location}</Text>
+          </View>
+        )}
+
+        {/* Expected Harvest Date */}
+        {expectedHarvestDate && (
+          <View style={styles.infoCard}>
+            <View style={styles.infoCardHeader}>
+              <Ionicons name="calendar" size={20} color="#FF9800" />
+              <Text style={styles.infoCardTitle}>Expected Harvest Date</Text>
+            </View>
+            <Text style={styles.infoCardText}>{new Date(expectedHarvestDate).toLocaleDateString()}</Text>
+            <Text style={styles.infoCardSubtext}>
+              Auto-calculated based on plant variety and planting date
+            </Text>
+          </View>
+        )}
+
+        {/* Companion Planting Suggestions */}
+        {plantVariety && getCompanionSuggestions(plantVariety).length > 0 && (
+          <View style={styles.infoCard}>
+            <View style={styles.infoCardHeader}>
+              <Ionicons name="leaf" size={20} color="#4CAF50" />
+              <Text style={styles.infoCardTitle}>Companion Plants</Text>
+              <TouchableOpacity onPress={() => setShowCompanionSuggestions(!showCompanionSuggestions)}>
+                <Ionicons 
+                  name={showCompanionSuggestions ? "chevron-up" : "chevron-down"} 
+                  size={20} 
+                  color="#666" 
+                />
+              </TouchableOpacity>
+            </View>
+            {showCompanionSuggestions && (
+              <>
+                <Text style={styles.infoCardSubtext}>Plants that grow well with {plantVariety}:</Text>
+                <View style={styles.chipContainer}>
+                  {getCompanionSuggestions(plantVariety).map((companion, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.companionChip,
+                        companionPlants.includes(companion) && styles.companionChipSelected
+                      ]}
+                      onPress={() => {
+                        if (companionPlants.includes(companion)) {
+                          setCompanionPlants(companionPlants.filter(c => c !== companion));
+                        } else {
+                          setCompanionPlants([...companionPlants, companion]);
+                        }
+                      }}
+                    >
+                      <Text style={[
+                        styles.companionChipText,
+                        companionPlants.includes(companion) && styles.companionChipTextSelected
+                      ]}>
+                        {companion}
+                      </Text>
+                      {companionPlants.includes(companion) && (
+                        <Ionicons name="checkmark-circle" size={16} color="#2e7d32" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
+          </View>
+        )}
+
+        {/* Pest & Disease History */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionHeaderText}>🐛 Pest & Disease History</Text>
+          <TouchableOpacity 
+            style={styles.addPestButton}
+            onPress={() => {
+              setCurrentPestDisease({
+                type: 'pest',
+                name: '',
+                occurredAt: new Date().toISOString().split('T')[0],
+                resolved: false,
+              });
+              setShowPestDiseaseModal(true);
+            }}
+          >
+            <Ionicons name="add-circle" size={24} color="#2e7d32" />
+          </TouchableOpacity>
+        </View>
+
+        {pestDiseaseHistory.length > 0 ? (
+          <View style={styles.pestDiseaseList}>
+            {pestDiseaseHistory.map((record, index) => (
+              <View key={index} style={styles.pestDiseaseCard}>
+                <View style={styles.pestDiseaseHeader}>
+                  <Ionicons 
+                    name={record.type === 'pest' ? 'bug' : 'medical'} 
+                    size={20} 
+                    color={record.resolved ? '#4CAF50' : '#f44336'} 
+                  />
+                  <Text style={styles.pestDiseaseName}>{record.name}</Text>
+                  {record.resolved && (
+                    <View style={styles.resolvedBadge}>
+                      <Text style={styles.resolvedText}>Resolved</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.pestDiseaseDate}>
+                  Occurred: {new Date(record.occurredAt).toLocaleDateString()}
+                </Text>
+                {record.treatment && (
+                  <Text style={styles.pestDiseaseTreatment}>Treatment: {record.treatment}</Text>
+                )}
+                {record.notes && (
+                  <Text style={styles.pestDiseaseNotes}>{record.notes}</Text>
+                )}
+                <TouchableOpacity
+                  style={styles.deletePestButton}
+                  onPress={() => {
+                    setPestDiseaseHistory(pestDiseaseHistory.filter((_, i) => i !== index));
+                  }}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#f44336" />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.noPestHistory}>No pest or disease records yet</Text>
+        )}
 
         <TextInput
           style={[styles.input, styles.textArea]}
@@ -655,6 +901,130 @@ export default function PlantFormScreen({ route, navigation }: any) {
           numberOfLines={4}
           placeholderTextColor="#999"
         />
+
+        {/* Pest/Disease Modal */}
+        <Modal
+          visible={showPestDiseaseModal}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowPestDiseaseModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Add Pest/Disease Record</Text>
+                <TouchableOpacity onPress={() => setShowPestDiseaseModal(false)}>
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView 
+                style={styles.modalScrollView}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                <Text style={styles.label}>Type</Text>
+                <View style={styles.typeButtons}>
+                  <TouchableOpacity
+                    style={[
+                      styles.typeButton,
+                      currentPestDisease.type === 'pest' && styles.typeButtonActive
+                    ]}
+                    onPress={() => setCurrentPestDisease({...currentPestDisease, type: 'pest'})}
+                  >
+                    <Ionicons name="bug" size={20} color={currentPestDisease.type === 'pest' ? '#2e7d32' : '#666'} />
+                    <Text style={[
+                      styles.typeButtonText,
+                      currentPestDisease.type === 'pest' && styles.typeButtonTextActive
+                    ]}>Pest</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.typeButton,
+                      currentPestDisease.type === 'disease' && styles.typeButtonActive
+                    ]}
+                    onPress={() => setCurrentPestDisease({...currentPestDisease, type: 'disease'})}
+                  >
+                    <Ionicons name="medical" size={20} color={currentPestDisease.type === 'disease' ? '#2e7d32' : '#666'} />
+                    <Text style={[
+                      styles.typeButtonText,
+                      currentPestDisease.type === 'disease' && styles.typeButtonTextActive
+                    ]}>Disease</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.label}>Common {currentPestDisease.type === 'pest' ? 'Pests' : 'Diseases'}:</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.suggestionsScroll}>
+                  {(currentPestDisease.type === 'pest' ? getCommonPests(plantType) : getCommonDiseases(plantType)).map((item, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.suggestionChip}
+                      onPress={() => setCurrentPestDisease({...currentPestDisease, name: item})}
+                    >
+                      <Text style={styles.suggestionChipText}>{item}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+
+                <TextInput
+                  style={styles.input}
+                  placeholder={`${currentPestDisease.type === 'pest' ? 'Pest' : 'Disease'} Name *`}
+                  value={currentPestDisease.name}
+                  onChangeText={(text) => setCurrentPestDisease({...currentPestDisease, name: text})}
+                  placeholderTextColor="#999"
+                />
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Treatment Used"
+                  value={currentPestDisease.treatment || ''}
+                  onChangeText={(text) => setCurrentPestDisease({...currentPestDisease, treatment: text})}
+                  placeholderTextColor="#999"
+                />
+
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Notes"
+                  value={currentPestDisease.notes || ''}
+                  onChangeText={(text) => setCurrentPestDisease({...currentPestDisease, notes: text})}
+                  multiline
+                  numberOfLines={3}
+                  placeholderTextColor="#999"
+                />
+
+                <TouchableOpacity
+                  style={styles.checkboxContainer}
+                  onPress={() => setCurrentPestDisease({
+                    ...currentPestDisease, 
+                    resolved: !currentPestDisease.resolved,
+                    resolvedAt: !currentPestDisease.resolved ? new Date().toISOString().split('T')[0] : undefined
+                  })}
+                >
+                  <Ionicons
+                    name={currentPestDisease.resolved ? 'checkbox' : 'square-outline'}
+                    size={24}
+                    color={currentPestDisease.resolved ? '#2e7d32' : '#999'}
+                  />
+                  <Text style={styles.checkboxLabel}>Resolved</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.modalSaveButton}
+                  onPress={() => {
+                    if (currentPestDisease.name.trim()) {
+                      setPestDiseaseHistory([...pestDiseaseHistory, {...currentPestDisease, id: Date.now().toString()}]);
+                      setShowPestDiseaseModal(false);
+                    } else {
+                      Alert.alert('Validation Error', 'Please enter a name');
+                    }
+                  }}
+                >
+                  <Text style={styles.modalSaveButtonText}>Add Record</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -702,6 +1072,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 16,
+  },
+  scrollContent: {
+    paddingBottom: 100,
   },
   photoButton: {
     alignSelf: 'center',
@@ -811,6 +1184,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     height: 120,
   },
+  locationPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#e8f5e9',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  locationPreviewText: {
+    fontSize: 14,
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
   sectionHeader: {
     fontSize: 18,
     fontWeight: '700',
@@ -832,5 +1219,228 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     marginLeft: 12,
+  },
+  infoCard: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  infoCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  infoCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  infoCardText: {
+    fontSize: 16,
+    color: '#2e7d32',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  infoCardSubtext: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 8,
+  },
+  chipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  companionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    gap: 4,
+  },
+  companionChipSelected: {
+    backgroundColor: '#e8f5e9',
+    borderColor: '#2e7d32',
+  },
+  companionChipText: {
+    fontSize: 13,
+    color: '#666',
+  },
+  companionChipTextSelected: {
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    marginBottom: 12,
+  },
+  sectionHeaderText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    flex: 1,
+  },
+  addPestButton: {
+    padding: 4,
+  },
+  pestDiseaseList: {
+    marginBottom: 16,
+  },
+  pestDiseaseCard: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    position: 'relative',
+  },
+  pestDiseaseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  pestDiseaseName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  resolvedBadge: {
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  resolvedText: {
+    fontSize: 11,
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  pestDiseaseDate: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 4,
+  },
+  pestDiseaseTreatment: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 4,
+  },
+  pestDiseaseNotes: {
+    fontSize: 13,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  deletePestButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    padding: 4,
+  },
+  noPestHistory: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    paddingVertical: 20,
+    fontStyle: 'italic',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    maxHeight: '85%',
+  },
+  modalScrollView: {
+    flexGrow: 0,
+    marginBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+  },
+  typeButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  typeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    gap: 8,
+  },
+  typeButtonActive: {
+    backgroundColor: '#e8f5e9',
+    borderColor: '#2e7d32',
+  },
+  typeButtonText: {
+    fontSize: 15,
+    color: '#666',
+    fontWeight: '500',
+  },
+  typeButtonTextActive: {
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  suggestionsScroll: {
+    marginBottom: 12,
+  },
+  suggestionChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#e8f5e9',
+    marginRight: 8,
+  },
+  suggestionChipText: {
+    fontSize: 13,
+    color: '#2e7d32',
+  },
+  modalSaveButton: {
+    backgroundColor: '#2e7d32',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  modalSaveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });

@@ -12,18 +12,27 @@ import {
   Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { createJournalEntry, saveJournalImage } from '../services/journal';
+import { createJournalEntry, updateJournalEntry, saveJournalImage } from '../services/journal';
 import { getPlants } from '../services/plants';
-import { Plant } from '../types/database.types';
+import { Plant, JournalEntryType } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
 
-export default function JournalFormScreen({ navigation }: any) {
-  const [content, setContent] = useState('');
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null);
+export default function JournalFormScreen({ navigation, route }: any) {
+  const editEntry = route.params?.entry as JournalEntry | undefined;
+  const isEditing = !!editEntry;
+
+  const [entryType, setEntryType] = useState<JournalEntryType>(editEntry?.entry_type || 'observation');
+  const [content, setContent] = useState(editEntry?.content || '');
+  const [photoUris, setPhotoUris] = useState<string[]>(editEntry?.photo_urls || []);
+  const [selectedPlantId, setSelectedPlantId] = useState<string | null>(editEntry?.plant_id || null);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(false);
   const [showPlantPicker, setShowPlantPicker] = useState(false);
+  
+  // Harvest-specific fields
+  const [harvestQuantity, setHarvestQuantity] = useState(editEntry?.harvest_quantity?.toString() || '');
+  const [harvestUnit, setHarvestUnit] = useState(editEntry?.harvest_unit || 'pieces');
+  const [harvestQuality, setHarvestQuality] = useState<'excellent' | 'good' | 'fair' | 'poor'>(editEntry?.harvest_quality || 'good');
 
   useEffect(() => {
     loadPlants();
@@ -50,11 +59,17 @@ export default function JournalFormScreen({ navigation }: any) {
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.8,
+      allowsMultipleSelection: true,
     });
 
     if (!result.canceled) {
-      setPhotoUri(result.assets[0].uri);
+      const newUris = result.assets.map(asset => asset.uri);
+      setPhotoUris(prev => [...prev, ...newUris]);
     }
+  };
+
+  const removeImage = (index: number) => {
+    setPhotoUris(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSave = async () => {
@@ -63,19 +78,42 @@ export default function JournalFormScreen({ navigation }: any) {
       return;
     }
 
+    if (entryType === 'harvest' && !harvestQuantity) {
+      Alert.alert('Error', 'Please enter harvest quantity');
+      return;
+    }
+
     setLoading(true);
     try {
-      let photoUrl = null;
+      const photoUrls: string[] = [];
       
-      if (photoUri) {
-        photoUrl = await saveJournalImage(photoUri);
+      // Save new images (those not already saved with file:// protocol)
+      for (const uri of photoUris) {
+        if (uri.startsWith('file://')) {
+          // Already saved, keep as is
+          photoUrls.push(uri);
+        } else {
+          // New image, save it
+          const savedUri = await saveJournalImage(uri);
+          photoUrls.push(savedUri);
+        }
       }
 
-      await createJournalEntry({
+      const entryData = {
+        entry_type: entryType,
         content: content.trim(),
-        photo_url: photoUrl,
+        photo_urls: photoUrls,
         plant_id: selectedPlantId,
-      });
+        harvest_quantity: entryType === 'harvest' ? parseFloat(harvestQuantity) : null,
+        harvest_unit: entryType === 'harvest' ? harvestUnit : null,
+        harvest_quality: entryType === 'harvest' ? harvestQuality : null,
+      };
+
+      if (isEditing && editEntry) {
+        await updateJournalEntry(editEntry.id, entryData);
+      } else {
+        await createJournalEntry(entryData);
+      }
 
       navigation.goBack();
     } catch (error: any) {
@@ -96,7 +134,7 @@ export default function JournalFormScreen({ navigation }: any) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="close" size={28} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.title}>New Entry</Text>
+        <Text style={styles.title}>{isEditing ? 'Edit Entry' : 'New Entry'}</Text>
         <TouchableOpacity onPress={handleSave} disabled={loading}>
           <Text style={[styles.saveText, loading && styles.saveTextDisabled]}>
             {loading ? 'Saving...' : 'Save'}
@@ -105,22 +143,66 @@ export default function JournalFormScreen({ navigation }: any) {
       </View>
 
       <ScrollView style={styles.content}>
-        {photoUri && (
-          <View style={styles.photoContainer}>
-            <Image source={{ uri: photoUri }} style={styles.photo} />
-            <TouchableOpacity 
-              style={styles.removePhotoButton}
-              onPress={() => setPhotoUri(null)}
-            >
-              <Ionicons name="close-circle" size={32} color="#fff" />
-            </TouchableOpacity>
+        {/* Entry Type Selector */}
+        <View style={styles.typeSelector}>
+          <TouchableOpacity 
+            style={[styles.typeButton, entryType === 'observation' && styles.typeButtonActive]}
+            onPress={() => setEntryType('observation')}
+          >
+            <Ionicons name="eye" size={20} color={entryType === 'observation' ? '#fff' : '#2e7d32'} />
+            <Text style={[styles.typeButtonText, entryType === 'observation' && styles.typeButtonTextActive]}>
+              Observation
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.typeButton, entryType === 'harvest' && styles.typeButtonActive]}
+            onPress={() => setEntryType('harvest')}
+          >
+            <Ionicons name="basket" size={20} color={entryType === 'harvest' ? '#fff' : '#2e7d32'} />
+            <Text style={[styles.typeButtonText, entryType === 'harvest' && styles.typeButtonTextActive]}>
+              Harvest
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.typeButton, entryType === 'issue' && styles.typeButtonActive]}
+            onPress={() => setEntryType('issue')}
+          >
+            <Ionicons name="alert-circle" size={20} color={entryType === 'issue' ? '#fff' : '#2e7d32'} />
+            <Text style={[styles.typeButtonText, entryType === 'issue' && styles.typeButtonTextActive]}>
+              Issue
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.typeButton, entryType === 'milestone' && styles.typeButtonActive]}
+            onPress={() => setEntryType('milestone')}
+          >
+            <Ionicons name="flag" size={20} color={entryType === 'milestone' ? '#fff' : '#2e7d32'} />
+            <Text style={[styles.typeButtonText, entryType === 'milestone' && styles.typeButtonTextActive]}>
+              Milestone
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {photoUris.length > 0 && (
+          <View style={styles.photosGrid}>
+            {photoUris.map((uri, index) => (
+              <View key={index} style={styles.photoContainer}>
+                <Image source={{ uri }} style={styles.photoThumbnail} />
+                <TouchableOpacity 
+                  style={styles.removePhotoButton}
+                  onPress={() => removeImage(index)}
+                >
+                  <Ionicons name="close-circle" size={24} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            ))}
           </View>
         )}
 
         <TouchableOpacity style={styles.addPhotoButton} onPress={pickImage}>
           <Ionicons name="camera" size={20} color="#2e7d32" />
           <Text style={styles.addPhotoText}>
-            {photoUri ? 'Change Photo' : 'Add Photo'}
+            {photoUris.length > 0 ? `Add More Photos (${photoUris.length})` : 'Add Photos'}
           </Text>
         </TouchableOpacity>
 
@@ -156,6 +238,70 @@ export default function JournalFormScreen({ navigation }: any) {
                 <Text style={styles.plantOptionText}>{plant.name}</Text>
               </TouchableOpacity>
             ))}
+          </View>
+        )}
+
+        {/* Harvest-specific fields */}
+        {entryType === 'harvest' && (
+          <View style={styles.harvestSection}>
+            <Text style={styles.sectionTitle}>Harvest Details</Text>
+            
+            <View style={styles.harvestRow}>
+              <View style={styles.quantityInput}>
+                <Text style={styles.label}>Quantity *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="0"
+                  value={harvestQuantity}
+                  onChangeText={setHarvestQuantity}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+              
+              <View style={styles.unitInput}>
+                <Text style={styles.label}>Unit</Text>
+                <View style={styles.unitButtons}>
+                  {['pieces', 'kg', 'lbs'].map(unit => (
+                    <TouchableOpacity
+                      key={unit}
+                      style={[styles.unitButton, harvestUnit === unit && styles.unitButtonActive]}
+                      onPress={() => setHarvestUnit(unit)}
+                    >
+                      <Text style={[styles.unitButtonText, harvestUnit === unit && styles.unitButtonTextActive]}>
+                        {unit}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
+
+            <Text style={styles.label}>Quality</Text>
+            <View style={styles.qualityButtons}>
+              {[
+                { value: 'excellent', label: 'Excellent', emoji: '🌟' },
+                { value: 'good', label: 'Good', emoji: '👍' },
+                { value: 'fair', label: 'Fair', emoji: '👌' },
+                { value: 'poor', label: 'Poor', emoji: '👎' },
+              ].map(quality => (
+                <TouchableOpacity
+                  key={quality.value}
+                  style={[
+                    styles.qualityButton,
+                    harvestQuality === quality.value && styles.qualityButtonActive,
+                  ]}
+                  onPress={() => setHarvestQuality(quality.value as any)}
+                >
+                  <Text style={styles.qualityEmoji}>{quality.emoji}</Text>
+                  <Text style={[
+                    styles.qualityButtonText,
+                    harvestQuality === quality.value && styles.qualityButtonTextActive,
+                  ]}>
+                    {quality.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         )}
 
@@ -206,19 +352,28 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  photoContainer: {
-    position: 'relative',
+  photosGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 16,
   },
-  photo: {
+  photoContainer: {
+    position: 'relative',
+    width: '48%',
+    aspectRatio: 1,
+  },
+  photoThumbnail: {
     width: '100%',
-    height: 250,
+    height: '100%',
     borderRadius: 12,
   },
   removePhotoButton: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 12,
   },
   addPhotoButton: {
     flexDirection: 'row',
@@ -279,5 +434,127 @@ const styles = StyleSheet.create({
     minHeight: 200,
     borderWidth: 1,
     borderColor: '#ddd',
+  },
+  typeSelector: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 8,
+  },
+  typeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e8f5e9',
+    gap: 4,
+  },
+  typeButtonActive: {
+    backgroundColor: '#2e7d32',
+    borderColor: '#2e7d32',
+  },
+  typeButtonText: {
+    fontSize: 12,
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  typeButtonTextActive: {
+    color: '#fff',
+  },
+  harvestSection: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  harvestRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  quantityInput: {
+    flex: 1,
+  },
+  unitInput: {
+    flex: 1,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 8,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  unitButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  unitButton: {
+    flex: 1,
+    padding: 10,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  unitButtonActive: {
+    backgroundColor: '#e8f5e9',
+    borderColor: '#2e7d32',
+  },
+  unitButtonText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '600',
+  },
+  unitButtonTextActive: {
+    color: '#2e7d32',
+  },
+  qualityButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  qualityButton: {
+    flex: 1,
+    padding: 12,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  qualityButtonActive: {
+    backgroundColor: '#e8f5e9',
+    borderColor: '#2e7d32',
+  },
+  qualityEmoji: {
+    fontSize: 20,
+    marginBottom: 4,
+  },
+  qualityButtonText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+  },
+  qualityButtonTextActive: {
+    color: '#2e7d32',
   },
 });

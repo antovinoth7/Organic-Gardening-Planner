@@ -10,13 +10,15 @@ import {
 } from 'react-native';
 import { getPlant } from '../services/plants';
 import { getTaskTemplates, createTaskTemplate } from '../services/tasks';
-import { Plant, TaskTemplate, TaskType } from '../types/database.types';
+import { getJournalEntries } from '../services/journal';
+import { Plant, TaskTemplate, TaskType, JournalEntry } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function PlantDetailScreen({ route, navigation }: any) {
   const { plantId } = route.params || {};
   const [plant, setPlant] = useState<Plant | null>(null);
   const [tasks, setTasks] = useState<TaskTemplate[]>([]);
+  const [harvestEntries, setHarvestEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -27,39 +29,21 @@ export default function PlantDetailScreen({ route, navigation }: any) {
 
   const loadData = async () => {
     try {
-      const [plantData, allTasks] = await Promise.all([
+      const [plantData, allTasks, allJournalEntries] = await Promise.all([
         getPlant(plantId),
         getTaskTemplates(),
+        getJournalEntries(),
       ]);
       setPlant(plantData);
       setTasks(allTasks.filter(t => t.plant_id === plantId));
+      const plantHarvests = allJournalEntries.filter(
+        e => e.plant_id === plantId && e.entry_type === 'harvest'
+      ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setHarvestEntries(plantHarvests);
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleAddTask = async (taskType: TaskType) => {
-    if (!plantId) return;
-    
-    try {
-      const nextDue = new Date();
-      nextDue.setDate(nextDue.getDate() + 1); // Default: tomorrow
-
-      await createTaskTemplate({
-        plant_id: plantId,
-        task_type: taskType,
-        frequency_days: taskType === 'water' ? 2 : taskType === 'fertilise' ? 14 : 30,
-        preferred_time: null,
-        enabled: true,
-        next_due_at: nextDue.toISOString(),
-      });
-
-      Alert.alert('Success', `${taskType} task added!`);
-      loadData();
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
     }
   };
 
@@ -153,7 +137,7 @@ export default function PlantDetailScreen({ route, navigation }: any) {
             <View style={styles.infoRow}>
               <Ionicons name="calendar-outline" size={20} color="#666" />
               <Text style={styles.infoText}>
-                {plant.harvest_start_date} {plant.harvest_end_date && `- ${plant.harvest_end_date}`}
+                {plant.harvest_start_date || ''}{plant.harvest_end_date ? ` - ${plant.harvest_end_date}` : ''}
               </Text>
             </View>
           )}
@@ -235,6 +219,103 @@ export default function PlantDetailScreen({ route, navigation }: any) {
           </View>
         )}
 
+        {/* Harvest History Section */}
+        {(plant.plant_type === 'fruit_tree' || plant.plant_type === 'coconut_tree') && (
+          <View style={styles.harvestSection}>
+            <View style={styles.harvestHeader}>
+              <Text style={styles.sectionTitle}>🧺 Harvest History</Text>
+              {harvestEntries.length > 0 && (
+                <TouchableOpacity onPress={() => navigation.navigate('JournalForm')}>
+                  <Ionicons name="add-circle" size={24} color="#2e7d32" />
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            {harvestEntries.length > 0 ? (
+              <>
+                {/* Harvest Statistics */}
+                <View style={styles.harvestStats}>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{harvestEntries.length}</Text>
+                    <Text style={styles.statLabel}>Harvests</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>
+                      {harvestEntries.reduce((sum, e) => sum + (e.harvest_quantity || 0), 0).toFixed(1)}
+                    </Text>
+                    <Text style={styles.statLabel}>Total {harvestEntries[0]?.harvest_unit || 'units'}</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>
+                      {(harvestEntries.reduce((sum, e) => sum + (e.harvest_quantity || 0), 0) / harvestEntries.length).toFixed(1)}
+                    </Text>
+                    <Text style={styles.statLabel}>Avg/harvest</Text>
+                  </View>
+                  {plant.plant_type === 'coconut_tree' && harvestEntries.length > 0 && (() => {
+                    const lastHarvestDate = new Date(harvestEntries[0].created_at);
+                    const nextHarvestDate = new Date(lastHarvestDate);
+                    nextHarvestDate.setMonth(nextHarvestDate.getMonth() + 2);
+                    const daysUntil = Math.ceil((nextHarvestDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    return (
+                      <View style={styles.statCard}>
+                        <Text style={[styles.statValue, { fontSize: 18, color: daysUntil <= 7 ? '#4CAF50' : '#666' }]}>
+                          {daysUntil > 0 ? `${daysUntil}d` : 'Ready'}
+                        </Text>
+                        <Text style={styles.statLabel}>Next harvest</Text>
+                      </View>
+                    );
+                  })()}
+                </View>
+
+                {/* Recent Harvests */}
+                <Text style={styles.recentTitle}>Recent Harvests</Text>
+                {harvestEntries.slice(0, 5).map((entry, index) => (
+                  <View key={entry.id} style={styles.harvestItem}>
+                    <View style={styles.harvestLeft}>
+                      <Text style={styles.harvestDate}>
+                        {new Date(entry.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </Text>
+                      <Text style={styles.harvestQuantity}>
+                        {entry.harvest_quantity} {entry.harvest_unit}
+                      </Text>
+                    </View>
+                    <View style={styles.harvestRight}>
+                      {entry.harvest_quality && (
+                        <Text style={styles.qualityBadge}>
+                          {entry.harvest_quality === 'excellent' ? '🌟' : 
+                           entry.harvest_quality === 'good' ? '👍' : 
+                           entry.harvest_quality === 'fair' ? '👌' : '👎'}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                ))}
+                
+                {harvestEntries.length > 5 && (
+                  <TouchableOpacity 
+                    style={styles.viewAllButton}
+                    onPress={() => navigation.navigate('Journal')}
+                  >
+                    <Text style={styles.viewAllText}>View All in Journal</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#2e7d32" />
+                  </TouchableOpacity>
+                )}
+              </>
+            ) : (
+              <View style={styles.emptyHarvest}>
+                <Ionicons name="basket-outline" size={48} color="#ccc" />
+                <Text style={styles.emptyHarvestText}>No harvests recorded yet</Text>
+                <TouchableOpacity 
+                  style={styles.addHarvestButton}
+                  onPress={() => navigation.navigate('JournalForm')}
+                >
+                  <Text style={styles.addHarvestButtonText}>Record First Harvest</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
         <View style={styles.tasksSection}>
           <Text style={styles.sectionTitle}>Tasks ({tasks.length})</Text>
           {tasks.map(task => (
@@ -250,40 +331,6 @@ export default function PlantDetailScreen({ route, navigation }: any) {
               </Text>
             </View>
           ))}
-
-          <View style={styles.addTaskSection}>
-            <Text style={styles.addTaskTitle}>Quick Add Task</Text>
-            <View style={styles.taskButtons}>
-              <TouchableOpacity
-                style={[styles.taskButton, { backgroundColor: '#2196F320' }]}
-                onPress={() => handleAddTask('water')}
-              >
-                <Ionicons name="water" size={24} color="#2196F3" />
-                <Text style={[styles.taskButtonText, { color: '#2196F3' }]}>Water</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.taskButton, { backgroundColor: '#FF980320' }]}
-                onPress={() => handleAddTask('fertilise')}
-              >
-                <Ionicons name="nutrition" size={24} color="#FF9800" />
-                <Text style={[styles.taskButtonText, { color: '#FF9800' }]}>Fertilise</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.taskButton, { backgroundColor: '#9C27B020' }]}
-                onPress={() => handleAddTask('prune')}
-              >
-                <Ionicons name="cut" size={24} color="#9C27B0" />
-                <Text style={[styles.taskButtonText, { color: '#9C27B0' }]}>Prune</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.taskButton, { backgroundColor: '#4CAF5020' }]}
-                onPress={() => handleAddTask('repot')}
-              >
-                <Ionicons name="move" size={24} color="#4CAF50" />
-                <Text style={[styles.taskButtonText, { color: '#4CAF50' }]}>Repot</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
         </View>
       </View>
     </ScrollView>
@@ -421,31 +468,6 @@ const styles = StyleSheet.create({
   taskDisabled: {
     color: '#999',
   },
-  addTaskSection: {
-    marginTop: 16,
-  },
-  addTaskTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-  },
-  taskButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  taskButton: {
-    width: '47%',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  taskButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 8,
-  },
   centered: {
     flex: 1,
     justifyContent: 'center',
@@ -456,5 +478,107 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginTop: 16,
+  },
+  harvestSection: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  harvestHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  harvestStats: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#2e7d32',
+  },
+  statLabel: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  recentTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
+  harvestItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  harvestLeft: {
+    flex: 1,
+  },
+  harvestDate: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  harvestQuantity: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  harvestRight: {
+    alignItems: 'flex-end',
+  },
+  qualityBadge: {
+    fontSize: 24,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 8,
+  },
+  viewAllText: {
+    fontSize: 14,
+    color: '#2e7d32',
+    fontWeight: '600',
+    marginRight: 4,
+  },
+  emptyHarvest: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  emptyHarvestText: {
+    fontSize: 16,
+    color: '#999',
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  addHarvestButton: {
+    backgroundColor: '#2e7d32',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  addHarvestButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

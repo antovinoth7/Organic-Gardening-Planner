@@ -47,6 +47,21 @@ export default function JournalScreen({ navigation }: any) {
     return plant?.name;
   };
 
+  const getEntryTypeIcon = (type: string) => {
+    const iconMap: Record<string, string> = {
+      observation: 'eye',
+      harvest: 'basket',
+      issue: 'alert-circle',
+      milestone: 'flag',
+      other: 'document-text',
+    };
+    return (
+      <View style={styles.typeIconBadge}>
+        <Ionicons name={iconMap[type] as any || 'document-text'} size={12} color="#2e7d32" />
+      </View>
+    );
+  };
+
   const handleDelete = async (id: string) => {
     Alert.alert(
       'Delete Entry',
@@ -96,16 +111,45 @@ export default function JournalScreen({ navigation }: any) {
           });
 
           return (
-            <View key={entry.id} style={styles.card}>
-              {entry.photo_url && (
-                <Image source={{ uri: entry.photo_url }} style={styles.photo} />
+            <TouchableOpacity 
+              key={entry.id} 
+              style={styles.card}
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('JournalForm', { entry })}
+            >
+              {entry.photo_urls && entry.photo_urls.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
+                  {entry.photo_urls.map((photoUrl, idx) => (
+                    <Image key={idx} source={{ uri: photoUrl }} style={styles.photo} />
+                  ))}
+                </ScrollView>
               )}
               <View style={styles.cardContent}>
                 <View style={styles.cardHeader}>
-                  <Text style={styles.date}>{date}</Text>
-                  <TouchableOpacity onPress={() => handleDelete(entry.id)}>
-                    <Ionicons name="trash-outline" size={20} color="#f44336" />
-                  </TouchableOpacity>
+                  <View style={styles.headerLeft}>
+                    <Text style={styles.date}>{date}</Text>
+                    {getEntryTypeIcon(entry.entry_type)}
+                  </View>
+                  <View style={styles.headerRight}>
+                    <TouchableOpacity 
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        navigation.navigate('JournalForm', { entry });
+                      }}
+                      style={styles.iconButton}
+                    >
+                      <Ionicons name="pencil-outline" size={20} color="#2e7d32" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleDelete(entry.id);
+                      }}
+                      style={styles.iconButton}
+                    >
+                      <Ionicons name="trash-outline" size={20} color="#f44336" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 {plantName && (
                   <View style={styles.plantTag}>
@@ -115,7 +159,7 @@ export default function JournalScreen({ navigation }: any) {
                 )}
                 <Text style={styles.content}>{entry.content}</Text>
               </View>
-            </View>
+            </TouchableOpacity>
           );
         })}
 
@@ -172,9 +216,13 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  photosScroll: {
+    maxHeight: 200,
+  },
   photo: {
-    width: '100%',
+    width: 300,
     height: 200,
+    marginRight: 8,
     backgroundColor: '#e8f5e9',
   },
   cardContent: {
@@ -186,10 +234,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   date: {
     fontSize: 14,
     fontWeight: '600',
     color: '#666',
+  },
+  typeIconBadge: {
+    backgroundColor: '#e8f5e9',
+    borderRadius: 12,
+    padding: 4,
+  },
+  iconButton: {
+    padding: 4,
   },
   plantTag: {
     flexDirection: 'row',

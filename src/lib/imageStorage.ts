@@ -14,14 +14,18 @@
 
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
+import { Platform } from 'react-native';
 
 // Directory for storing all garden images
-const IMAGES_DIR = `${FileSystem.documentDirectory}garden_images/`;
+const IMAGES_DIR = Platform.OS === 'web' ? null : `${FileSystem.documentDirectory}garden_images/`;
 
 /**
  * Initialize the images directory if it doesn't exist
  */
 export const initImageStorage = async (): Promise<void> => {
+  // Skip on web platform
+  if (Platform.OS === 'web' || !IMAGES_DIR) return;
+  
   try {
     const dirInfo = await FileSystem.getInfoAsync(IMAGES_DIR);
     if (!dirInfo.exists) {
@@ -44,6 +48,11 @@ export const saveImageLocally = async (
   sourceUri: string,
   prefix: string = 'img'
 ): Promise<string> => {
+  // On web, just return the source URI (blob URL)
+  if (Platform.OS === 'web') {
+    return sourceUri;
+  }
+  
   try {
     await initImageStorage();
     
@@ -75,6 +84,9 @@ export const saveImageLocally = async (
 export const deleteImageLocally = async (imageUri: string | null): Promise<void> => {
   if (!imageUri) return;
   
+  // On web, we can't delete blob URLs, just skip
+  if (Platform.OS === 'web') return;
+  
   try {
     const fileInfo = await FileSystem.getInfoAsync(imageUri);
     if (fileInfo.exists) {
@@ -94,6 +106,9 @@ export const deleteImageLocally = async (imageUri: string | null): Promise<void>
  */
 export const imageExists = async (imageUri: string | null): Promise<boolean> => {
   if (!imageUri) return false;
+  
+  // On web, assume blob URLs exist
+  if (Platform.OS === 'web') return true;
   
   try {
     const fileInfo = await FileSystem.getInfoAsync(imageUri);

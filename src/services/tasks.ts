@@ -136,20 +136,23 @@ export const deleteTaskTemplate = async (id: string): Promise<void> => {
   await deleteDoc(docRef);
 };
 
-export const markTaskDone = async (template: TaskTemplate): Promise<void> => {
+export const markTaskDone = async (template: TaskTemplate, notes?: string, productUsed?: string): Promise<void> => {
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
 
   const doneAt = new Date();
   const nextDueAt = new Date(doneAt.getTime() + template.frequency_days * 24 * 60 * 60 * 1000);
 
-  // Insert task log
+  // Insert task log with optional notes
   await addDoc(collection(db, TASK_LOGS_COLLECTION), {
     user_id: user.uid,
     template_id: template.id,
     plant_id: template.plant_id,
     task_type: template.task_type,
-    done_at: Timestamp.fromDate(doneAt)
+    done_at: Timestamp.fromDate(doneAt),
+    notes: notes || null,
+    product_used: productUsed || null,
+    created_at: Timestamp.now()
   });
 
   // Update next due date
@@ -183,7 +186,8 @@ export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {
     const logs = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
-      done_at: doc.data().done_at?.toDate?.()?.toISOString() || doc.data().done_at
+      done_at: doc.data().done_at?.toDate?.()?.toISOString() || doc.data().done_at,
+      created_at: doc.data().created_at?.toDate?.()?.toISOString() || doc.data().created_at
     })) as TaskLog[];
     
     // Cache locally
@@ -194,5 +198,77 @@ export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {
     console.warn('Failed to fetch from Firestore, using cached data:', error);
     const cachedLogs = await getData<TaskLog>(KEYS.TASK_LOGS);
     return templateId ? cachedLogs.filter(log => log.template_id === templateId) : cachedLogs;
+  }
+};
+
+/**
+ * Generate recurring tasks from plant care schedules
+ * This will create task templates for plants that have care schedules configured
+ */
+export const generateRecurringTasksFromPlants = async (plants: any[]): Promise<void> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+
+  // Get existing task templates to avoid duplicates
+  const existingTasks = await getTaskTemplates();
+  
+  for (const plant of plants) {
+    if (!plant.care_schedule || !plant.care_schedule.auto_generate_tasks) continue;
+
+    const schedule = plant.care_schedule;
+    
+    // Generate water task
+    if (schedule.water_frequency_days && schedule.water_frequency_days > 0) {
+      const existingWaterTask = existingTasks.find(
+        t => t.plant_id === plant.id && t.task_type === 'water'
+      );
+      
+      if (!existingWaterTask) {
+        await createTaskTemplate({
+          plant_id: plant.id,
+          task_type: 'water',
+          frequency_days: schedule.water_frequency_days,
+          next_due_at: new Date().toISOString(),
+          enabled: true,
+          preferred_time: null
+        });
+      }
+    }
+
+    // Generate fertilise task
+    if (schedule.fertilise_frequency_days && schedule.fertilise_frequency_days > 0) {
+      const existingFertiliseTask = existingTasks.find(
+        t => t.plant_id === plant.id && t.task_type === 'fertilise'
+      );
+      
+      if (!existingFertiliseTask) {
+        await createTaskTemplate({
+          plant_id: plant.id,
+          task_type: 'fertilise',
+          frequency_days: schedule.fertilise_frequency_days,
+          next_due_at: new Date().toISOString(),
+          enabled: true,
+          preferred_time: null
+        });
+      }
+    }
+
+    // Generate prune task
+    if (schedule.prune_frequency_days && schedule.prune_frequency_days > 0) {
+      const existingPruneTask = existingTasks.find(
+        t => t.plant_id === plant.id && t.task_type === 'prune'
+      );
+      
+      if (!existingPruneTask) {
+        await createTaskTemplate({
+          plant_id: plant.id,
+          task_type: 'prune',
+          frequency_days: schedule.prune_frequency_days,
+          next_due_at: new Date().toISOString(),
+          enabled: true,
+          preferred_time: null
+        });
+      }
+    }
   }
 };

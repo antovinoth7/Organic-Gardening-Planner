@@ -1,11 +1,23 @@
 export type SpaceType = 'pot' | 'bed' | 'ground';
 export type TaskType = 'water' | 'fertilise' | 'prune' | 'repot' | 'spray' | 'mulch';
 export type PlantType = 'vegetable' | 'herb' | 'flower' | 'fruit_tree' | 'timber_tree' | 'coconut_tree' | 'shrub';
+export type JournalEntryType = 'observation' | 'harvest' | 'issue' | 'milestone' | 'other';
 export type SunlightLevel = 'full_sun' | 'partial_sun' | 'shade';
 export type SoilType = 'garden_soil' | 'potting_mix' | 'coco_peat' | 'custom';
 export type WaterRequirement = 'low' | 'medium' | 'high';
 export type HealthStatus = 'healthy' | 'stressed' | 'recovering' | 'sick';
 export type FertiliserType = 'compost' | 'vermicompost' | 'fish_emulsion' | 'seaweed' | 'neem_cake' | 'other';
+
+export interface PestDiseaseRecord {
+  id?: string;
+  type: 'pest' | 'disease';
+  name: string;
+  occurredAt: string;
+  treatment?: string;
+  resolved: boolean;
+  resolvedAt?: string;
+  notes?: string;
+}
 
 export interface Plant {
   id: string;
@@ -41,6 +53,19 @@ export interface Plant {
   last_watered_date?: string | null;
   last_fertilised_date?: string | null;
   health_status?: HealthStatus | null;
+  // Pest & Disease History
+  pest_disease_history?: PestDiseaseRecord[] | null;
+  // Companion Plants
+  companion_plants?: string[] | null;
+  // Expected Harvest Date
+  expected_harvest_date?: string | null;
+  // Recurring Care Schedule (for auto-generating tasks)
+  care_schedule?: {
+    water_frequency_days?: number;
+    fertilise_frequency_days?: number;
+    prune_frequency_days?: number;
+    auto_generate_tasks?: boolean;
+  } | null;
   created_at: string;
 }
 
@@ -72,8 +97,15 @@ export interface JournalEntry {
   id: string;
   user_id: string;
   plant_id: string | null;
+  entry_type: JournalEntryType;
   content: string;
-  // Local file URI - images stored on device, not in cloud
-  photo_url: string | null;
+  // Local file URIs - images stored on device, not in cloud
+  photo_urls: string[];
+  // Legacy field for backward compatibility
+  photo_url?: string | null;
+  // Harvest-specific fields
+  harvest_quantity?: number | null;
+  harvest_unit?: string | null;
+  harvest_quality?: 'excellent' | 'good' | 'fair' | 'poor' | null;
   created_at: string;
 }

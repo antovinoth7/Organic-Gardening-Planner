@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl, Alert, ActivityIndicator, ScrollView, TextInput } from 'react-native';
 import { getPlants, deletePlant } from '../services/plants';
 import { Plant, PlantType, SpaceType, HealthStatus, SunlightLevel, WaterRequirement } from '../types/database.types';
 import PlantCard from '../components/PlantCard';
 import { Ionicons } from '@expo/vector-icons';
 
-type FilterCategory = 'type' | 'health' | 'space' | 'sunlight' | 'water';
+type FilterCategory = 'type' | 'health' | 'space' | 'sunlight' | 'water' | 'location';
 type FilterType = 'all' | 'crops' | 'trees';
+type SortOption = 'name' | 'newest' | 'oldest' | 'health' | 'age';
 
 interface ActiveFilters {
   type: FilterType;
@@ -14,9 +15,14 @@ interface ActiveFilters {
   space: SpaceType | 'all';
   sunlight: SunlightLevel | 'all';
   water: WaterRequirement | 'all';
+  parentLocation: string;
+  childLocation: string;
 }
 
 const ITEMS_PER_PAGE = 20;
+
+const PARENT_LOCATIONS = ['Mangarai', 'Velliavilai Home', 'Velliavilai Near Pond', 'Palappallam'];
+const CHILD_LOCATIONS = ['North', 'South', 'East', 'West', 'North-East', 'North-West', 'South-East', 'South-West', 'Center', 'Front', 'Back'];
 
 export default function PlantsScreen({ navigation }: any) {
   const [plants, setPlants] = useState<Plant[]>([]);
@@ -24,12 +30,17 @@ export default function PlantsScreen({ navigation }: any) {
   const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE);
   const [loadingMore, setLoadingMore] = useState(false);
   const [activeCategory, setActiveCategory] = useState<FilterCategory>('type');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('name');
+  const [showSortMenu, setShowSortMenu] = useState(false);
   const [filters, setFilters] = useState<ActiveFilters>({
     type: 'all',
     health: 'all',
     space: 'all',
     sunlight: 'all',
     water: 'all',
+    parentLocation: '',
+    childLocation: '',
   });
 
   const loadPlants = async () => {
@@ -76,6 +87,17 @@ export default function PlantsScreen({ navigation }: any) {
   const getFilteredPlants = () => {
     let filtered = [...plants];
 
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(p => 
+        p.name.toLowerCase().includes(query) ||
+        (p.plant_variety && p.plant_variety.toLowerCase().includes(query)) ||
+        (p.variety && p.variety.toLowerCase().includes(query)) ||
+        p.location.toLowerCase().includes(query)
+      );
+    }
+
     if (filters.type === 'crops') {
       filtered = filtered.filter(p => ['vegetable', 'herb', 'flower'].includes(p.plant_type));
     } else if (filters.type === 'trees') {
@@ -98,7 +120,43 @@ export default function PlantsScreen({ navigation }: any) {
       filtered = filtered.filter(p => p.water_requirement === filters.water);
     }
 
+    if (filters.parentLocation) {
+      filtered = filtered.filter(p => p.location.includes(filters.parentLocation));
+    }
+
+    if (filters.childLocation) {
+      filtered = filtered.filter(p => p.location.includes(filters.childLocation));
+    }
+
     return filtered;
+  };
+
+  const getSortedPlants = (plantsToSort: Plant[]) => {
+    const sorted = [...plantsToSort];
+    
+    switch (sortBy) {
+      case 'name':
+        return sorted.sort((a, b) => a.name.localeCompare(b.name));
+      case 'newest':
+        return sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      case 'oldest':
+        return sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      case 'health':
+        const healthOrder = { healthy: 0, recovering: 1, stressed: 2, sick: 3 };
+        return sorted.sort((a, b) => {
+          const aHealth = a.health_status || 'healthy';
+          const bHealth = b.health_status || 'healthy';
+          return healthOrder[aHealth] - healthOrder[bHealth];
+        });
+      case 'age':
+        return sorted.sort((a, b) => {
+          const aDate = a.planting_date ? new Date(a.planting_date).getTime() : 0;
+          const bDate = b.planting_date ? new Date(b.planting_date).getTime() : 0;
+          return aDate - bDate;
+        });
+      default:
+        return sorted;
+    }
   };
 
   const updateFilter = <K extends keyof ActiveFilters>(category: K, value: ActiveFilters[K]) => {
@@ -107,7 +165,8 @@ export default function PlantsScreen({ navigation }: any) {
 
   const hasActiveFilters = () => {
     return filters.type !== 'all' || filters.health !== 'all' || 
-           filters.space !== 'all' || filters.sunlight !== 'all' || filters.water !== 'all';
+           filters.space !== 'all' || filters.sunlight !== 'all' || filters.water !== 'all' ||
+           filters.parentLocation !== '' || filters.childLocation !== '' || searchQuery.trim() !== '';
   };
 
   const clearAllFilters = () => {
@@ -117,11 +176,14 @@ export default function PlantsScreen({ navigation }: any) {
       space: 'all',
       sunlight: 'all',
       water: 'all',
+      parentLocation: '',
+      childLocation: '',
     });
+    setSearchQuery('');
     setDisplayCount(ITEMS_PER_PAGE);
   };
 
-  const filteredPlants = useMemo(() => getFilteredPlants(), [plants, filters]);
+  const filteredPlants = useMemo(() => getSortedPlants(getFilteredPlants()), [plants, filters, searchQuery, sortBy]);
   
   const displayedPlants = useMemo(() => {
     return filteredPlants.slice(0, displayCount);
@@ -141,22 +203,93 @@ export default function PlantsScreen({ navigation }: any) {
 
   useEffect(() => {
     setDisplayCount(ITEMS_PER_PAGE);
-  }, [filters]);
+  }, [filters, searchQuery, sortBy]);
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>My Plants</Text>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={() => navigation.navigate('PlantForm')}
-        >
-          <Ionicons name="add" size={24} color="#fff" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            style={styles.sortButton}
+            onPress={() => setShowSortMenu(!showSortMenu)}
+          >
+            <Ionicons name="swap-vertical" size={22} color="#2e7d32" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => navigation.navigate('PlantForm')}
+          >
+            <Ionicons name="add" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* Sort Menu */}
+      {showSortMenu && (
+        <View style={styles.sortMenu}>
+          <TouchableOpacity 
+            style={[styles.sortOption, sortBy === 'name' && styles.sortOptionActive]}
+            onPress={() => { setSortBy('name'); setShowSortMenu(false); }}
+          >
+            <Ionicons name="text" size={18} color={sortBy === 'name' ? '#2e7d32' : '#666'} />
+            <Text style={[styles.sortText, sortBy === 'name' && styles.sortTextActive]}>Name (A-Z)</Text>
+            {sortBy === 'name' && <Ionicons name="checkmark" size={18} color="#2e7d32" />}
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.sortOption, sortBy === 'newest' && styles.sortOptionActive]}
+            onPress={() => { setSortBy('newest'); setShowSortMenu(false); }}
+          >
+            <Ionicons name="time" size={18} color={sortBy === 'newest' ? '#2e7d32' : '#666'} />
+            <Text style={[styles.sortText, sortBy === 'newest' && styles.sortTextActive]}>Newest First</Text>
+            {sortBy === 'newest' && <Ionicons name="checkmark" size={18} color="#2e7d32" />}
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.sortOption, sortBy === 'oldest' && styles.sortOptionActive]}
+            onPress={() => { setSortBy('oldest'); setShowSortMenu(false); }}
+          >
+            <Ionicons name="hourglass" size={18} color={sortBy === 'oldest' ? '#2e7d32' : '#666'} />
+            <Text style={[styles.sortText, sortBy === 'oldest' && styles.sortTextActive]}>Oldest First</Text>
+            {sortBy === 'oldest' && <Ionicons name="checkmark" size={18} color="#2e7d32" />}
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.sortOption, sortBy === 'health' && styles.sortOptionActive]}
+            onPress={() => { setSortBy('health'); setShowSortMenu(false); }}
+          >
+            <Ionicons name="fitness" size={18} color={sortBy === 'health' ? '#2e7d32' : '#666'} />
+            <Text style={[styles.sortText, sortBy === 'health' && styles.sortTextActive]}>Health Status</Text>
+            {sortBy === 'health' && <Ionicons name="checkmark" size={18} color="#2e7d32" />}
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.sortOption, sortBy === 'age' && styles.sortOptionActive]}
+            onPress={() => { setSortBy('age'); setShowSortMenu(false); }}
+          >
+            <Ionicons name="trending-up" size={18} color={sortBy === 'age' ? '#2e7d32' : '#666'} />
+            <Text style={[styles.sortText, sortBy === 'age' && styles.sortTextActive]}>Age (Oldest)</Text>
+            {sortBy === 'age' && <Ionicons name="checkmark" size={18} color="#2e7d32" />}
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View style={styles.filterContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+          {/* Search Button/Input */}
+          <View style={styles.searchWrapper}>
+            <Ionicons name="search" size={16} color="#666" />
+            <TextInput
+              style={styles.compactSearchInput}
+              placeholder="Search..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor="#999"
+            />
+            {searchQuery.trim() !== '' && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={16} color="#999" />
+              </TouchableOpacity>
+            )}
+          </View>
+
           <TouchableOpacity 
             style={[styles.categoryChip, activeCategory === 'type' && styles.categoryChipActive]}
             onPress={() => setActiveCategory('type')}
@@ -195,6 +328,14 @@ export default function PlantsScreen({ navigation }: any) {
             <Ionicons name="water" size={16} color={activeCategory === 'water' ? '#2e7d32' : '#666'} />
             <Text style={[styles.categoryText, activeCategory === 'water' && styles.categoryTextActive]}>Water</Text>
             {filters.water !== 'all' && <View style={styles.activeDot} />}
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.categoryChip, activeCategory === 'location' && styles.categoryChipActive]}
+            onPress={() => setActiveCategory('location')}
+          >
+            <Ionicons name="location" size={16} color={activeCategory === 'location' ? '#2e7d32' : '#666'} />
+            <Text style={[styles.categoryText, activeCategory === 'location' && styles.categoryTextActive]}>Location</Text>
+            {(filters.parentLocation !== '' || filters.childLocation !== '') && <View style={styles.activeDot} />}
           </TouchableOpacity>
           {hasActiveFilters() && (
             <TouchableOpacity 
@@ -357,6 +498,55 @@ export default function PlantsScreen({ navigation }: any) {
               </TouchableOpacity>
             </>
           )}
+
+          {activeCategory === 'location' && (
+            <>
+              <Text style={styles.filterSectionLabel}>Main Location:</Text>
+              <TouchableOpacity 
+                style={[styles.filterChip, filters.parentLocation === '' && styles.filterChipActive]}
+                onPress={() => {
+                  updateFilter('parentLocation', '');
+                  updateFilter('childLocation', '');
+                }}
+              >
+                <Text style={[styles.filterText, filters.parentLocation === '' && styles.filterTextActive]}>All</Text>
+              </TouchableOpacity>
+              {PARENT_LOCATIONS.map(loc => (
+                <TouchableOpacity 
+                  key={loc}
+                  style={[styles.filterChip, filters.parentLocation === loc && styles.filterChipActive]}
+                  onPress={() => {
+                    updateFilter('parentLocation', loc);
+                    updateFilter('childLocation', '');
+                  }}
+                >
+                  <Text style={[styles.filterText, filters.parentLocation === loc && styles.filterTextActive]}>📍 {loc}</Text>
+                </TouchableOpacity>
+              ))}
+              
+              {filters.parentLocation !== '' && (
+                <>
+                  <View style={styles.filterDivider} />
+                  <Text style={styles.filterSectionLabel}>Direction:</Text>
+                  <TouchableOpacity 
+                    style={[styles.filterChip, filters.childLocation === '' && styles.filterChipActive]}
+                    onPress={() => updateFilter('childLocation', '')}
+                  >
+                    <Text style={[styles.filterText, filters.childLocation === '' && styles.filterTextActive]}>All</Text>
+                  </TouchableOpacity>
+                  {CHILD_LOCATIONS.map(loc => (
+                    <TouchableOpacity 
+                      key={loc}
+                      style={[styles.filterChip, filters.childLocation === loc && styles.filterChipActive]}
+                      onPress={() => updateFilter('childLocation', loc)}
+                    >
+                      <Text style={[styles.filterText, filters.childLocation === loc && styles.filterTextActive]}>🧭 {loc}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+            </>
+          )}
         </ScrollView>
       </View>
 
@@ -432,6 +622,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  sortButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#e8f5e9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   addButton: {
     width: 48,
     height: 48,
@@ -439,6 +642,61 @@ const styles = StyleSheet.create({
     backgroundColor: '#2e7d32',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  searchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+    minWidth: 160,
+    gap: 6,
+  },
+  compactSearchInput: {
+    fontSize: 14,
+    color: '#333',
+    padding: 0,
+    minWidth: 80,
+    maxWidth: 120,
+  },
+  sortMenu: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sortOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    gap: 12,
+  },
+  sortOptionActive: {
+    backgroundColor: '#f5f5f5',
+  },
+  sortText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#333',
+  },
+  sortTextActive: {
+    fontWeight: '600',
+    color: '#2e7d32',
   },
   filterContainer: {
     paddingHorizontal: 16,
@@ -529,6 +787,21 @@ const styles = StyleSheet.create({
   filterTextActive: {
     color: '#2e7d32',
     fontWeight: '600',
+  },
+  filterSectionLabel: {
+    fontSize: 12,
+    color: '#999',
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  filterDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: '#ddd',
+    marginHorizontal: 8,
   },
   resultsHeader: {
     paddingHorizontal: 16,

@@ -40,9 +40,9 @@ const AppTabs = () => (
     screenOptions={({ route }) => ({
       tabBarIcon: ({ color, size }) => {
         let iconName: keyof typeof Ionicons.glyphMap = 'home';
-        if (route.name === 'Today') iconName = 'today';
+        if (route.name === 'Home') iconName = 'home';
         else if (route.name === 'Plants') iconName = 'leaf';
-        else if (route.name === 'Calendar') iconName = 'calendar';
+        else if (route.name === 'Care Plan') iconName = 'calendar';
         else if (route.name === 'Journal') iconName = 'book';
         else if (route.name === 'Settings') iconName = 'settings';
         return <Ionicons name={iconName} size={size} color={color} />;
@@ -52,9 +52,9 @@ const AppTabs = () => (
       headerShown: false,
     })}
   >
-    <Tab.Screen name="Today" component={TodayScreen} />
+    <Tab.Screen name="Home" component={TodayScreen} />
     <Tab.Screen name="Plants" component={PlantStack} />
-    <Tab.Screen name="Calendar" component={CalendarScreen} />
+    <Tab.Screen name="Care Plan" component={CalendarScreen} />
     <Tab.Screen name="Journal" component={JournalStack} />
     <Tab.Screen name="Settings" component={SettingsScreen} />
   </Tab.Navigator>

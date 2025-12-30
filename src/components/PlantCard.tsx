@@ -115,7 +115,7 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete }: PlantCar
             </Text>
           </View>
         )}
-        {isTree && age && (
+        {isTree && age !== null && age > 0 && (
           <Text style={styles.age}>{age} {age === 1 ? 'year' : 'years'} old</Text>
         )}
       </View>

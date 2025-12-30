@@ -33,11 +33,18 @@ export const getJournalEntries = async (): Promise<JournalEntry[]> => {
     );
     
     const snapshot = await getDocs(q);
-    const entries = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      created_at: doc.data().created_at?.toDate?.()?.toISOString() || doc.data().created_at
-    })) as JournalEntry[];
+    const entries = snapshot.docs.map(doc => {
+      const data = doc.data();
+      // Migrate legacy photo_url to photo_urls array
+      const photo_urls = data.photo_urls || (data.photo_url ? [data.photo_url] : []);
+      
+      return {
+        id: doc.id,
+        ...data,
+        photo_urls,
+        created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at
+      };
+    }) as JournalEntry[];
     
     // Cache locally
     await setData(KEYS.JOURNAL, entries);
@@ -45,7 +52,12 @@ export const getJournalEntries = async (): Promise<JournalEntry[]> => {
     return entries;
   } catch (error) {
     console.warn('Failed to fetch from Firestore, using cached data:', error);
-    return getData<JournalEntry>(KEYS.JOURNAL);
+    const cachedEntries = await getData<JournalEntry>(KEYS.JOURNAL);
+    // Ensure cached entries also have photo_urls migrated
+    return cachedEntries.map(entry => ({
+      ...entry,
+      photo_urls: entry.photo_urls || (entry.photo_url ? [entry.photo_url] : [])
+    }));
   }
 };
 
@@ -55,10 +67,12 @@ export const createJournalEntry = async (
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
 
-  // CRITICAL: photo_url should already be a local file URI
-  // Only the URI string goes to Firestore, not the actual image data
+  // CRITICAL: photo_urls should already be local file URIs
+  // Only the URI strings go to Firestore, not the actual image data
   const newEntry = {
     ...entry,
+    // Ensure photo_urls exists as array for consistency
+    photo_urls: entry.photo_urls || [],
     user_id: user.uid,
     created_at: Timestamp.now(),
   };
@@ -68,6 +82,7 @@ export const createJournalEntry = async (
   const result = {
     id: docRef.id,
     ...entry,
+    photo_urls: entry.photo_urls || [],
     user_id: user.uid,
     created_at: newEntry.created_at.toDate().toISOString()
   } as JournalEntry;
@@ -113,7 +128,7 @@ export const updateJournalEntry = async (
 };
 
 export const deleteJournalEntry = async (id: string): Promise<void> => {
-  // Get the entry to find its image URI
+  // Get the entry to find its image URIs
   const cachedEntries = await getData<JournalEntry>(KEYS.JOURNAL);
   const entry = cachedEntries.find(e => e.id === id);
   
@@ -121,8 +136,14 @@ export const deleteJournalEntry = async (id: string): Promise<void> => {
   const docRef = doc(db, JOURNAL_COLLECTION, id);
   await deleteDoc(docRef);
   
-  // Delete the local image file if it exists
-  if (entry?.photo_url) {
+  // Delete all local image files
+  if (entry?.photo_urls && entry.photo_urls.length > 0) {
+    for (const photoUrl of entry.photo_urls) {
+      await deleteImageLocally(photoUrl);
+    }
+  }
+  // Also handle legacy photo_url field
+  else if (entry?.photo_url) {
     await deleteImageLocally(entry.photo_url);
   }
   
