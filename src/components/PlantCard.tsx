@@ -1,0 +1,240 @@
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { Plant } from '../types/database.types';
+import { Ionicons } from '@expo/vector-icons';
+import { imageExists } from '../lib/imageStorage';
+
+interface PlantCardProps {
+  plant: Plant;
+  onPress: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}
+
+export default function PlantCard({ plant, onPress, onEdit, onDelete }: PlantCardProps) {
+  const [imageAvailable, setImageAvailable] = useState(false);
+
+  // Check if the local image file exists
+  useEffect(() => {
+    if (plant.photo_url) {
+      imageExists(plant.photo_url).then(setImageAvailable);
+    }
+  }, [plant.photo_url]);
+
+  const getPlantTypeIcon = () => {
+    const icons: Record<string, string> = {
+      vegetable: '🥬',
+      herb: '🌿',
+      flower: '🌸',
+      fruit_tree: '🥭',
+      timber_tree: '🌲',
+      coconut_tree: '🥥',
+      shrub: '🌱',
+    };
+    return icons[plant.plant_type] || '🌱';
+  };
+
+  const getPlantTypeLabel = () => {
+    const labels: Record<string, string> = {
+      vegetable: 'Vegetable',
+      herb: 'Herb',
+      flower: 'Flower',
+      fruit_tree: 'Fruit Tree',
+      timber_tree: 'Timber Tree',
+      coconut_tree: 'Coconut Tree',
+      shrub: 'Shrub',
+    };
+    return labels[plant.plant_type] || 'Plant';
+  };
+
+  const isTree = ['fruit_tree', 'timber_tree', 'coconut_tree'].includes(plant.plant_type);
+  const age = plant.planting_date ? Math.floor((new Date().getTime() - new Date(plant.planting_date).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : null;
+
+  const getHealthIcon = () => {
+    const icons: Record<string, string> = {
+      healthy: '✅',
+      stressed: '⚠️',
+      recovering: '🔄',
+      sick: '❌',
+    };
+    return plant.health_status ? icons[plant.health_status] : '';
+  };
+
+  const getHealthColor = () => {
+    const colors: Record<string, string> = {
+      healthy: '#4caf50',
+      stressed: '#ff9800',
+      recovering: '#2196f3',
+      sick: '#f44336',
+    };
+    return plant.health_status ? colors[plant.health_status] : '#666';
+  };
+
+  return (
+    <TouchableOpacity style={styles.card} onPress={onPress}>
+      {plant.photo_url && imageAvailable ? (
+        <Image 
+          source={{ uri: plant.photo_url }} 
+          style={styles.image}
+          onError={() => setImageAvailable(false)}
+        />
+      ) : (
+        <View style={[styles.image, styles.placeholder]}>
+          <Text style={styles.emoji}>{getPlantTypeIcon()}</Text>
+          {plant.photo_url && !imageAvailable && (
+            <Text style={styles.missingImageText}>📷</Text>
+          )}
+        </View>
+      )}
+
+      <View style={styles.content}>
+        <View style={styles.nameRow}>
+          <Text style={styles.name}>{plant.name}</Text>
+          <Text style={styles.badge}>{plant.plant_variety || getPlantTypeLabel()}</Text>
+        </View>
+        {plant.variety && (
+          <Text style={styles.variety}>{plant.variety}</Text>
+        )}
+        <View style={styles.info}>
+          <Ionicons 
+            name={plant.space_type === 'pot' ? 'cube-outline' : plant.space_type === 'bed' ? 'apps' : 'earth'} 
+            size={14} 
+            color="#666" 
+          />
+          <Text style={styles.infoText}>
+            {plant.space_type === 'pot' ? plant.pot_size || 'Pot' : plant.space_type === 'bed' ? plant.bed_name || 'Bed' : 'Ground'}
+          </Text>
+          <Text style={styles.separator}>•</Text>
+          <Text style={styles.infoText}>{plant.location}</Text>
+        </View>
+        {plant.health_status && (
+          <View style={styles.healthContainer}>
+            <Text style={styles.healthIcon}>{getHealthIcon()}</Text>
+            <Text style={[styles.healthText, { color: getHealthColor() }]}>
+              {plant.health_status.charAt(0).toUpperCase() + plant.health_status.slice(1)}
+            </Text>
+          </View>
+        )}
+        {isTree && age && (
+          <Text style={styles.age}>{age} {age === 1 ? 'year' : 'years'} old</Text>
+        )}
+      </View>
+
+      <View style={styles.actions}>
+        <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
+          <Ionicons name="pencil" size={20} color="#2e7d32" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
+          <Ionicons name="trash" size={20} color="#f44336" />
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  image: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  placeholder: {
+    backgroundColor: '#e8f5e9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emoji: {
+    fontSize: 40,
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  name: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  badge: {
+    fontSize: 10,
+    color: '#2e7d32',
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  variety: {
+    fontSize: 13,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  info: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 4,
+  },
+  separator: {
+    fontSize: 14,
+    color: '#ddd',
+    marginHorizontal: 6,
+  },
+  healthContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  healthIcon: {
+    fontSize: 12,
+    marginRight: 4,
+  },
+  healthText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  missingImageText: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    fontSize: 16,
+    opacity: 0.6,
+  },
+  age: {
+    fontSize: 12,
+    color: '#2e7d32',
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  actions: {
+    justifyContent: 'center',
+  },
+  actionButton: {
+    padding: 8,
+  },
+});

@@ -1,0 +1,105 @@
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { TaskTemplate } from '../types/database.types';
+import { Ionicons } from '@expo/vector-icons';
+
+interface TaskCardProps {
+  task: TaskTemplate;
+  plantName: string;
+  onMarkDone: () => void;
+  isOverdue?: boolean;
+}
+
+const taskIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
+  water: 'water',
+  fertilise: 'nutrition',
+  prune: 'cut',
+  repot: 'move',
+};
+
+const taskColors: Record<string, string> = {
+  water: '#2196F3',
+  fertilise: '#FF9800',
+  prune: '#9C27B0',
+  repot: '#4CAF50',
+};
+
+export default function TaskCard({ task, plantName, onMarkDone, isOverdue }: TaskCardProps) {
+  const color = taskColors[task.task_type] || '#666';
+  const icon = taskIcons[task.task_type] || 'ellipse';
+
+  return (
+    <View style={[styles.card, isOverdue && styles.overdueCard]}>
+      <View style={[styles.iconContainer, { backgroundColor: color + '20' }]}>
+        <Ionicons name={icon} size={24} color={color} />
+      </View>
+
+      <View style={styles.content}>
+        <Text style={styles.taskType}>
+          {task.task_type.charAt(0).toUpperCase() + task.task_type.slice(1)}
+        </Text>
+        <Text style={styles.plantName}>{plantName}</Text>
+        {task.preferred_time && (
+          <Text style={styles.time}>Preferred: {task.preferred_time}</Text>
+        )}
+      </View>
+
+      <TouchableOpacity style={[styles.button, { backgroundColor: color }]} onPress={onMarkDone}>
+        <Ionicons name="checkmark" size={20} color="#fff" />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  overdueCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#f44336',
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  content: {
+    flex: 1,
+  },
+  taskType: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  plantName: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  time: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
+  },
+  button: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
