@@ -191,24 +191,29 @@ export default function CalendarScreen() {
 
   // Get tasks for today and upcoming week
   const getTodayTasks = () => {
+    if (!tasks || tasks.length === 0) return [];
     const today = new Date();
     return tasks.filter(task => {
+      if (!task || !task.next_due_at) return false;
       const dueDate = new Date(task.next_due_at);
       return dueDate.toDateString() === today.toDateString();
     });
   };
 
   const getWeekTasks = () => {
+    if (!tasks || tasks.length === 0) return [];
     const weekEnd = new Date(currentWeekStart);
     weekEnd.setDate(weekEnd.getDate() + 7);
     
     return tasks.filter(task => {
+      if (!task || !task.next_due_at) return false;
       const dueDate = new Date(task.next_due_at);
       return dueDate >= currentWeekStart && dueDate < weekEnd;
     });
   };
 
   const getHarvestsReady = () => {
+    if (!plants || plants.length === 0 || !harvestEntries) return [];
     const fruitTrees = plants.filter(p => 
       (p.plant_type === 'fruit_tree' || p.plant_type === 'coconut_tree')
     );
@@ -242,6 +247,7 @@ export default function CalendarScreen() {
 
   const getPlantDetails = (plantId: string | null) => {
     if (!plantId) return { name: 'General', location: '', type: '' };
+    if (!plants || plants.length === 0) return { name: 'Unknown', location: '', type: '' };
     const plant = plants.find(p => p.id === plantId);
     return {
       name: plant?.name || 'Unknown',
@@ -275,6 +281,7 @@ export default function CalendarScreen() {
   };
 
   const renderSwipeableTask = (task: TaskTemplate) => {
+    if (!task || !task.next_due_at) return null;
     const plantDetails = getPlantDetails(task.plant_id);
     const dueDate = new Date(task.next_due_at);
     const isOverdue = dueDate < new Date();

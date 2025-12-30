@@ -103,21 +103,22 @@ export default function TodayScreen({ navigation }: any) {
 
   const getPlantName = (plantId: string | null) => {
     if (!plantId) return 'General';
+    if (!plants || plants.length === 0) return 'Unknown';
     const plant = plants.find(p => p.id === plantId);
     return plant?.name || 'Unknown';
   };
 
   // Calculate stats
   const stats = useMemo(() => {
-    const totalTasks = tasks.length;
-    const completed = taskLogs.length; // Use actual task logs from today
+    const totalTasks = tasks?.length || 0;
+    const completed = taskLogs?.length || 0; // Use actual task logs from today
     const completionRate = totalTasks > 0 ? Math.round((completed / totalTasks) * 100) : 0;
     
-    const unhealthyPlants = plants.filter(p => 
+    const unhealthyPlants = (plants || []).filter(p => 
       p.health_status === 'sick' || p.health_status === 'stressed'
     );
     
-    const needsAttention = plants.filter(p => {
+    const needsAttention = (plants || []).filter(p => {
       // Skip if no watering frequency is set
       if (!p.watering_frequency_days) return false;
       
@@ -151,14 +152,16 @@ export default function TodayScreen({ navigation }: any) {
     };
   }, [tasks, plants, taskLogs]);
 
-  const overdueTasks = tasks.filter(t => {
+  const overdueTasks = (tasks || []).filter(t => {
+    if (!t || !t.next_due_at) return false;
     const dueDate = new Date(t.next_due_at);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return dueDate < today;
   });
   
-  const todayTasks = tasks.filter(t => {
+  const todayTasks = (tasks || []).filter(t => {
+    if (!t || !t.next_due_at) return false;
     const dueDate = new Date(t.next_due_at);
     const today = new Date();
     return dueDate.toDateString() === today.toDateString();

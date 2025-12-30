@@ -85,16 +85,19 @@ export default function PlantsScreen({ navigation }: any) {
   };
 
   const getFilteredPlants = () => {
+    if (!plants || plants.length === 0) return [];
     let filtered = [...plants];
 
     // Search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(p => 
-        p.name.toLowerCase().includes(query) ||
-        (p.plant_variety && p.plant_variety.toLowerCase().includes(query)) ||
-        (p.variety && p.variety.toLowerCase().includes(query)) ||
-        p.location.toLowerCase().includes(query)
+        p && p.name && (
+          p.name.toLowerCase().includes(query) ||
+          (p.plant_variety && p.plant_variety.toLowerCase().includes(query)) ||
+          (p.variety && p.variety.toLowerCase().includes(query)) ||
+          (p.location && p.location.toLowerCase().includes(query))
+        )
       );
     }
 
