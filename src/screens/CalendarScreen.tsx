@@ -33,6 +33,7 @@ export default function CalendarScreen() {
   const [taskType, setTaskType] = useState<TaskType>('water');
   const [selectedPlant, setSelectedPlant] = useState<string>('');
   const [frequencyDays, setFrequencyDays] = useState('7');
+  const [isOneTimeTask, setIsOneTimeTask] = useState(false);
   const [startDate, setStartDate] = useState(new Date());
   const [preferredTime, setPreferredTime] = useState<'morning' | 'afternoon' | 'evening' | null>(null);
   const [taskDescription, setTaskDescription] = useState('');
@@ -126,10 +127,13 @@ export default function CalendarScreen() {
   };
 
   const handleCreateTask = async () => {
-    const frequency = parseInt(frequencyDays);
-    if (isNaN(frequency) || frequency < 1) {
-      Alert.alert('Error', 'Please enter a valid frequency (1 or more days)');
-      return;
+    // Validate frequency only if it's not a one-time task
+    if (!isOneTimeTask) {
+      const frequency = parseInt(frequencyDays);
+      if (isNaN(frequency) || frequency < 1) {
+        Alert.alert('Error', 'Please enter a valid frequency (1 or more days)');
+        return;
+      }
     }
 
     setLoading(true);
@@ -156,7 +160,7 @@ export default function CalendarScreen() {
       await createTaskTemplate({
         task_type: taskType,
         plant_id: selectedPlant || null,
-        frequency_days: frequency,
+        frequency_days: isOneTimeTask ? 0 : parseInt(frequencyDays),
         next_due_at: dueDate.toISOString(),
         enabled: true,
         preferred_time: preferredTime,
@@ -176,6 +180,7 @@ export default function CalendarScreen() {
     setTaskType('water');
     setSelectedPlant('');
     setFrequencyDays('7');
+    setIsOneTimeTask(false);
     setStartDate(new Date());
     setPreferredTime(null);
     setTaskDescription('');
@@ -761,7 +766,29 @@ export default function CalendarScreen() {
                   </TouchableOpacity>
                 </View>
 
-                <Text style={styles.label}>Repeat Every (days) *</Text>
+                <Text style={styles.label}>Task Type</Text>
+                <View style={styles.taskTypeToggle}>
+                  <TouchableOpacity 
+                    style={[styles.toggleButton, !isOneTimeTask && styles.toggleButtonActive]}
+                    onPress={() => setIsOneTimeTask(false)}
+                  >
+                    <Text style={[styles.toggleButtonText, !isOneTimeTask && styles.toggleButtonTextActive]}>
+                      🔄 Repeating
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.toggleButton, isOneTimeTask && styles.toggleButtonActive]}
+                    onPress={() => setIsOneTimeTask(true)}
+                  >
+                    <Text style={[styles.toggleButtonText, isOneTimeTask && styles.toggleButtonTextActive]}>
+                      ✓ One-Time
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {!isOneTimeTask && (
+                  <>
+                    <Text style={styles.label}>Repeat Every (days) *</Text>
                 
                 {/* Quick Presets */}
                 <View style={styles.presets}>
@@ -840,6 +867,21 @@ export default function CalendarScreen() {
                     </Text>
                     <Text style={styles.previewText}>
                       • Repeats every {frequencyDays} {parseInt(frequencyDays) === 1 ? 'day' : 'days'}
+                    </Text>
+                  </View>
+                )}
+                  </>
+                )}
+
+                {isOneTimeTask && (
+                  <View style={styles.preview}>
+                    <Text style={styles.previewTitle}>📅 One-Time Task</Text>
+                    <Text style={styles.previewText}>
+                      • Due: {startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {preferredTime && ` (${preferredTime})`}
+                    </Text>
+                    <Text style={styles.previewText}>
+                      • Will not repeat after completion
                     </Text>
                   </View>
                 )}
@@ -1425,6 +1467,34 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   timeButtonTextActive: {
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  taskTypeToggle: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  toggleButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  toggleButtonActive: {
+    borderColor: '#2e7d32',
+    backgroundColor: '#e8f5e9',
+  },
+  toggleButtonText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  toggleButtonTextActive: {
     color: '#2e7d32',
     fontWeight: '600',
   },

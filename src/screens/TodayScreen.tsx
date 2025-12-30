@@ -6,6 +6,7 @@ import { TaskTemplate, Plant, TaskLog } from '../types/database.types';
 import TaskCard from '../components/TaskCard';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function TodayScreen({ navigation }: any) {
   const [tasks, setTasks] = useState<TaskTemplate[]>([]);
@@ -47,6 +48,13 @@ export default function TodayScreen({ navigation }: any) {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Refresh data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const handleMarkDone = async (task: TaskTemplate) => {
     if (completingTaskId) return; // Prevent multiple clicks
