@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { TaskTemplate } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../theme';
 
 interface TaskCardProps {
   task: TaskTemplate;
@@ -26,7 +27,9 @@ const taskColors: Record<string, string> = {
 };
 
 export default function TaskCard({ task, plantName, onMarkDone, isOverdue, disabled }: TaskCardProps) {
-  const color = taskColors[task.task_type] || '#666';
+  const theme = useTheme();
+  const styles = createStyles(theme);
+  const color = taskColors[task.task_type] || theme.textSecondary;
   const icon = taskIcons[task.task_type] || 'ellipse';
 
   return (
@@ -57,10 +60,10 @@ export default function TaskCard({ task, plantName, onMarkDone, isOverdue, disab
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   card: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -73,7 +76,7 @@ const styles = StyleSheet.create({
   },
   overdueCard: {
     borderLeftWidth: 4,
-    borderLeftColor: '#f44336',
+    borderLeftColor: theme.error,
   },
   iconContainer: {
     width: 48,
@@ -89,16 +92,16 @@ const styles = StyleSheet.create({
   taskType: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
   },
   plantName: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     marginTop: 2,
   },
   time: {
     fontSize: 12,
-    color: '#999',
+    color: theme.textTertiary,
     marginTop: 2,
   },
   button: {

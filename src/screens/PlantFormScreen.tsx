@@ -25,6 +25,7 @@ import {
   getCommonPests, 
   getCommonDiseases 
 } from '../utils/plantHelpers';
+import { useTheme } from '../theme';
 
 const PLANT_VARIETIES: Record<PlantType, string[]> = {
   vegetable: ['Tomato', 'Carrot', 'Lettuce', 'Cabbage', 'Broccoli', 'Cucumber', 'Pepper', 'Eggplant', 'Spinach', 'Radish', 'Potato', 'Onion', 'Garlic', 'Beans', 'Peas'],
@@ -42,6 +43,8 @@ const CHILD_LOCATIONS = ['North', 'South', 'East', 'West', 'North-East', 'North-
 
 export default function PlantFormScreen({ route, navigation }: any) {
   const { plantId } = route.params || {};
+  const theme = useTheme();
+  const styles = createStyles(theme);
   const [name, setName] = useState('');
   const [plantType, setPlantType] = useState<PlantType>('vegetable');
   const [plantVariety, setPlantVariety] = useState('');
@@ -378,7 +381,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
     >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="close" size={28} color="#333" />
+          <Ionicons name="close" size={28} color={theme.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.title}>{plantId ? 'Edit Plant' : 'Add Plant'}</Text>
@@ -408,7 +411,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
           placeholder="Plant Name *"
           value={name}
           onChangeText={setName}
-          placeholderTextColor="#999"
+          placeholderTextColor={theme.inputPlaceholder}
         />
 
         <Text style={styles.label}>Plant Category *</Text>
@@ -453,7 +456,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
           placeholder="Variety (e.g., Alphonso, Dwarf)"
           value={variety}
           onChangeText={setVariety}
-          placeholderTextColor="#999"
+          placeholderTextColor={theme.inputPlaceholder}
         />
 
         <TouchableOpacity
@@ -548,7 +551,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
           value={wateringFrequency}
           onChangeText={setWateringFrequency}
           keyboardType="numeric"
-          placeholderTextColor="#999"
+          placeholderTextColor={theme.inputPlaceholder}
         />
 
         <TextInput
@@ -557,7 +560,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
           value={fertilisingFrequency}
           onChangeText={setFertilisingFrequency}
           keyboardType="numeric"
-          placeholderTextColor="#999"
+          placeholderTextColor={theme.inputPlaceholder}
         />
 
         <Text style={styles.label}>Preferred Organic Fertiliser</Text>
@@ -712,7 +715,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
             placeholder="Pot Size (e.g., 12 inch)"
             value={potSize}
             onChangeText={setPotSize}
-            placeholderTextColor="#999"
+            placeholderTextColor={theme.inputPlaceholder}
           />
         )}
         {spaceType === 'bed' && (
@@ -721,7 +724,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
             placeholder="Bed Name (e.g., Veggie Bed 1)"
             value={bedName}
             onChangeText={setBedName}
-            placeholderTextColor="#999"
+            placeholderTextColor={theme.inputPlaceholder}
           />
         )}
 
@@ -763,7 +766,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
         {location && (
           <View style={styles.locationPreview}>
-            <Ionicons name="location" size={16} color="#2e7d32" />
+            <Ionicons name="location" size={16} color={theme.primary} />
             <Text style={styles.locationPreviewText}>{location}</Text>
           </View>
         )}
@@ -1030,10 +1033,10 @@ export default function PlantFormScreen({ route, navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
   },
   header: {
     flexDirection: 'row',
@@ -1041,14 +1044,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     paddingTop: 48,
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: theme.borderLight,
   },
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
   },
   headerCenter: {
     flexDirection: 'row',
@@ -1059,15 +1062,15 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#ff9800',
+    backgroundColor: theme.warning,
   },
   saveText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2e7d32',
+    color: theme.primary,
   },
   saveTextDisabled: {
-    color: '#999',
+    color: theme.textTertiary,
   },
   content: {
     flex: 1,
@@ -1089,42 +1092,43 @@ const styles = StyleSheet.create({
     width: 150,
     height: 150,
     borderRadius: 75,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   photoText: {
     marginTop: 8,
     fontSize: 14,
-    color: '#999',
+    color: theme.textTertiary,
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.inputBackground,
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
     fontSize: 16,
+    color: theme.inputText,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.inputBorder,
   },
   dateButton: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.inputBackground,
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.inputBorder,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   dateText: {
     fontSize: 16,
-    color: '#333',
+    color: theme.text,
   },
   datePlaceholder: {
     fontSize: 16,
-    color: '#999',
+    color: theme.inputPlaceholder,
   },
   textArea: {
     height: 100,
@@ -1141,37 +1145,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.border,
   },
   spaceTypeActive: {
-    borderColor: '#2e7d32',
-    backgroundColor: '#e8f5e9',
+    borderColor: theme.primary,
+    backgroundColor: theme.primaryLight,
   },
   spaceTypeText: {
     fontSize: 16,
-    color: '#999',
+    color: theme.textTertiary,
     marginLeft: 8,
   },
   spaceTypeTextActive: {
-    color: '#2e7d32',
+    color: theme.primary,
     fontWeight: '600',
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#666',
+    color: theme.textSecondary,
     marginBottom: 8,
     marginTop: 4,
   },
   pickerContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.pickerBackground,
     borderRadius: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.pickerBorder,
     overflow: 'hidden',
     minHeight: 56,
     justifyContent: 'center',
@@ -1179,54 +1183,56 @@ const styles = StyleSheet.create({
   picker: {
     height: 56,
     fontSize: 16,
+    color: theme.pickerText,
   },
   pickerItem: {
     fontSize: 18,
     height: 120,
+    color: theme.pickerText,
   },
   locationPreview: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
     padding: 12,
     borderRadius: 8,
     marginBottom: 12,
   },
   locationPreviewText: {
     fontSize: 14,
-    color: '#2e7d32',
+    color: theme.primary,
     fontWeight: '600',
   },
   sectionHeader: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#2e7d32',
+    color: theme.primary,
     marginTop: 16,
     marginBottom: 12,
   },
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.border,
   },
   checkboxLabel: {
     fontSize: 16,
-    color: '#333',
+    color: theme.text,
     marginLeft: 12,
   },
   infoCard: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: theme.borderDark,
   },
   infoCardHeader: {
     flexDirection: 'row',
@@ -1237,18 +1243,18 @@ const styles = StyleSheet.create({
   infoCardTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
     flex: 1,
   },
   infoCardText: {
     fontSize: 16,
-    color: '#2e7d32',
+    color: theme.primary,
     fontWeight: '600',
     marginBottom: 4,
   },
   infoCardSubtext: {
     fontSize: 13,
-    color: '#666',
+    color: theme.textSecondary,
     marginBottom: 8,
   },
   chipContainer: {
@@ -1263,21 +1269,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.border,
     gap: 4,
   },
   companionChipSelected: {
-    backgroundColor: '#e8f5e9',
-    borderColor: '#2e7d32',
+    backgroundColor: theme.primaryLight,
+    borderColor: theme.primary,
   },
   companionChipText: {
     fontSize: 13,
-    color: '#666',
+    color: theme.textSecondary,
   },
   companionChipTextSelected: {
-    color: '#2e7d32',
+    color: theme.primary,
     fontWeight: '600',
   },
   sectionHeaderRow: {
@@ -1290,7 +1296,7 @@ const styles = StyleSheet.create({
   sectionHeaderText: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#333',
+    color: theme.text,
     flex: 1,
   },
   addPestButton: {
@@ -1300,12 +1306,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   pestDiseaseCard: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: theme.borderDark,
     position: 'relative',
   },
   pestDiseaseHeader: {
@@ -1317,33 +1323,33 @@ const styles = StyleSheet.create({
   pestDiseaseName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
     flex: 1,
   },
   resolvedBadge: {
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
   },
   resolvedText: {
     fontSize: 11,
-    color: '#2e7d32',
+    color: theme.primary,
     fontWeight: '600',
   },
   pestDiseaseDate: {
     fontSize: 13,
-    color: '#666',
+    color: theme.textSecondary,
     marginBottom: 4,
   },
   pestDiseaseTreatment: {
     fontSize: 13,
-    color: '#666',
+    color: theme.textSecondary,
     marginBottom: 4,
   },
   pestDiseaseNotes: {
     fontSize: 13,
-    color: '#666',
+    color: theme.textSecondary,
     fontStyle: 'italic',
   },
   deletePestButton: {
@@ -1354,18 +1360,18 @@ const styles = StyleSheet.create({
   },
   noPestHistory: {
     fontSize: 14,
-    color: '#999',
+    color: theme.textTertiary,
     textAlign: 'center',
     paddingVertical: 20,
     fontStyle: 'italic',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: theme.overlay,
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingTop: 20,
@@ -1385,7 +1391,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#333',
+    color: theme.text,
   },
   typeButtons: {
     flexDirection: 'row',
@@ -1399,22 +1405,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 16,
     borderRadius: 12,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.border,
     gap: 8,
   },
   typeButtonActive: {
-    backgroundColor: '#e8f5e9',
-    borderColor: '#2e7d32',
+    backgroundColor: theme.primaryLight,
+    borderColor: theme.primary,
   },
   typeButtonText: {
     fontSize: 15,
-    color: '#666',
+    color: theme.textSecondary,
     fontWeight: '500',
   },
   typeButtonTextActive: {
-    color: '#2e7d32',
+    color: theme.primary,
     fontWeight: '600',
   },
   suggestionsScroll: {
@@ -1424,15 +1430,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
     marginRight: 8,
   },
   suggestionChipText: {
     fontSize: 13,
-    color: '#2e7d32',
+    color: theme.primary,
   },
   modalSaveButton: {
-    backgroundColor: '#2e7d32',
+    backgroundColor: theme.primary,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -1441,6 +1447,6 @@ const styles = StyleSheet.create({
   modalSaveButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: theme.textInverse,
   },
 });

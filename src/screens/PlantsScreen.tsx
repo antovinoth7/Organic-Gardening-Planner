@@ -4,6 +4,7 @@ import { getPlants, deletePlant } from '../services/plants';
 import { Plant, PlantType, SpaceType, HealthStatus, SunlightLevel, WaterRequirement } from '../types/database.types';
 import PlantCard from '../components/PlantCard';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../theme';
 
 type FilterCategory = 'type' | 'health' | 'space' | 'sunlight' | 'water' | 'location';
 type FilterType = 'all' | PlantType;
@@ -25,6 +26,8 @@ const PARENT_LOCATIONS = ['Mangarai', 'Velliavilai Home', 'Velliavilai Near Pond
 const CHILD_LOCATIONS = ['North', 'South', 'East', 'West', 'North-East', 'North-West', 'South-East', 'South-West', 'Center', 'Front', 'Back'];
 
 export default function PlantsScreen({ navigation }: any) {
+  const theme = useTheme();
+  const styles = createStyles(theme);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE);
@@ -635,10 +638,10 @@ export default function PlantsScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
   },
   header: {
     flexDirection: 'row',
@@ -647,14 +650,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 48,
     paddingBottom: 16,
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: theme.border,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.text,
   },
   sortButton: {
     width: 40,
@@ -683,10 +686,10 @@ const styles = StyleSheet.create({
   searchWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.border,
     paddingHorizontal: 12,
     paddingVertical: 6,
     marginRight: 8,
@@ -695,19 +698,19 @@ const styles = StyleSheet.create({
   },
   compactSearchInput: {
     fontSize: 14,
-    color: '#333',
+    color: theme.text,
     padding: 0,
     minWidth: 80,
     maxWidth: 120,
   },
   sortMenu: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     marginHorizontal: 16,
     marginTop: 4,
     marginBottom: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -720,16 +723,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: theme.border,
     gap: 12,
   },
   sortOptionActive: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
   },
   sortText: {
     flex: 1,
     fontSize: 15,
-    color: '#333',
+    color: theme.text,
   },
   sortTextActive: {
     fontWeight: '600',
@@ -738,9 +741,9 @@ const styles = StyleSheet.create({
   filterContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: theme.border,
   },
   categoryScroll: {
     flexDirection: 'row',
@@ -751,9 +754,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: theme.background,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.border,
     marginRight: 8,
     gap: 6,
   },
@@ -796,9 +799,9 @@ const styles = StyleSheet.create({
   filterOptionsContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fafafa',
+    backgroundColor: theme.background,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: theme.border,
   },
   filterChip: {
     flexDirection: 'row',
@@ -806,9 +809,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.border,
     marginRight: 8,
   },
   filterChipActive: {
@@ -836,7 +839,7 @@ const styles = StyleSheet.create({
   filterDivider: {
     width: 1,
     height: 30,
-    backgroundColor: '#ddd',
+    backgroundColor: theme.border,
     marginHorizontal: 8,
   },
   resultsHeader: {
@@ -845,11 +848,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#fafafa',
+    backgroundColor: theme.background,
   },
   resultsText: {
     fontSize: 13,
-    color: '#666',
+    color: theme.textSecondary,
     fontWeight: '500',
   },
   listContent: {
@@ -865,7 +868,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
   },
   loadMoreButton: {
     flexDirection: 'row',
@@ -891,12 +894,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
     marginTop: 16,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     marginTop: 4,
   },
 });

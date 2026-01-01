@@ -13,8 +13,11 @@ import { getTaskTemplates, createTaskTemplate } from '../services/tasks';
 import { getJournalEntries } from '../services/journal';
 import { Plant, TaskTemplate, TaskType, JournalEntry } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../theme';
 
 export default function PlantDetailScreen({ route, navigation }: any) {
+  const theme = useTheme();
+  const styles = createStyles(theme);
   const { plantId } = route.params || {};
   const [plant, setPlant] = useState<Plant | null>(null);
   const [tasks, setTasks] = useState<TaskTemplate[]>([]);
@@ -70,13 +73,13 @@ export default function PlantDetailScreen({ route, navigation }: any) {
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => navigation.navigate('PlantForm', { plantId })}
           style={styles.editButton}
         >
-          <Ionicons name="pencil" size={24} color="#2e7d32" />
+          <Ionicons name="pencil" size={24} color={theme.primary} />
         </TouchableOpacity>
       </View>
 
@@ -84,7 +87,7 @@ export default function PlantDetailScreen({ route, navigation }: any) {
         <Image source={{ uri: plant.photo_url }} style={styles.photo} />
       ) : (
         <View style={[styles.photo, styles.photoPlaceholder]}>
-          <Ionicons name="leaf" size={64} color="#2e7d32" />
+          <Ionicons name="leaf" size={64} color={theme.primary} />
         </View>
       )}
 
@@ -97,19 +100,19 @@ export default function PlantDetailScreen({ route, navigation }: any) {
         <View style={styles.infoSection}>
           {plant.plant_variety && (
             <View style={styles.infoRow}>
-              <Ionicons name="leaf" size={20} color="#666" />
+              <Ionicons name="leaf" size={20} color={theme.textSecondary} />
               <Text style={styles.infoText}>Type: {plant.plant_variety}</Text>
             </View>
           )}
           <View style={styles.infoRow}>
-            <Ionicons name="location" size={20} color="#666" />
+            <Ionicons name="location" size={20} color={theme.textSecondary} />
             <Text style={styles.infoText}>{plant.location}</Text>
           </View>
           <View style={styles.infoRow}>
             <Ionicons
               name={plant.space_type === 'pot' ? 'cube-outline' : plant.space_type === 'bed' ? 'apps' : 'earth'}
               size={20}
-              color="#666"
+              color={theme.textSecondary}
             />
             <Text style={styles.infoText}>
               {plant.space_type === 'pot'
@@ -121,7 +124,7 @@ export default function PlantDetailScreen({ route, navigation }: any) {
           </View>
           {plant.planting_date && (
             <View style={styles.infoRow}>
-              <Ionicons name="calendar" size={20} color="#666" />
+              <Ionicons name="calendar" size={20} color={theme.textSecondary} />
               <Text style={styles.infoText}>
                 Planted {plant.planting_date} ({Math.floor((new Date().getTime() - new Date(plant.planting_date).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} years old)
               </Text>
@@ -129,13 +132,13 @@ export default function PlantDetailScreen({ route, navigation }: any) {
           )}
           {plant.harvest_season && (
             <View style={styles.infoRow}>
-              <Ionicons name="sunny" size={20} color="#666" />
+              <Ionicons name="sunny" size={20} color={theme.textSecondary} />
               <Text style={styles.infoText}>Harvest: {plant.harvest_season}</Text>
             </View>
           )}
           {(plant.harvest_start_date || plant.harvest_end_date) && (
             <View style={styles.infoRow}>
-              <Ionicons name="calendar-outline" size={20} color="#666" />
+              <Ionicons name="calendar-outline" size={20} color={theme.textSecondary} />
               <Text style={styles.infoText}>
                 {plant.harvest_start_date || ''}{plant.harvest_end_date ? ` - ${plant.harvest_end_date}` : ''}
               </Text>
@@ -226,11 +229,10 @@ export default function PlantDetailScreen({ route, navigation }: any) {
               <Text style={styles.sectionTitle}>🧺 Harvest History</Text>
               {harvestEntries.length > 0 && (
                 <TouchableOpacity onPress={() => navigation.navigate('JournalForm')}>
-                  <Ionicons name="add-circle" size={24} color="#2e7d32" />
+                  <Ionicons name="add-circle" size={24} color={theme.primary} />
                 </TouchableOpacity>
               )}
             </View>
-            
             {harvestEntries.length > 0 ? (
               <>
                 {/* Harvest Statistics */}
@@ -258,7 +260,7 @@ export default function PlantDetailScreen({ route, navigation }: any) {
                     const daysUntil = Math.ceil((nextHarvestDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
                     return (
                       <View style={styles.statCard}>
-                        <Text style={[styles.statValue, { fontSize: 18, color: daysUntil <= 7 ? '#4CAF50' : '#666' }]}>
+                        <Text style={[styles.statValue, { fontSize: 18, color: daysUntil <= 7 ? theme.success : theme.textSecondary }]}>
                           {daysUntil > 0 ? `${daysUntil}d` : 'Ready'}
                         </Text>
                         <Text style={styles.statLabel}>Next harvest</Text>
@@ -297,13 +299,13 @@ export default function PlantDetailScreen({ route, navigation }: any) {
                     onPress={() => navigation.navigate('Journal')}
                   >
                     <Text style={styles.viewAllText}>View All in Journal</Text>
-                    <Ionicons name="chevron-forward" size={16} color="#2e7d32" />
+                    <Ionicons name="chevron-forward" size={16} color={theme.primary} />
                   </TouchableOpacity>
                 )}
               </>
             ) : (
               <View style={styles.emptyHarvest}>
-                <Ionicons name="basket-outline" size={48} color="#ccc" />
+                <Ionicons name="basket-outline" size={48} color={theme.border} />
                 <Text style={styles.emptyHarvestText}>No harvests recorded yet</Text>
                 <TouchableOpacity 
                   style={styles.addHarvestButton}
@@ -337,10 +339,10 @@ export default function PlantDetailScreen({ route, navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
   },
   header: {
     position: 'absolute',
@@ -356,10 +358,10 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: theme.card,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: theme.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -369,10 +371,10 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: theme.card,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: theme.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -383,7 +385,7 @@ const styles = StyleSheet.create({
     height: 300,
   },
   photoPlaceholder: {
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -393,12 +395,12 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.text,
     marginBottom: 4,
   },
   variety: {
     fontSize: 18,
-    color: '#666',
+    color: theme.textSecondary,
     fontStyle: 'italic',
     marginBottom: 16,
   },
@@ -407,7 +409,7 @@ const styles = StyleSheet.create({
   },
   careSection: {
     marginBottom: 24,
-    backgroundColor: '#fff',
+    backgroundColor: theme.card,
     padding: 16,
     borderRadius: 12,
   },
@@ -418,7 +420,7 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 16,
-    color: '#666',
+    color: theme.textSecondary,
     marginLeft: 12,
   },
   notesSection: {
@@ -427,12 +429,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
     marginBottom: 12,
   },
   notesText: {
     fontSize: 16,
-    color: '#666',
+    color: theme.textSecondary,
     lineHeight: 24,
   },
   tasksSection: {
@@ -442,7 +444,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: theme.card,
     padding: 16,
     borderRadius: 12,
     marginBottom: 8,
@@ -453,20 +455,20 @@ const styles = StyleSheet.create({
   taskType: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
   },
   taskFrequency: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     marginTop: 2,
   },
   taskStatus: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#2e7d32',
+    color: theme.primary,
   },
   taskDisabled: {
-    color: '#999',
+    color: theme.textTertiary,
   },
   centered: {
     flex: 1,
@@ -474,13 +476,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   link: {
-    color: '#2e7d32',
+    color: theme.primary,
     fontSize: 16,
     fontWeight: '600',
     marginTop: 16,
   },
   harvestSection: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.card,
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
@@ -498,7 +500,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
@@ -506,18 +508,18 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#2e7d32',
+    color: theme.primary,
   },
   statLabel: {
     fontSize: 11,
-    color: '#666',
+    color: theme.textSecondary,
     marginTop: 4,
     textAlign: 'center',
   },
   recentTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#666',
+    color: theme.textSecondary,
     marginBottom: 8,
   },
   harvestItem: {
@@ -526,20 +528,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: theme.border,
   },
   harvestLeft: {
     flex: 1,
   },
   harvestDate: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     marginBottom: 4,
   },
   harvestQuantity: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
   },
   harvestRight: {
     alignItems: 'flex-end',
@@ -556,7 +558,7 @@ const styles = StyleSheet.create({
   },
   viewAllText: {
     fontSize: 14,
-    color: '#2e7d32',
+    color: theme.primary,
     fontWeight: '600',
     marginRight: 4,
   },
@@ -566,18 +568,18 @@ const styles = StyleSheet.create({
   },
   emptyHarvestText: {
     fontSize: 16,
-    color: '#999',
+    color: theme.textTertiary,
     marginTop: 12,
     marginBottom: 16,
   },
   addHarvestButton: {
-    backgroundColor: '#2e7d32',
+    backgroundColor: theme.primary,
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 8,
   },
   addHarvestButtonText: {
-    color: '#fff',
+    color: theme.buttonText,
     fontSize: 14,
     fontWeight: '600',
   },

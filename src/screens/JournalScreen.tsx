@@ -16,10 +16,13 @@ import { getJournalEntries, deleteJournalEntry } from '../services/journal';
 import { getPlants } from '../services/plants';
 import { JournalEntry, Plant } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../theme';
 
 const { width } = Dimensions.get('window');
 
 export default function JournalScreen({ navigation }: any) {
+  const theme = useTheme();
+  const styles = createStyles(theme);
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,7 +77,7 @@ export default function JournalScreen({ navigation }: any) {
     };
     return (
       <View style={styles.typeIconBadge}>
-        <Ionicons name={iconMap[type] as any || 'document-text'} size={12} color="#2e7d32" />
+        <Ionicons name={iconMap[type] as any || 'document-text'} size={12} color={theme.primary} />
       </View>
     );
   };
@@ -204,13 +207,13 @@ export default function JournalScreen({ navigation }: any) {
               style={[styles.viewToggle, viewMode === 'list' && styles.viewToggleActive]}
               onPress={() => setViewMode('list')}
             >
-              <Ionicons name="list" size={20} color={viewMode === 'list' ? '#fff' : '#666'} />
+              <Ionicons name="list" size={20} color={viewMode === 'list' ? '#fff' : theme.textSecondary} />
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.viewToggle, viewMode === 'gallery' && styles.viewToggleActive]}
               onPress={() => setViewMode('gallery')}
             >
-              <Ionicons name="grid" size={20} color={viewMode === 'gallery' ? '#fff' : '#666'} />
+              <Ionicons name="grid" size={20} color={viewMode === 'gallery' ? '#fff' : theme.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -218,29 +221,29 @@ export default function JournalScreen({ navigation }: any) {
         {/* Statistics Dashboard */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsScroll}>
           <View style={styles.statCard}>
-            <Ionicons name="document-text" size={20} color="#2e7d32" />
+            <Ionicons name="document-text" size={20} color={theme.primary} />
             <Text style={styles.statNumber}>{stats.totalEntries}</Text>
             <Text style={styles.statLabel}>Entries</Text>
           </View>
           <View style={styles.statCard}>
-            <Ionicons name="basket" size={20} color="#ff9800" />
+            <Ionicons name="basket" size={20} color={theme.warning} />
             <Text style={styles.statNumber}>{stats.totalHarvests}</Text>
             <Text style={styles.statLabel}>Harvests</Text>
           </View>
           <View style={styles.statCard}>
-            <Ionicons name="scale" size={20} color="#4caf50" />
+            <Ionicons name="scale" size={20} color={theme.success} />
             <Text style={styles.statNumber}>{stats.totalWeight}</Text>
             <Text style={styles.statLabel}>kg Total</Text>
           </View>
           {stats.topPlant && (
             <View style={styles.statCard}>
-              <Ionicons name="trophy" size={20} color="#ffc107" />
+              <Ionicons name="trophy" size={20} color={theme.warning} />
               <Text style={styles.statNumber}>{stats.topPlantCount}</Text>
               <Text style={styles.statLabel}>{stats.topPlant}</Text>
             </View>
           )}
           <View style={styles.statCard}>
-            <Ionicons name="alert-circle" size={20} color="#f44336" />
+            <Ionicons name="alert-circle" size={20} color={theme.error} />
             <Text style={styles.statNumber}>{stats.totalIssues}</Text>
             <Text style={styles.statLabel}>Issues</Text>
           </View>
@@ -248,16 +251,17 @@ export default function JournalScreen({ navigation }: any) {
         
         {/* Search Bar */}
         <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+          <Ionicons name="search" size={20} color={theme.textSecondary} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search entries..."
+            placeholderTextColor={theme.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
           {searchQuery !== '' && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#666" />
+              <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
             </TouchableOpacity>
           )}
         </View>
@@ -285,7 +289,7 @@ export default function JournalScreen({ navigation }: any) {
             style={[styles.filterChip, selectedType === 'harvest' && styles.filterChipActive]}
             onPress={() => setSelectedType(selectedType === 'harvest' ? null : 'harvest')}
           >
-            <Ionicons name="basket" size={14} color={selectedType === 'harvest' ? '#fff' : '#666'} />
+            <Ionicons name="basket" size={14} color={selectedType === 'harvest' ? '#fff' : theme.textSecondary} />
             <Text style={[styles.filterChipText, selectedType === 'harvest' && styles.filterChipTextActive]}>
               Harvest
             </Text>
@@ -294,7 +298,7 @@ export default function JournalScreen({ navigation }: any) {
             style={[styles.filterChip, selectedType === 'observation' && styles.filterChipActive]}
             onPress={() => setSelectedType(selectedType === 'observation' ? null : 'observation')}
           >
-            <Ionicons name="eye" size={14} color={selectedType === 'observation' ? '#fff' : '#666'} />
+            <Ionicons name="eye" size={14} color={selectedType === 'observation' ? '#fff' : theme.textSecondary} />
             <Text style={[styles.filterChipText, selectedType === 'observation' && styles.filterChipTextActive]}>
               Observation
             </Text>
@@ -303,7 +307,7 @@ export default function JournalScreen({ navigation }: any) {
             style={[styles.filterChip, selectedType === 'issue' && styles.filterChipActive]}
             onPress={() => setSelectedType(selectedType === 'issue' ? null : 'issue')}
           >
-            <Ionicons name="alert-circle" size={14} color={selectedType === 'issue' ? '#fff' : '#666'} />
+            <Ionicons name="alert-circle" size={14} color={selectedType === 'issue' ? '#fff' : theme.textSecondary} />
             <Text style={[styles.filterChipText, selectedType === 'issue' && styles.filterChipTextActive]}>
               Issue
             </Text>
@@ -312,7 +316,7 @@ export default function JournalScreen({ navigation }: any) {
             style={[styles.filterChip, selectedType === 'milestone' && styles.filterChipActive]}
             onPress={() => setSelectedType(selectedType === 'milestone' ? null : 'milestone')}
           >
-            <Ionicons name="flag" size={14} color={selectedType === 'milestone' ? '#fff' : '#666'} />
+            <Ionicons name="flag" size={14} color={selectedType === 'milestone' ? '#fff' : theme.textSecondary} />
             <Text style={[styles.filterChipText, selectedType === 'milestone' && styles.filterChipTextActive]}>
               Milestone
             </Text>
@@ -365,7 +369,7 @@ export default function JournalScreen({ navigation }: any) {
                         }}
                         style={styles.iconButton}
                       >
-                        <Ionicons name="pencil-outline" size={20} color="#2e7d32" />
+                        <Ionicons name="pencil-outline" size={20} color={theme.primary} />
                       </TouchableOpacity>
                       <TouchableOpacity 
                         onPress={(e) => {
@@ -374,13 +378,13 @@ export default function JournalScreen({ navigation }: any) {
                         }}
                         style={styles.iconButton}
                       >
-                        <Ionicons name="trash-outline" size={20} color="#f44336" />
+                        <Ionicons name="trash-outline" size={20} color={theme.error} />
                       </TouchableOpacity>
                     </View>
                   </View>
                   {plantName && (
                     <View style={styles.plantTag}>
-                      <Ionicons name="leaf" size={12} color="#2e7d32" />
+                      <Ionicons name="leaf" size={12} color={theme.primary} />
                       <Text style={styles.plantTagText}>{plantName}</Text>
                     </View>
                   )}
@@ -389,7 +393,7 @@ export default function JournalScreen({ navigation }: any) {
                   {entry.entry_type === 'harvest' && entry.harvest_quantity && (
                     <View style={styles.harvestDetails}>
                       <View style={styles.harvestBadge}>
-                        <Ionicons name="scale-outline" size={16} color="#ff9800" />
+                        <Ionicons name="scale-outline" size={16} color={theme.warning} />
                         <Text style={styles.harvestText}>
                           {entry.harvest_quantity} {entry.harvest_unit || 'units'}
                         </Text>
@@ -412,7 +416,7 @@ export default function JournalScreen({ navigation }: any) {
 
           {filteredEntries.length === 0 && !loading && (
             <View style={styles.emptyState}>
-              <Ionicons name="book-outline" size={64} color="#ccc" />
+              <Ionicons name="book-outline" size={64} color={theme.border} />
               <Text style={styles.emptyText}>
                 {searchQuery || selectedType || selectedPlant || dateFilter !== 'all' 
                   ? 'No entries match your filters' 
@@ -447,7 +451,7 @@ export default function JournalScreen({ navigation }: any) {
           
           {allPhotos.length === 0 && !loading && (
             <View style={styles.emptyState}>
-              <Ionicons name="images-outline" size={64} color="#ccc" />
+              <Ionicons name="images-outline" size={64} color={theme.border} />
               <Text style={styles.emptyText}>No photos yet</Text>
               <Text style={styles.emptySubtext}>Add photos to your journal entries</Text>
             </View>
@@ -489,18 +493,18 @@ export default function JournalScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.backgroundSecondary,
   },
   header: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.card,
     paddingTop: 48,
     paddingHorizontal: 16,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: theme.border,
   },
   headerTop: {
     flexDirection: 'row',
@@ -511,7 +515,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.text,
   },
   headerActions: {
     flexDirection: 'row',
@@ -524,10 +528,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.backgroundSecondary,
   },
   viewToggleActive: {
-    backgroundColor: '#2e7d32',
+    backgroundColor: theme.primary,
   },
   fab: {
     position: 'absolute',
@@ -536,7 +540,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#2e7d32',
+    backgroundColor: theme.primary,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -549,7 +553,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   statCard: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 12,
     padding: 12,
     marginRight: 12,
@@ -559,19 +563,19 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.text,
     marginTop: 4,
   },
   statLabel: {
     fontSize: 11,
-    color: '#666',
+    color: theme.textSecondary,
     marginTop: 2,
     textAlign: 'center',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -583,7 +587,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
+    color: theme.text,
   },
   filtersScroll: {
     marginBottom: 8,
@@ -591,7 +595,7 @@ const styles = StyleSheet.create({
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.backgroundSecondary,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
@@ -599,11 +603,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   filterChipActive: {
-    backgroundColor: '#2e7d32',
+    backgroundColor: theme.primary,
   },
   filterChipText: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
   },
   filterChipTextActive: {
     color: '#fff',
@@ -614,7 +618,7 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.card,
     borderRadius: 12,
     marginBottom: 16,
     overflow: 'hidden',
@@ -631,7 +635,7 @@ const styles = StyleSheet.create({
     width: 300,
     height: 200,
     marginRight: 8,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
   },
   cardContent: {
     padding: 16,
@@ -655,10 +659,10 @@ const styles = StyleSheet.create({
   date: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#666',
+    color: theme.textSecondary,
   },
   typeIconBadge: {
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
     borderRadius: 12,
     padding: 4,
   },
@@ -669,7 +673,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -677,7 +681,7 @@ const styles = StyleSheet.create({
   },
   plantTagText: {
     fontSize: 12,
-    color: '#2e7d32',
+    color: theme.primary,
     marginLeft: 4,
   },
   harvestDetails: {
@@ -688,7 +692,7 @@ const styles = StyleSheet.create({
   harvestBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff3e0',
+    backgroundColor: theme.warningLight,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -696,7 +700,7 @@ const styles = StyleSheet.create({
   },
   harvestText: {
     fontSize: 12,
-    color: '#ff9800',
+    color: theme.warning,
     fontWeight: '600',
   },
   qualityBadge: {
@@ -705,25 +709,25 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   qualityexcellent: {
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
   },
   qualitygood: {
-    backgroundColor: '#e3f2fd',
+    backgroundColor: theme.primaryLight,
   },
   qualityfair: {
-    backgroundColor: '#fff3e0',
+    backgroundColor: theme.warningLight,
   },
   qualitypoor: {
-    backgroundColor: '#ffebee',
+    backgroundColor: theme.errorLight,
   },
   qualityText: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: '#666',
+    color: theme.textSecondary,
   },
   contentText: {
     fontSize: 15,
-    color: '#333',
+    color: theme.text,
     lineHeight: 22,
   },
   galleryGrid: {
@@ -738,7 +742,7 @@ const styles = StyleSheet.create({
   galleryImage: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
   },
   emptyState: {
     alignItems: 'center',
@@ -749,12 +753,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
     marginTop: 16,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     marginTop: 4,
   },
   modalContainer: {

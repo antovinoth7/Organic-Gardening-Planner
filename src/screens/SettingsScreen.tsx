@@ -5,8 +5,11 @@ import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
 import { exportBackup, importBackup, getBackupStats } from '../services/backup';
 import { getImageStorageSize } from '../lib/imageStorage';
+import { useTheme } from '../theme';
 
 export default function SettingsScreen() {
+  const theme = useTheme();
+  const styles = createStyles(theme);
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({ plantCount: 0, taskCount: 0, journalCount: 0, lastExport: null });
   const [imageStorageSize, setImageStorageSize] = useState(0);
@@ -255,20 +258,20 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
   },
   header: {
     padding: 24,
     paddingTop: 48,
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.text,
   },
   content: {
     flex: 1,
@@ -280,22 +283,22 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#666',
+    color: theme.textSecondary,
     marginBottom: 12,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   sectionDescription: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     marginBottom: 12,
     lineHeight: 20,
   },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 12,
     padding: 16,
-    shadowColor: '#000',
+    shadowColor: theme.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -311,11 +314,11 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
   },
   rowSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     marginTop: 2,
   },
   infoItem: {
@@ -325,7 +328,7 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 14,
-    color: '#333',
+    color: theme.text,
     marginLeft: 12,
     flex: 1,
   },
@@ -340,11 +343,11 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#2e7d32',
+    color: theme.primary,
   },
   statLabel: {
     fontSize: 12,
-    color: '#666',
+    color: theme.textSecondary,
     marginTop: 4,
   },
   backupButton: {

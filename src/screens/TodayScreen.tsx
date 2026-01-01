@@ -7,8 +7,11 @@ import TaskCard from '../components/TaskCard';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTheme } from '../theme';
 
 export default function TodayScreen({ navigation }: any) {
+  const theme = useTheme();
+  const styles = createStyles(theme);
   const [tasks, setTasks] = useState<TaskTemplate[]>([]);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -460,31 +463,31 @@ export default function TodayScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
   },
   header: {
     paddingHorizontal: 16,
     paddingTop: 48,
     paddingBottom: 16,
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: theme.border,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.text,
   },
   date: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     marginTop: 4,
   },
   statsContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     padding: 16,
     marginTop: 8,
   },
@@ -508,17 +511,17 @@ const styles = StyleSheet.create({
   progressNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#2e7d32',
+    color: theme.primary,
   },
   statLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
     marginTop: 4,
   },
   statSubtext: {
     fontSize: 13,
-    color: '#666',
+    color: theme.textSecondary,
     marginTop: 2,
   },
   statsGrid: {
@@ -527,7 +530,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: theme.border,
   },
   miniStatCard: {
     alignItems: 'center',
@@ -536,17 +539,17 @@ const styles = StyleSheet.create({
   miniStatNumber: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.text,
     marginTop: 8,
   },
   miniStatLabel: {
     fontSize: 11,
-    color: '#666',
+    color: theme.textSecondary,
     marginTop: 4,
     textAlign: 'center',
   },
   alertsSection: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     padding: 16,
     marginTop: 8,
   },
@@ -554,27 +557,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    backgroundColor: '#fff5f5',
+    backgroundColor: theme.errorLight,
     borderRadius: 12,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: '#ffcdd2',
+    borderColor: theme.error,
   },
   alertCardWarning: {
-    backgroundColor: '#fff8e1',
-    borderColor: '#ffe082',
+    backgroundColor: theme.warningLight,
+    borderColor: theme.warning,
   },
   alertIcon: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#f44336',
+    backgroundColor: theme.error,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   alertIconWarning: {
-    backgroundColor: '#ff9800',
+    backgroundColor: theme.warning,
   },
   alertContent: {
     flex: 1,
@@ -582,16 +585,16 @@ const styles = StyleSheet.create({
   alertPlantName: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
     marginBottom: 2,
   },
   alertText: {
     fontSize: 13,
-    color: '#666',
+    color: theme.textSecondary,
   },
   section: {
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     marginTop: 8,
   },
   sectionHeader: {
@@ -603,21 +606,21 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
   },
   priorityBadge: {
-    backgroundColor: '#ffebee',
+    backgroundColor: theme.errorLight,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
   },
   priorityMedium: {
-    backgroundColor: '#fff8e1',
+    backgroundColor: theme.warningLight,
   },
   priorityText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#f44336',
+    color: theme.error,
     letterSpacing: 0.5,
   },
   taskWrapper: {
@@ -636,13 +639,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: theme.border,
   },
   actionText: {
     fontSize: 12,
-    color: '#666',
+    color: theme.textSecondary,
     fontWeight: '500',
   },
   emptyState: {
@@ -654,35 +657,35 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
     marginTop: 16,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     marginTop: 4,
   },
   emptyButton: {
     marginTop: 20,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: '#2e7d32',
+    backgroundColor: theme.primary,
     borderRadius: 24,
   },
   emptyButtonText: {
-    color: '#fff',
+    color: theme.textInverse,
     fontSize: 15,
     fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: theme.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 20,
     padding: 24,
     width: '100%',
@@ -691,23 +694,25 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#333',
+    color: theme.text,
     marginBottom: 8,
   },
   modalSubtext: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     marginBottom: 16,
   },
   modalInput: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.inputBackground,
     borderRadius: 12,
     padding: 12,
     fontSize: 15,
-    color: '#333',
+    color: theme.inputText,
     minHeight: 80,
     textAlignVertical: 'top',
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: theme.inputBorder,
   },
   skipReasons: {
     flexDirection: 'row',
@@ -718,14 +723,14 @@ const styles = StyleSheet.create({
   reasonChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#2e7d32',
+    borderColor: theme.primary,
   },
   reasonText: {
     fontSize: 13,
-    color: '#2e7d32',
+    color: theme.primary,
     fontWeight: '500',
   },
   modalButtons: {
@@ -739,19 +744,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalButtonCancel: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
+    borderWidth: 1,
+    borderColor: theme.border,
   },
   modalButtonConfirm: {
-    backgroundColor: '#ff9800',
+    backgroundColor: theme.warning,
   },
   modalButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#fff',
+    color: theme.textInverse,
   },
   modalButtonTextCancel: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#666',
+    color: theme.textSecondary,
   },
 });

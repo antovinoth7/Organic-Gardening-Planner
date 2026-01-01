@@ -8,6 +8,7 @@ import { getJournalEntries } from '../services/journal';
 import { TaskTemplate, Plant, TaskType, JournalEntry } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
+import { useTheme } from '../theme';
 
 const TASK_COLORS: Record<TaskType, string> = {
   water: '#2196F3',
@@ -19,6 +20,8 @@ const TASK_COLORS: Record<TaskType, string> = {
 };
 
 export default function CalendarScreen() {
+  const theme = useTheme();
+  const styles = createStyles(theme);
   const [tasks, setTasks] = useState<TaskTemplate[]>([]);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [harvestEntries, setHarvestEntries] = useState<JournalEntry[]>([]);
@@ -974,10 +977,10 @@ function getStartOfWeek(date: Date): Date {
   return new Date(d.setDate(diff));
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
   },
   header: {
     flexDirection: 'row',
@@ -986,14 +989,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 48,
     paddingBottom: 16,
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: theme.border,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.text,
   },
   headerActions: {
     flexDirection: 'row',
@@ -1005,13 +1008,13 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
     borderRadius: 16,
   },
   viewToggleText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#2e7d32',
+    color: theme.primary,
   },
   groupButton: {
     flexDirection: 'row',
@@ -1019,26 +1022,26 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
     borderRadius: 16,
   },
   groupButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#2e7d32',
+    color: theme.primary,
   },
   recurringButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   weekView: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: theme.border,
   },
   weekHeader: {
     flexDirection: 'row',
@@ -1049,7 +1052,7 @@ const styles = StyleSheet.create({
   weekTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
   },
   weekDaysScroll: {
     paddingHorizontal: 12,
@@ -1061,36 +1064,36 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
   },
   weekDayToday: {
-    backgroundColor: '#2e7d32',
+    backgroundColor: theme.primary,
   },
   weekDaySelected: {
-    backgroundColor: '#1976D2',
+    backgroundColor: theme.accent,
   },
   weekDayName: {
     fontSize: 12,
-    color: '#666',
+    color: theme.textSecondary,
     marginBottom: 4,
   },
   weekDayNameToday: {
-    color: '#fff',
+    color: theme.textInverse,
   },
   weekDayNameSelected: {
-    color: '#fff',
+    color: theme.textInverse,
   },
   weekDayNumber: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.text,
     marginBottom: 8,
   },
   weekDayNumberToday: {
-    color: '#fff',
+    color: theme.textInverse,
   },
   weekDayNumberSelected: {
-    color: '#fff',
+    color: theme.textInverse,
   },
   weekDayDots: {
     flexDirection: 'row',
@@ -1106,12 +1109,12 @@ const styles = StyleSheet.create({
   },
   weekDayMore: {
     fontSize: 10,
-    color: '#999',
+    color: theme.textTertiary,
   },
   monthView: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: theme.border,
     padding: 16,
   },
   monthHeader: {
@@ -1123,7 +1126,7 @@ const styles = StyleSheet.create({
   monthTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
   },
   monthWeekdays: {
     flexDirection: 'row',
@@ -1134,7 +1137,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     fontWeight: '600',
-    color: '#666',
+    color: theme.textSecondary,
   },
   monthGrid: {
     flexDirection: 'row',
@@ -1146,28 +1149,28 @@ const styles = StyleSheet.create({
     padding: 4,
     alignItems: 'center',
     borderWidth: 0.5,
-    borderColor: '#eee',
+    borderColor: theme.border,
   },
   monthCellToday: {
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
   },
   monthCellSelected: {
-    backgroundColor: '#bbdefb',
+    backgroundColor: theme.accentLight,
     borderWidth: 2,
-    borderColor: '#1976D2',
+    borderColor: theme.accent,
   },
   monthCellNumber: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#333',
+    color: theme.text,
     marginBottom: 2,
   },
   monthCellNumberToday: {
-    color: '#2e7d32',
+    color: theme.primary,
     fontWeight: 'bold',
   },
   monthCellNumberSelected: {
-    color: '#1976D2',
+    color: theme.accent,
     fontWeight: 'bold',
   },
   monthCellDots: {
@@ -1183,7 +1186,7 @@ const styles = StyleSheet.create({
   },
   monthCellMore: {
     fontSize: 8,
-    color: '#999',
+    color: theme.textTertiary,
   },
   content: {
     flex: 1,
@@ -1202,21 +1205,21 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.text,
     marginBottom: 12,
   },
   emptyState: {
     alignItems: 'center',
     padding: 32,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: theme.background,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: theme.border,
     borderStyle: 'dashed',
   },
   emptyStateText: {
     fontSize: 14,
-    color: '#999',
+    color: theme.textTertiary,
     marginBottom: 16,
   },
   addTaskButton: {
@@ -1225,17 +1228,17 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
     borderRadius: 20,
   },
   addTaskButtonText: {
     fontSize: 14,
-    color: '#2e7d32',
+    color: theme.primary,
     fontWeight: '600',
   },
   taskCard: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 12,
     marginBottom: 12,
     overflow: 'hidden',
@@ -1247,7 +1250,7 @@ const styles = StyleSheet.create({
   },
   taskCardOverdue: {
     borderWidth: 2,
-    borderColor: '#f44336',
+    borderColor: theme.error,
   },
   taskColorBar: {
     width: 6,
@@ -1264,7 +1267,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -1275,16 +1278,16 @@ const styles = StyleSheet.create({
   taskTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
     marginBottom: 2,
   },
   taskPlant: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
   },
   taskLocation: {
     fontSize: 12,
-    color: '#999',
+    color: theme.textTertiary,
     marginTop: 2,
   },
   taskRight: {
@@ -1292,10 +1295,10 @@ const styles = StyleSheet.create({
   },
   taskTime: {
     fontSize: 12,
-    color: '#666',
+    color: theme.textSecondary,
   },
   taskTimeOverdue: {
-    color: '#f44336',
+    color: theme.error,
     fontWeight: '600',
   },
   swipeAction: {
@@ -1311,14 +1314,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   swipeActionText: {
-    color: '#fff',
+    color: theme.backgroundSecondary,
     fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
   },
   swipeHint: {
     fontSize: 12,
-    color: '#999',
+    color: theme.textTertiary,
     textAlign: 'center',
     marginTop: 8,
     fontStyle: 'italic',
@@ -1326,16 +1329,16 @@ const styles = StyleSheet.create({
   harvestCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     borderWidth: 2,
-    borderColor: '#e0e0e0',
+    borderColor: theme.border,
   },
   harvestCardReady: {
     borderColor: '#4CAF50',
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
   },
   harvestIcon: {
     marginRight: 12,
@@ -1349,12 +1352,12 @@ const styles = StyleSheet.create({
   harvestPlant: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
     marginBottom: 4,
   },
   harvestDate: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
   },
   fab: {
     position: 'absolute',
@@ -1363,7 +1366,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#2e7d32',
+    backgroundColor: theme.primary,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -1374,11 +1377,11 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: theme.overlay,
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '85%',
@@ -1389,12 +1392,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: theme.border,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.text,
   },
   modalBody: {
     padding: 24,
@@ -1403,11 +1406,11 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#666',
+    color: theme.textSecondary,
     marginBottom: 8,
   },
   pickerContainer: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.pickerBackground,
     borderRadius: 12,
     marginBottom: 16,
     overflow: 'hidden',
@@ -1415,14 +1418,14 @@ const styles = StyleSheet.create({
   },
   picker: {
     height: 56,
-    color: '#333',
+    color: theme.pickerText,
   },
   pickerItem: {
     fontSize: 16,
-    color: '#333',
+    color: theme.pickerText,
   },
   input: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
     padding: 16,
     borderRadius: 12,
     fontSize: 16,
@@ -1432,14 +1435,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
   },
   dateButtonText: {
     fontSize: 16,
-    color: '#333',
+    color: theme.text,
     fontWeight: '500',
   },
   timeButtons: {
@@ -1453,21 +1456,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#e0e0e0',
-    backgroundColor: '#fff',
+    borderColor: theme.border,
+    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
   },
   timeButtonActive: {
-    borderColor: '#2e7d32',
-    backgroundColor: '#e8f5e9',
+    borderColor: theme.primary,
+    backgroundColor: theme.primaryLight,
   },
   timeButtonText: {
     fontSize: 12,
-    color: '#666',
+    color: theme.textSecondary,
     fontWeight: '500',
   },
   timeButtonTextActive: {
-    color: '#2e7d32',
+    color: theme.primary,
     fontWeight: '600',
   },
   taskTypeToggle: {
@@ -1481,21 +1484,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#e0e0e0',
-    backgroundColor: '#fff',
+    borderColor: theme.border,
+    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
   },
   toggleButtonActive: {
-    borderColor: '#2e7d32',
-    backgroundColor: '#e8f5e9',
+    borderColor: theme.primary,
+    backgroundColor: theme.primaryLight,
   },
   toggleButtonText: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     fontWeight: '500',
   },
   toggleButtonTextActive: {
-    color: '#2e7d32',
+    color: theme.primary,
     fontWeight: '600',
   },
   presets: {
@@ -1508,50 +1511,50 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.border,
   },
   presetButtonActive: {
-    backgroundColor: '#e8f5e9',
-    borderColor: '#2e7d32',
+    backgroundColor: theme.primaryLight,
+    borderColor: theme.primary,
   },
   presetText: {
     fontSize: 12,
-    color: '#666',
+    color: theme.textSecondary,
     fontWeight: '600',
   },
   presetTextActive: {
-    color: '#2e7d32',
+    color: theme.primary,
   },
   preview: {
-    backgroundColor: '#f0f4ff',
+    backgroundColor: theme.accentLight,
     padding: 16,
     borderRadius: 12,
     marginTop: 8,
     marginBottom: 16,
     borderLeftWidth: 4,
-    borderLeftColor: '#2196F3',
+    borderLeftColor: theme.accent,
   },
   previewTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.text,
     marginBottom: 8,
   },
   previewText: {
     fontSize: 13,
-    color: '#555',
+    color: theme.textSecondary,
     marginBottom: 4,
     lineHeight: 20,
   },
   helperText: {
     fontSize: 12,
-    color: '#999',
+    color: theme.textTertiary,
     marginBottom: 24,
   },
   createButton: {
-    backgroundColor: '#2e7d32',
+    backgroundColor: theme.primary,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -1560,12 +1563,12 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   createButtonText: {
-    color: '#fff',
+    color: theme.backgroundSecondary,
     fontSize: 16,
     fontWeight: '600',
   },
   selectedTaskInfo: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
@@ -1573,12 +1576,12 @@ const styles = StyleSheet.create({
   selectedTaskTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.text,
     marginBottom: 4,
   },
   selectedTaskPlant: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
   },
   notesInput: {
     minHeight: 80,
@@ -1595,10 +1598,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   skipButton: {
-    backgroundColor: '#2e7d32',
+    backgroundColor: theme.primary,
   },
   skipButtonText: {
-    color: '#fff',
+    color: theme.backgroundSecondary,
     fontSize: 16,
     fontWeight: '600',
   },

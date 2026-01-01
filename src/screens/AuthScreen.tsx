@@ -3,8 +3,11 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvo
 import { auth } from '../lib/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../theme';
 
 export default function AuthScreen() {
+  const theme = useTheme();
+  const styles = createStyles(theme);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
@@ -59,7 +62,7 @@ export default function AuthScreen() {
     >
       <View style={styles.content}>
         <View style={styles.header}>
-          <Ionicons name="leaf" size={64} color="#2e7d32" />
+          <Ionicons name="leaf" size={64} color={theme.primary} />
           <Text style={styles.title}>Garden Planner</Text>
           <Text style={styles.subtitle}>Track your plants, tasks & journal</Text>
         </View>
@@ -68,6 +71,7 @@ export default function AuthScreen() {
           <TextInput
             style={styles.input}
             placeholder="Email"
+            placeholderTextColor={theme.inputPlaceholder}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -78,6 +82,7 @@ export default function AuthScreen() {
           <TextInput
             style={styles.input}
             placeholder="Password (min 6 characters)"
+            placeholderTextColor={theme.inputPlaceholder}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -110,10 +115,10 @@ export default function AuthScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
   },
   content: {
     flex: 1,
@@ -127,38 +132,39 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.text,
     marginTop: 16,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    color: theme.textSecondary,
     marginTop: 8,
   },
   form: {
     width: '100%',
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.inputBackground,
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
     fontSize: 16,
+    color: theme.inputText,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.inputBorder,
   },
   button: {
-    backgroundColor: '#2e7d32',
+    backgroundColor: theme.primary,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 8,
   },
   buttonDisabled: {
-    backgroundColor: '#aaa',
+    backgroundColor: theme.textTertiary,
   },
   buttonText: {
-    color: '#fff',
+    color: theme.textInverse,
     fontSize: 18,
     fontWeight: '600',
   },
@@ -167,7 +173,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   switchText: {
-    color: '#2e7d32',
+    color: theme.primary,
     fontSize: 16,
     fontWeight: '500',
   },

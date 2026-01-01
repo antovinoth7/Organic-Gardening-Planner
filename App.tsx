@@ -3,8 +3,10 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { useColorScheme } from 'react-native';
 import { auth } from './src/lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import { lightTheme, darkTheme } from './src/theme/colors';
 
 // Screens
 import AuthScreen from './src/screens/AuthScreen';
@@ -35,23 +37,31 @@ const JournalStack = () => (
   </Stack.Navigator>
 );
 
-const AppTabs = () => (
-  <Tab.Navigator
-    screenOptions={({ route }) => ({
-      tabBarIcon: ({ color, size }) => {
-        let iconName: keyof typeof Ionicons.glyphMap = 'home';
-        if (route.name === 'Home') iconName = 'home';
-        else if (route.name === 'Plants') iconName = 'leaf';
-        else if (route.name === 'Care Plan') iconName = 'calendar';
-        else if (route.name === 'Journal') iconName = 'book';
-        else if (route.name === 'Settings') iconName = 'settings';
-        return <Ionicons name={iconName} size={size} color={color} />;
-      },
-      tabBarActiveTintColor: '#2e7d32',
-      tabBarInactiveTintColor: 'gray',
-      headerShown: false,
-    })}
-  >
+const AppTabs = () => {
+  const colorScheme = useColorScheme();
+  const theme = colorScheme === 'dark' ? darkTheme : lightTheme;
+  
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ color, size }) => {
+          let iconName: keyof typeof Ionicons.glyphMap = 'home';
+          if (route.name === 'Home') iconName = 'home';
+          else if (route.name === 'Plants') iconName = 'leaf';
+          else if (route.name === 'Care Plan') iconName = 'calendar';
+          else if (route.name === 'Journal') iconName = 'book';
+          else if (route.name === 'Settings') iconName = 'settings';
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: theme.tabBarActive,
+        tabBarInactiveTintColor: theme.tabBarInactive,
+        tabBarStyle: {
+          backgroundColor: theme.tabBarBackground,
+          borderTopColor: theme.border,
+        },
+        headerShown: false,
+      })}
+    >
     <Tab.Screen name="Home" component={TodayScreen} />
     <Tab.Screen 
       name="Plants" 
@@ -84,11 +94,45 @@ const AppTabs = () => (
     />
     <Tab.Screen name="Settings" component={SettingsScreen} />
   </Tab.Navigator>
-);
+  );
+};
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const colorScheme = useColorScheme();
+  const theme = colorScheme === 'dark' ? darkTheme : lightTheme;
+
+  // Configure navigation theme
+  const navigationTheme = {
+    dark: colorScheme === 'dark',
+    colors: {
+      primary: theme.primary,
+      background: theme.background,
+      card: theme.backgroundSecondary,
+      text: theme.text,
+      border: theme.border,
+      notification: theme.primary,
+    },
+    fonts: {
+      regular: {
+        fontFamily: 'System',
+        fontWeight: '400' as const,
+      },
+      medium: {
+        fontFamily: 'System',
+        fontWeight: '500' as const,
+      },
+      bold: {
+        fontFamily: 'System',
+        fontWeight: '700' as const,
+      },
+      heavy: {
+        fontFamily: 'System',
+        fontWeight: '900' as const,
+      },
+    },
+  };
 
   useEffect(() => {
     // Listen for auth state changes
@@ -104,7 +148,7 @@ export default function App() {
   if (loading) return null; // Show splash screen
 
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={navigationTheme}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {user ? (
           <Stack.Screen name="AppTabs" component={AppTabs} />

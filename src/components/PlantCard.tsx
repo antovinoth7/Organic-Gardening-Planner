@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Plant } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../theme';
 import { imageExists } from '../lib/imageStorage';
 
 interface PlantCardProps {
@@ -12,6 +13,8 @@ interface PlantCardProps {
 }
 
 export default function PlantCard({ plant, onPress, onEdit, onDelete }: PlantCardProps) {
+  const theme = useTheme();
+  const styles = createStyles(theme);
   const [imageAvailable, setImageAvailable] = useState(false);
 
   // Check if the local image file exists
@@ -99,7 +102,7 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete }: PlantCar
           <Ionicons 
             name={plant.space_type === 'pot' ? 'cube-outline' : plant.space_type === 'bed' ? 'apps' : 'earth'} 
             size={14} 
-            color="#666" 
+            color={theme.textSecondary} 
           />
           <Text style={styles.infoText}>
             {plant.space_type === 'pot' ? plant.pot_size || 'Pot' : plant.space_type === 'bed' ? plant.bed_name || 'Bed' : 'Ground'}
@@ -122,24 +125,24 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete }: PlantCar
 
       <View style={styles.actions}>
         <TouchableOpacity onPress={onEdit} style={styles.actionButton}>
-          <Ionicons name="pencil" size={20} color="#2e7d32" />
+          <Ionicons name="pencil" size={20} color={theme.primary} />
         </TouchableOpacity>
         <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
-          <Ionicons name="trash" size={20} color="#f44336" />
+          <Ionicons name="trash" size={20} color={theme.error} />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   card: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 12,
     padding: 12,
     marginBottom: 12,
-    shadowColor: '#000',
+    shadowColor: theme.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -152,7 +155,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   placeholder: {
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.backgroundTertiary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -171,13 +174,13 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
     flex: 1,
   },
   badge: {
     fontSize: 10,
-    color: '#2e7d32',
-    backgroundColor: '#e8f5e9',
+    color: theme.primary,
+    backgroundColor: theme.primaryLight,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
@@ -186,7 +189,7 @@ const styles = StyleSheet.create({
   },
   variety: {
     fontSize: 13,
-    color: '#666',
+    color: theme.textSecondary,
     fontStyle: 'italic',
     marginTop: 2,
   },
@@ -197,12 +200,12 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     marginLeft: 4,
   },
   separator: {
     fontSize: 14,
-    color: '#ddd',
+    color: theme.border,
     marginHorizontal: 6,
   },
   healthContainer: {
@@ -227,7 +230,7 @@ const styles = StyleSheet.create({
   },
   age: {
     fontSize: 12,
-    color: '#2e7d32',
+    color: theme.primary,
     marginTop: 4,
     fontWeight: '500',
   },

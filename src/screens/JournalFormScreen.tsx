@@ -16,8 +16,10 @@ import { createJournalEntry, updateJournalEntry, saveJournalImage } from '../ser
 import { getPlants } from '../services/plants';
 import { Plant, JournalEntryType } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../theme';
 
 export default function JournalFormScreen({ navigation, route }: any) {
+  const theme = useTheme();
   const editEntry = route.params?.entry as JournalEntry | undefined;
   const isEditing = !!editEntry;
 
@@ -126,6 +128,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
   };
 
   const selectedPlant = plants.find(p => p.id === selectedPlantId);
+  const styles = createStyles(theme);
 
   return (
     <KeyboardAvoidingView 
@@ -134,7 +137,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
     >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="close" size={28} color="#333" />
+          <Ionicons name="close" size={28} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>{isEditing ? 'Edit Entry' : 'New Entry'}</Text>
         <TouchableOpacity onPress={handleSave} disabled={loading}>
@@ -151,7 +154,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
             style={[styles.typeButton, entryType === 'observation' && styles.typeButtonActive]}
             onPress={() => setEntryType('observation')}
           >
-            <Ionicons name="eye" size={20} color={entryType === 'observation' ? '#fff' : '#2e7d32'} />
+            <Ionicons name="eye" size={20} color={entryType === 'observation' ? theme.textInverse : theme.primary} />
             <Text style={[styles.typeButtonText, entryType === 'observation' && styles.typeButtonTextActive]}>
               Observation
             </Text>
@@ -160,7 +163,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
             style={[styles.typeButton, entryType === 'harvest' && styles.typeButtonActive]}
             onPress={() => setEntryType('harvest')}
           >
-            <Ionicons name="basket" size={20} color={entryType === 'harvest' ? '#fff' : '#2e7d32'} />
+            <Ionicons name="basket" size={20} color={entryType === 'harvest' ? theme.textInverse : theme.primary} />
             <Text style={[styles.typeButtonText, entryType === 'harvest' && styles.typeButtonTextActive]}>
               Harvest
             </Text>
@@ -169,7 +172,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
             style={[styles.typeButton, entryType === 'issue' && styles.typeButtonActive]}
             onPress={() => setEntryType('issue')}
           >
-            <Ionicons name="alert-circle" size={20} color={entryType === 'issue' ? '#fff' : '#2e7d32'} />
+            <Ionicons name="alert-circle" size={20} color={entryType === 'issue' ? theme.textInverse : theme.primary} />
             <Text style={[styles.typeButtonText, entryType === 'issue' && styles.typeButtonTextActive]}>
               Issue
             </Text>
@@ -178,7 +181,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
             style={[styles.typeButton, entryType === 'milestone' && styles.typeButtonActive]}
             onPress={() => setEntryType('milestone')}
           >
-            <Ionicons name="flag" size={20} color={entryType === 'milestone' ? '#fff' : '#2e7d32'} />
+            <Ionicons name="flag" size={20} color={entryType === 'milestone' ? theme.textInverse : theme.primary} />
             <Text style={[styles.typeButtonText, entryType === 'milestone' && styles.typeButtonTextActive]}>
               Milestone
             </Text>
@@ -333,10 +336,10 @@ export default function JournalFormScreen({ navigation, route }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
   },
   header: {
     flexDirection: 'row',
@@ -344,22 +347,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     paddingTop: 48,
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: theme.borderLight,
   },
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
   },
   saveText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2e7d32',
+    color: theme.primary,
   },
   saveTextDisabled: {
-    color: '#999',
+    color: theme.textTertiary,
   },
   content: {
     flex: 1,
@@ -393,13 +396,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
     borderRadius: 12,
     marginBottom: 16,
   },
   addPhotoText: {
     fontSize: 16,
-    color: '#2e7d32',
+    color: theme.primary,
     marginLeft: 8,
     fontWeight: '600',
   },
@@ -407,46 +410,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.border,
   },
   plantSelectorText: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
+    color: theme.text,
     marginLeft: 8,
   },
   plantPicker: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 12,
     marginBottom: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.border,
   },
   plantOption: {
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: theme.borderLight,
   },
   plantOptionSelected: {
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
   },
   plantOptionText: {
     fontSize: 16,
-    color: '#333',
+    color: theme.text,
   },
   textArea: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.inputBackground,
     padding: 16,
     borderRadius: 12,
     fontSize: 16,
+    color: theme.inputText,
     minHeight: 200,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.inputBorder,
   },
   typeSelector: {
     flexDirection: 'row',
@@ -459,36 +463,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 12,
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#e8f5e9',
+    borderColor: theme.primaryLight,
     gap: 4,
   },
   typeButtonActive: {
-    backgroundColor: '#2e7d32',
-    borderColor: '#2e7d32',
+    backgroundColor: theme.primary,
+    borderColor: theme.primary,
   },
   typeButtonText: {
     fontSize: 12,
-    color: '#2e7d32',
+    color: theme.primary,
     fontWeight: '600',
   },
   typeButtonTextActive: {
-    color: '#fff',
+    color: theme.textInverse,
   },
   harvestSection: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.backgroundSecondary,
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.border,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
     marginBottom: 12,
   },
   harvestRow: {
@@ -505,16 +509,17 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#666',
+    color: theme.textSecondary,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.inputBackground,
     padding: 12,
     borderRadius: 8,
     fontSize: 16,
+    color: theme.inputText,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.inputBorder,
   },
   unitButtons: {
     flexDirection: 'row',
@@ -523,23 +528,23 @@ const styles = StyleSheet.create({
   unitButton: {
     flex: 1,
     padding: 10,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
     borderRadius: 8,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.border,
   },
   unitButtonActive: {
-    backgroundColor: '#e8f5e9',
-    borderColor: '#2e7d32',
+    backgroundColor: theme.primaryLight,
+    borderColor: theme.primary,
   },
   unitButtonText: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     fontWeight: '600',
   },
   unitButtonTextActive: {
-    color: '#2e7d32',
+    color: theme.primary,
   },
   qualityButtons: {
     flexDirection: 'row',
@@ -548,15 +553,15 @@ const styles = StyleSheet.create({
   qualityButton: {
     flex: 1,
     padding: 12,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
     borderRadius: 8,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.border,
   },
   qualityButtonActive: {
-    backgroundColor: '#e8f5e9',
-    borderColor: '#2e7d32',
+    backgroundColor: theme.primaryLight,
+    borderColor: theme.primary,
   },
   qualityEmoji: {
     fontSize: 20,
@@ -564,19 +569,20 @@ const styles = StyleSheet.create({
   },
   qualityButtonText: {
     fontSize: 12,
-    color: '#666',
+    color: theme.textSecondary,
     fontWeight: '600',
   },
   qualityButtonTextActive: {
-    color: '#2e7d32',
+    color: theme.primary,
   },
   harvestNotesInput: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.inputBackground,
     padding: 12,
     borderRadius: 8,
     fontSize: 16,
+    color: theme.inputText,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: theme.inputBorder,
     minHeight: 60,
   },
 });
