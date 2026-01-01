@@ -125,11 +125,11 @@ export default function PlantsScreen({ navigation }: any) {
     }
 
     if (filters.parentLocation) {
-      filtered = filtered.filter(p => p.location.includes(filters.parentLocation));
+      filtered = filtered.filter(p => p.location?.includes(filters.parentLocation));
     }
 
     if (filters.childLocation) {
-      filtered = filtered.filter(p => p.location.includes(filters.childLocation));
+      filtered = filtered.filter(p => p.location?.includes(filters.childLocation));
     }
 
     return filtered;

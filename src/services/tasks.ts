@@ -161,7 +161,8 @@ export const markTaskDone = async (template: TaskTemplate, notes?: string, produ
   if (!user) throw new Error('Not authenticated');
 
   const doneAt = new Date();
-  const nextDueAt = new Date(doneAt.getTime() + template.frequency_days * 24 * 60 * 60 * 1000);
+  const frequencyDays = Number.isFinite(template.frequency_days) ? template.frequency_days : 0;
+  const nextDueAt = new Date(doneAt.getTime() + frequencyDays * 24 * 60 * 60 * 1000);
 
   // Insert task log with optional notes
   await addDoc(collection(db, TASK_LOGS_COLLECTION), {
@@ -177,9 +178,11 @@ export const markTaskDone = async (template: TaskTemplate, notes?: string, produ
 
   // Update next due date
   const docRef = doc(db, TASKS_COLLECTION, template.id);
-  await updateDoc(docRef, {
-    next_due_at: Timestamp.fromDate(nextDueAt)
-  });
+  if (!Number.isNaN(nextDueAt.getTime())) {
+    await updateDoc(docRef, {
+      next_due_at: Timestamp.fromDate(nextDueAt)
+    });
+  }
 };
 
 export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {

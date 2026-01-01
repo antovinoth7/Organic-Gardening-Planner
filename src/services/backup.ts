@@ -112,7 +112,11 @@ export const importBackup = async (overwrite: boolean = false): Promise<{
     if (result.canceled) {
       throw new Error('Import cancelled');
     }
-    
+
+    if (!result.assets || result.assets.length === 0) {
+      throw new Error('No backup file selected');
+    }
+
     // Read the backup file
     const fileContent = await FileSystem.readAsStringAsync(result.assets[0].uri, {
       encoding: 'utf8',

@@ -216,7 +216,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
         setLocation(plant.location);
         
         // Parse location into parent and child
-        const locationParts = plant.location.split(' - ');
+        const locationParts = plant.location?.split(' - ') || [];
         if (locationParts.length === 2) {
           setParentLocation(locationParts[0]);
           setChildLocation(locationParts[1]);
