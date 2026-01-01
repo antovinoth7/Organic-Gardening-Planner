@@ -18,6 +18,10 @@ export const lightTheme = {
   primary: '#2e7d32',
   primaryLight: '#e8f5e9',
   primaryDark: '#1b5e20',
+
+  // Accent colors
+  accent: '#e07a3f',
+  accentLight: '#fde7d6',
   
   // Border colors
   border: '#ddd',
@@ -29,10 +33,16 @@ export const lightTheme = {
   warning: '#ff9800',
   error: '#f44336',
   info: '#2196f3',
+  warningLight: '#fff3e0',
+  errorLight: '#ffebee',
   
   // Special colors
   overlay: 'rgba(0,0,0,0.5)',
   shadow: '#000',
+
+  // Card & button
+  card: '#fff',
+  buttonText: '#fff',
   
   // Input colors
   inputBackground: '#fff',
@@ -67,6 +77,10 @@ export const darkTheme = {
   primary: '#4caf50',
   primaryLight: '#2d4a2e',
   primaryDark: '#66bb6a',
+
+  // Accent colors
+  accent: '#e08b4f',
+  accentLight: '#55321b',
   
   // Border colors
   border: '#404040',
@@ -78,10 +92,16 @@ export const darkTheme = {
   warning: '#ffa726',
   error: '#ef5350',
   info: '#42a5f5',
+  warningLight: '#4a3a1f',
+  errorLight: '#4a1f1f',
   
   // Special colors
   overlay: 'rgba(0,0,0,0.8)',
   shadow: '#000',
+
+  // Card & button
+  card: '#1e1e1e',
+  buttonText: '#000',
   
   // Input colors
   inputBackground: '#2a2a2a',

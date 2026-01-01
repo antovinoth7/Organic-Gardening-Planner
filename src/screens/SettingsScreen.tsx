@@ -1,17 +1,31 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { auth } from '../lib/firebase';
-import { signOut } from 'firebase/auth';
-import { exportBackup, importBackup, getBackupStats } from '../services/backup';
-import { getImageStorageSize } from '../lib/imageStorage';
-import { useTheme } from '../theme';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { auth } from "../lib/firebase";
+import { signOut } from "firebase/auth";
+import { exportBackup, importBackup, getBackupStats } from "../services/backup";
+import { getImageStorageSize } from "../lib/imageStorage";
+import { useTheme, useThemeMode } from "../theme";
 
 export default function SettingsScreen() {
   const theme = useTheme();
+  const { mode, setMode } = useThemeMode();
   const styles = createStyles(theme);
   const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState({ plantCount: 0, taskCount: 0, journalCount: 0, lastExport: null });
+  const [stats, setStats] = useState<{
+    plantCount: number;
+    taskCount: number;
+    journalCount: number;
+    lastExport: string | null;
+  }>({ plantCount: 0, taskCount: 0, journalCount: 0, lastExport: null });
   const [imageStorageSize, setImageStorageSize] = useState(0);
 
   useEffect(() => {
@@ -25,14 +39,14 @@ export default function SettingsScreen() {
       setStats(backupStats);
       setImageStorageSize(imageSize);
     } catch (error) {
-      console.error('Error loading stats:', error);
+      console.error("Error loading stats:", error);
     }
   };
 
   const formatBytes = (bytes: number): string => {
-    if (bytes === 0) return '0 MB';
+    if (bytes === 0) return "0 MB";
     const mb = bytes / (1024 * 1024);
-    return mb.toFixed(2) + ' MB';
+    return mb.toFixed(2) + " MB";
   };
 
   const handleExportBackup = async () => {
@@ -40,12 +54,12 @@ export default function SettingsScreen() {
       setLoading(true);
       await exportBackup();
       Alert.alert(
-        'Backup Created',
-        'Your garden data has been exported. Save this file to your cloud storage (Google Drive, OneDrive, etc.) for safekeeping.',
-        [{ text: 'OK', onPress: loadStats }]
+        "Backup Created",
+        "Your garden data has been exported. Save this file to your cloud storage (Google Drive, OneDrive, etc.) for safekeeping.",
+        [{ text: "OK", onPress: loadStats }]
       );
     } catch (error: any) {
-      Alert.alert('Export Failed', error.message);
+      Alert.alert("Export Failed", error.message);
     } finally {
       setLoading(false);
     }
@@ -53,27 +67,27 @@ export default function SettingsScreen() {
 
   const handleImportBackup = async (overwrite: boolean) => {
     Alert.alert(
-      'Import Backup',
-      overwrite 
-        ? 'This will REPLACE all your current data with the backup. Continue?' 
-        : 'This will MERGE the backup with your current data. Continue?',
+      "Import Backup",
+      overwrite
+        ? "This will REPLACE all your current data with the backup. Continue?"
+        : "This will MERGE the backup with your current data. Continue?",
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Continue',
-          style: overwrite ? 'destructive' : 'default',
+          text: "Continue",
+          style: overwrite ? "destructive" : "default",
           onPress: async () => {
             try {
               setLoading(true);
               const result = await importBackup(overwrite);
               Alert.alert(
-                'Import Complete',
+                "Import Complete",
                 `Imported:\n• ${result.plants} plants\n• ${result.tasks} tasks\n• ${result.journal} journal entries`,
-                [{ text: 'OK', onPress: loadStats }]
+                [{ text: "OK", onPress: loadStats }]
               );
             } catch (error: any) {
-              if (error.message !== 'Import cancelled') {
-                Alert.alert('Import Failed', error.message);
+              if (error.message !== "Import cancelled") {
+                Alert.alert("Import Failed", error.message);
               }
             } finally {
               setLoading(false);
@@ -85,14 +99,14 @@ export default function SettingsScreen() {
   };
 
   const handleSignOut = async () => {
-    console.log('Sign out button pressed');
+    console.log("Sign out button pressed");
     try {
-      console.log('Calling signOut...');
+      console.log("Calling signOut...");
       await signOut(auth);
-      console.log('Signed out successfully');
+      console.log("Signed out successfully");
     } catch (error: any) {
-      console.error('Sign out error:', error);
-      Alert.alert('Error', error.message);
+      console.error("Sign out error:", error);
+      Alert.alert("Error", error.message);
     }
   };
 
@@ -104,12 +118,84 @@ export default function SettingsScreen() {
 
       <ScrollView style={styles.content}>
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account</Text>
+
+          <View style={styles.card}>
+            <View style={styles.infoItem}>
+              <Ionicons name="person-circle" size={20} color="#2e7d32" />
+              <Text style={styles.infoText}>
+                {auth.currentUser?.email || "Not signed in"}
+              </Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Appearance</Text>
+
+          <View style={styles.card}>
+            <View style={styles.themeRow}>
+              <Text style={styles.infoText}>App Theme</Text>
+              <View style={styles.themeButtons}>
+                <TouchableOpacity
+                  style={[
+                    styles.themeButton,
+                    mode === "system" && styles.themeButtonActive,
+                  ]}
+                  onPress={() => setMode("system")}
+                >
+                  <Text
+                    style={[
+                      styles.themeButtonText,
+                      mode === "system" && styles.themeButtonTextActive,
+                    ]}
+                  >
+                    System
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.themeButton,
+                    mode === "light" && styles.themeButtonActive,
+                  ]}
+                  onPress={() => setMode("light")}
+                >
+                  <Text
+                    style={[
+                      styles.themeButtonText,
+                      mode === "light" && styles.themeButtonTextActive,
+                    ]}
+                  >
+                    Light
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.themeButton,
+                    mode === "dark" && styles.themeButtonActive,
+                  ]}
+                  onPress={() => setMode("dark")}
+                >
+                  <Text
+                    style={[
+                      styles.themeButtonText,
+                      mode === "dark" && styles.themeButtonTextActive,
+                    ]}
+                  >
+                    Dark
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Data Backup</Text>
           <Text style={styles.sectionDescription}>
-            Your garden data is stored both locally and synced to Firestore. Images are stored only on this device.
-            Create manual backups to save to your own cloud storage for long-term safety.
+            Your garden data is stored both locally and synced to Firestore.
+            Images are stored only on this device. Create manual backups to save
+            to your own cloud storage for long-term safety.
           </Text>
-          
+
           <View style={styles.card}>
             <View style={styles.statsContainer}>
               <View style={styles.statItem}>
@@ -125,14 +211,16 @@ export default function SettingsScreen() {
                 <Text style={styles.statLabel}>Journal</Text>
               </View>
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>{formatBytes(imageStorageSize)}</Text>
+                <Text style={styles.statValue}>
+                  {formatBytes(imageStorageSize)}
+                </Text>
                 <Text style={styles.statLabel}>Images</Text>
               </View>
             </View>
           </View>
 
-          <TouchableOpacity 
-            style={[styles.backupButton, styles.exportButton]} 
+          <TouchableOpacity
+            style={[styles.backupButton, styles.exportButton]}
             onPress={handleExportBackup}
             disabled={loading}
           >
@@ -146,67 +234,77 @@ export default function SettingsScreen() {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.backupButton, styles.importButton]} 
+          <TouchableOpacity
+            style={[styles.backupButton, styles.importButton]}
             onPress={() => handleImportBackup(false)}
             disabled={loading}
           >
             <Ionicons name="cloud-upload-outline" size={20} color="#2e7d32" />
-            <Text style={[styles.backupButtonText, { color: '#2e7d32' }]}>Import & Merge</Text>
+            <Text style={[styles.backupButtonText, { color: "#2e7d32" }]}>
+              Import & Merge
+            </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.backupButton, styles.replaceButton]} 
+          <TouchableOpacity
+            style={[styles.backupButton, styles.replaceButton]}
             onPress={() => handleImportBackup(true)}
             disabled={loading}
           >
             <Ionicons name="refresh-outline" size={20} color="#f57c00" />
-            <Text style={[styles.backupButtonText, { color: '#f57c00' }]}>Import & Replace All</Text>
+            <Text style={[styles.backupButtonText, { color: "#f57c00" }]}>
+              Import & Replace All
+            </Text>
           </TouchableOpacity>
 
           <Text style={styles.backupNote}>
-            💡 Tip: Export backups regularly and save them to Google Drive, OneDrive, or an external drive.
-            Images are not included in backups - they stay local to this device.
+            💡 Tip: Export backups regularly and save them to Google Drive,
+            OneDrive, or an external drive. Images are not included in backups -
+            they stay local to this device.
           </Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          
-          <View style={styles.card}>
-            <View style={styles.infoItem}>
-              <Ionicons name="person-circle" size={20} color="#2e7d32" />
-              <Text style={styles.infoText}>{auth.currentUser?.email || 'Not signed in'}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Architecture</Text>
-          
+
           <View style={styles.card}>
             <View style={styles.infoItem}>
               <Ionicons name="cloud-outline" size={20} color="#2e7d32" />
-              <Text style={styles.infoText}>Text data synced via Firebase (free tier)</Text>
+              <Text style={styles.infoText}>
+                Text data synced via Firebase (free tier)
+              </Text>
             </View>
             <View style={styles.infoItem}>
-              <Ionicons name="phone-portrait-outline" size={20} color="#2e7d32" />
-              <Text style={styles.infoText}>Images stored locally on device only</Text>
+              <Ionicons
+                name="phone-portrait-outline"
+                size={20}
+                color="#2e7d32"
+              />
+              <Text style={styles.infoText}>
+                Images stored locally on device only
+              </Text>
             </View>
             <View style={styles.infoItem}>
               <Ionicons name="wifi-outline" size={20} color="#2e7d32" />
-              <Text style={styles.infoText}>Works offline with local cache</Text>
+              <Text style={styles.infoText}>
+                Works offline with local cache
+              </Text>
             </View>
             <View style={styles.infoItem}>
-              <Ionicons name="shield-checkmark-outline" size={20} color="#2e7d32" />
-              <Text style={styles.infoText}>Free forever - no subscriptions</Text>
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={20}
+                color="#2e7d32"
+              />
+              <Text style={styles.infoText}>
+                Free forever - no subscriptions
+              </Text>
             </View>
           </View>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>About</Text>
-          
+
           <View style={styles.card}>
             <View style={styles.row}>
               <Ionicons name="leaf" size={24} color="#2e7d32" />
@@ -220,15 +318,19 @@ export default function SettingsScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Features</Text>
-          
+
           <View style={styles.card}>
             <View style={styles.infoItem}>
               <Ionicons name="checkmark-circle" size={20} color="#2e7d32" />
-              <Text style={styles.infoText}>Track plants and their locations</Text>
+              <Text style={styles.infoText}>
+                Track plants and their locations
+              </Text>
             </View>
             <View style={styles.infoItem}>
               <Ionicons name="checkmark-circle" size={20} color="#2e7d32" />
-              <Text style={styles.infoText}>Set recurring tasks (water, fertilise, etc.)</Text>
+              <Text style={styles.infoText}>
+                Set recurring tasks (water, fertilise, etc.)
+              </Text>
             </View>
             <View style={styles.infoItem}>
               <Ionicons name="checkmark-circle" size={20} color="#2e7d32" />
@@ -236,7 +338,9 @@ export default function SettingsScreen() {
             </View>
             <View style={styles.infoItem}>
               <Ionicons name="checkmark-circle" size={20} color="#2e7d32" />
-              <Text style={styles.infoText}>Calendar view of upcoming tasks</Text>
+              <Text style={styles.infoText}>
+                Calendar view of upcoming tasks
+              </Text>
             </View>
             <View style={styles.infoItem}>
               <Ionicons name="checkmark-circle" size={20} color="#2e7d32" />
@@ -258,146 +362,176 @@ export default function SettingsScreen() {
   );
 }
 
-const createStyles = (theme: any) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.background,
-  },
-  header: {
-    padding: 24,
-    paddingTop: 48,
-    backgroundColor: theme.backgroundSecondary,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: theme.text,
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  sectionDescription: {
-    fontSize: 14,
-    color: theme.textSecondary,
-    marginBottom: 12,
-    lineHeight: 20,
-  },
-  card: {
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: theme.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  rowContent: {
-    marginLeft: 16,
-  },
-  rowTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.text,
-  },
-  rowSubtitle: {
-    fontSize: 14,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  infoText: {
-    fontSize: 14,
-    color: theme.text,
-    marginLeft: 12,
-    flex: 1,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 8,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: theme.primary,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 4,
-  },
-  backupButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 14,
-    borderRadius: 10,
-    marginTop: 12,
-  },
-  exportButton: {
-    backgroundColor: '#2e7d32',
-  },
-  importButton: {
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#2e7d32',
-  },
-  replaceButton: {
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#f57c00',
-  },
-  backupButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-    marginLeft: 8,
-  },
-  backupNote: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 12,
-    fontStyle: 'italic',
-    lineHeight: 18,
-  },
-  signOutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginTop: 16,
-    marginBottom: 32,
-  },
-  signOutText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#f44336',
-    marginLeft: 8,
-  },
-});
+const createStyles = (theme: any) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    header: {
+      padding: 24,
+      paddingTop: 48,
+      backgroundColor: theme.backgroundSecondary,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: "bold",
+      color: theme.text,
+    },
+    content: {
+      flex: 1,
+      padding: 16,
+    },
+    section: {
+      marginBottom: 24,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: theme.textSecondary,
+      marginBottom: 12,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+    },
+    sectionDescription: {
+      fontSize: 14,
+      color: theme.textSecondary,
+      marginBottom: 12,
+      lineHeight: 20,
+    },
+    card: {
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 12,
+      padding: 16,
+      shadowColor: theme.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    rowContent: {
+      marginLeft: 16,
+    },
+    rowTitle: {
+      fontSize: 18,
+      fontWeight: "600",
+      color: theme.text,
+    },
+    rowSubtitle: {
+      fontSize: 14,
+      color: theme.textSecondary,
+      marginTop: 2,
+    },
+    infoItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 8,
+    },
+    infoText: {
+      fontSize: 14,
+      color: theme.text,
+      marginLeft: 12,
+      flex: 1,
+    },
+    themeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    themeButtons: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    themeButton: {
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.background,
+    },
+    themeButtonActive: {
+      backgroundColor: theme.primaryLight,
+      borderColor: theme.primary,
+    },
+    themeButtonText: {
+      fontSize: 12,
+      color: theme.textSecondary,
+      fontWeight: "600",
+    },
+    themeButtonTextActive: {
+      color: theme.primary,
+    },
+    statsContainer: {
+      flexDirection: "row",
+      justifyContent: "space-around",
+      paddingVertical: 8,
+    },
+    statItem: {
+      alignItems: "center",
+    },
+    statValue: {
+      fontSize: 24,
+      fontWeight: "700",
+      color: theme.primary,
+    },
+    statLabel: {
+      fontSize: 12,
+      color: theme.textSecondary,
+      marginTop: 4,
+    },
+    backupButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 14,
+      borderRadius: 10,
+      marginTop: 12,
+    },
+    exportButton: {
+      backgroundColor: "#2e7d32",
+    },
+    importButton: {
+      backgroundColor: "#fff",
+      borderWidth: 2,
+      borderColor: "#2e7d32",
+    },
+    replaceButton: {
+      backgroundColor: "#fff",
+      borderWidth: 2,
+      borderColor: "#f57c00",
+    },
+    backupButtonText: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: "#fff",
+      marginLeft: 8,
+    },
+    backupNote: {
+      fontSize: 13,
+      color: "#666",
+      marginTop: 12,
+      fontStyle: "italic",
+      lineHeight: 18,
+    },
+    signOutButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#fff",
+      padding: 16,
+      borderRadius: 12,
+      marginTop: 16,
+      marginBottom: 32,
+    },
+    signOutText: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: "#f44336",
+      marginLeft: 8,
+    },
+  });

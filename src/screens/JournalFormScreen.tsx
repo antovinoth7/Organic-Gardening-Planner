@@ -14,7 +14,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { createJournalEntry, updateJournalEntry, saveJournalImage } from '../services/journal';
 import { getPlants } from '../services/plants';
-import { Plant, JournalEntryType } from '../types/database.types';
+import { Plant, JournalEntry, JournalEntryType } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 

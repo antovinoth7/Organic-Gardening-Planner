@@ -179,8 +179,8 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   },
   badge: {
     fontSize: 10,
-    color: theme.primary,
-    backgroundColor: theme.primaryLight,
+    color: theme.accent,
+    backgroundColor: theme.accentLight,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,

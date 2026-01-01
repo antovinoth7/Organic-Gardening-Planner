@@ -216,7 +216,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
         setLocation(plant.location);
         
         // Parse location into parent and child
-        const locationParts = plant.location.split(' - ');
+        const locationParts = plant.location?.split(' - ') || [];
         if (locationParts.length === 2) {
           setParentLocation(locationParts[0]);
           setChildLocation(locationParts[1]);
@@ -1275,15 +1275,15 @@ const createStyles = (theme: any) => StyleSheet.create({
     gap: 4,
   },
   companionChipSelected: {
-    backgroundColor: theme.primaryLight,
-    borderColor: theme.primary,
+    backgroundColor: theme.accentLight,
+    borderColor: theme.accent,
   },
   companionChipText: {
     fontSize: 13,
     color: theme.textSecondary,
   },
   companionChipTextSelected: {
-    color: theme.primary,
+    color: theme.accent,
     fontWeight: '600',
   },
   sectionHeaderRow: {
@@ -1430,12 +1430,12 @@ const createStyles = (theme: any) => StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
-    backgroundColor: theme.primaryLight,
+    backgroundColor: theme.accentLight,
     marginRight: 8,
   },
   suggestionChipText: {
     fontSize: 13,
-    color: theme.primary,
+    color: theme.accent,
   },
   modalSaveButton: {
     backgroundColor: theme.primary,

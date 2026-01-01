@@ -3,10 +3,9 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { useColorScheme } from 'react-native';
 import { auth } from './src/lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { lightTheme, darkTheme } from './src/theme/colors';
+import { ThemeProvider, useTheme, useThemeMode } from './src/theme';
 
 // Screens
 import AuthScreen from './src/screens/AuthScreen';
@@ -38,8 +37,7 @@ const JournalStack = () => (
 );
 
 const AppTabs = () => {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === 'dark' ? darkTheme : lightTheme;
+  const theme = useTheme();
   
   return (
     <Tab.Navigator
@@ -97,15 +95,15 @@ const AppTabs = () => {
   );
 };
 
-export default function App() {
+const AppRoot = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === 'dark' ? darkTheme : lightTheme;
+  const theme = useTheme();
+  const { resolvedMode } = useThemeMode();
 
   // Configure navigation theme
   const navigationTheme = {
-    dark: colorScheme === 'dark',
+    dark: resolvedMode === 'dark',
     colors: {
       primary: theme.primary,
       background: theme.background,
@@ -157,6 +155,14 @@ export default function App() {
         )}
       </Stack.Navigator>
     </NavigationContainer>
+  );
+};
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppRoot />
+    </ThemeProvider>
   );
 }
 

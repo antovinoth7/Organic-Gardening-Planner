@@ -122,6 +122,7 @@ export function calculateExpectedHarvestDate(
   if (!plantingDate) return null;
   
   const plantDate = new Date(plantingDate);
+  if (Number.isNaN(plantDate.getTime())) return null;
   let daysToAdd = 0;
   
   // Check if it's a fruit tree or coconut tree
