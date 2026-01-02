@@ -50,7 +50,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
     }
   };
 
-  const pickImage = async () => {
+  const openImageLibrary = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission required', 'Please allow access to your photos');
@@ -69,6 +69,36 @@ export default function JournalFormScreen({ navigation, route }: any) {
       const newUris = result.assets.map(asset => asset.uri);
       setPhotoUris(prev => [...prev, ...newUris]);
     }
+  };
+
+  const openCamera = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Please allow access to your camera');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      const cameraUri = result.assets[0]?.uri;
+      if (cameraUri) {
+        setPhotoUris(prev => [...prev, cameraUri]);
+      }
+    }
+  };
+
+  const pickImage = () => {
+    Alert.alert('Add Photo', 'Choose a source', [
+      { text: 'Camera', onPress: openCamera },
+      { text: 'Photo Library', onPress: openImageLibrary },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   const removeImage = (index: number) => {

@@ -92,8 +92,12 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete }: PlantCar
 
       <View style={styles.content}>
         <View style={styles.nameRow}>
-          <Text style={styles.name}>{plant.name}</Text>
-          <Text style={styles.badge}>{plant.plant_variety || getPlantTypeLabel()}</Text>
+          <Text style={styles.name} numberOfLines={1} ellipsizeMode="tail">
+            {plant.name}
+          </Text>
+          <Text style={styles.badge} numberOfLines={1} ellipsizeMode="tail">
+            {plant.plant_variety || getPlantTypeLabel()}
+          </Text>
         </View>
         {plant.variety && (
           <Text style={styles.variety}>{plant.variety}</Text>
@@ -104,11 +108,13 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete }: PlantCar
             size={14} 
             color={theme.textSecondary} 
           />
-          <Text style={styles.infoText}>
+          <Text style={styles.infoText} numberOfLines={1} ellipsizeMode="tail">
             {plant.space_type === 'pot' ? plant.pot_size || 'Pot' : plant.space_type === 'bed' ? plant.bed_name || 'Bed' : 'Ground'}
           </Text>
           <Text style={styles.separator}>•</Text>
-          <Text style={styles.infoText}>{plant.location}</Text>
+          <Text style={styles.infoText} numberOfLines={1} ellipsizeMode="tail">
+            {plant.location}
+          </Text>
         </View>
         {plant.health_status && (
           <View style={styles.healthContainer}>
@@ -165,11 +171,14 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   content: {
     flex: 1,
     justifyContent: 'center',
+    minWidth: 0,
+    paddingRight: 8,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    minWidth: 0,
   },
   name: {
     fontSize: 18,
@@ -186,6 +195,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     borderRadius: 10,
     fontWeight: '600',
     textTransform: 'uppercase',
+    maxWidth: 120,
   },
   variety: {
     fontSize: 13,
@@ -197,11 +207,15 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 4,
+    flexShrink: 1,
+    minWidth: 0,
   },
   infoText: {
     fontSize: 14,
     color: theme.textSecondary,
     marginLeft: 4,
+    flexShrink: 1,
+    minWidth: 0,
   },
   separator: {
     fontSize: 14,

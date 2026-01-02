@@ -20,6 +20,10 @@ export default function TodayScreen({ navigation }: any) {
   const [selectedTask, setSelectedTask] = useState<TaskTemplate | null>(null);
   const [skipReason, setSkipReason] = useState('');
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  const completedTemplateIds = useMemo(
+    () => new Set(taskLogs.map(log => log.template_id)),
+    [taskLogs]
+  );
 
   const loadData = async () => {
     try {
@@ -61,11 +65,21 @@ export default function TodayScreen({ navigation }: any) {
 
   const handleMarkDone = async (task: TaskTemplate) => {
     if (completingTaskId) return; // Prevent multiple clicks
-    
+    if (completedTemplateIds.has(task.id)) {
+      Alert.alert('Already Completed', 'This task is already marked as done for today.');
+      loadData();
+      return;
+    }
+
     setCompletingTaskId(task.id);
     try {
-      await markTaskDone(task);
-      Alert.alert('Success', 'Task marked as done! 🎉');
+      const didMark = await markTaskDone(task);
+      if (!didMark) {
+        Alert.alert('Already Completed', 'This task is already marked as done for today.');
+        loadData();
+        return;
+      }
+      Alert.alert('Success', 'Task marked as done!');
       loadData();
     } catch (error: any) {
       Alert.alert('Error', error.message);
@@ -119,10 +133,23 @@ export default function TodayScreen({ navigation }: any) {
     return plant?.name || 'Unknown';
   };
 
+  const getDaysSince = (dateValue?: string | null) => {
+    if (!dateValue) return null;
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return null;
+    const startOfDate = new Date(date);
+    startOfDate.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Math.floor((today.getTime() - startOfDate.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
   // Calculate stats
   const stats = useMemo(() => {
-    const totalTasks = tasks?.length || 0;
-    const completed = taskLogs?.length || 0; // Use actual task logs from today
+    const taskIds = new Set((tasks || []).map(task => task.id));
+    completedTemplateIds.forEach(id => taskIds.add(id));
+    const totalTasks = taskIds.size;
+    const completed = completedTemplateIds.size;
     const completionRate = totalTasks > 0 ? Math.round((completed / totalTasks) * 100) : 0;
     
     const unhealthyPlants = (plants || []).filter(p => 
@@ -130,26 +157,14 @@ export default function TodayScreen({ navigation }: any) {
     );
     
     const needsAttention = (plants || []).filter(p => {
-      // Skip if no watering frequency is set
-      if (!p.watering_frequency_days) return false;
-      
-      // If never watered but has a planting date, check against that
-      if (!p.last_watered_date && p.planting_date) {
-        const daysSincePlanting = Math.floor(
-          (new Date().getTime() - new Date(p.planting_date).getTime()) / (1000 * 60 * 60 * 24)
-        );
-        return daysSincePlanting >= p.watering_frequency_days;
-      }
-      
-      // If has last watered date, check against that
-      if (p.last_watered_date) {
-        const daysSinceWater = Math.floor(
-          (new Date().getTime() - new Date(p.last_watered_date).getTime()) / (1000 * 60 * 60 * 24)
-        );
-        return daysSinceWater >= p.watering_frequency_days;
-      }
-      
-      return false;
+      const frequency = Number(p.watering_frequency_days);
+      if (!Number.isFinite(frequency) || frequency <= 0) return false;
+
+      const referenceDate = p.last_watered_date || p.planting_date || p.created_at;
+      const daysSince = getDaysSince(referenceDate);
+      if (daysSince === null || daysSince < 0) return false;
+
+      return daysSince >= frequency;
     });
 
     return {
@@ -161,10 +176,11 @@ export default function TodayScreen({ navigation }: any) {
       needsAttentionCount: needsAttention.length,
       needsAttention
     };
-  }, [tasks, plants, taskLogs]);
+  }, [tasks, plants, completedTemplateIds]);
 
   const overdueTasks = (tasks || []).filter(t => {
     if (!t || !t.next_due_at) return false;
+    if (completedTemplateIds.has(t.id)) return false;
     const dueDate = new Date(t.next_due_at);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -173,6 +189,7 @@ export default function TodayScreen({ navigation }: any) {
   
   const todayTasks = (tasks || []).filter(t => {
     if (!t || !t.next_due_at) return false;
+    if (completedTemplateIds.has(t.id)) return false;
     const dueDate = new Date(t.next_due_at);
     const today = new Date();
     return dueDate.toDateString() === today.toDateString();
@@ -323,7 +340,7 @@ export default function TodayScreen({ navigation }: any) {
                 plantName={getPlantName(task.plant_id)}
                 onMarkDone={() => handleMarkDone(task)}
                 isOverdue
-                disabled={completingTaskId === task.id}
+                disabled={completingTaskId === task.id || completedTemplateIds.has(task.id)}
               />
               <View style={styles.quickActions}>
                 <TouchableOpacity 
@@ -363,7 +380,7 @@ export default function TodayScreen({ navigation }: any) {
                 task={task}
                 plantName={getPlantName(task.plant_id)}
                 onMarkDone={() => handleMarkDone(task)}
-                disabled={completingTaskId === task.id}
+                disabled={completingTaskId === task.id || completedTemplateIds.has(task.id)}
               />
               <View style={styles.quickActions}>
                 <TouchableOpacity 

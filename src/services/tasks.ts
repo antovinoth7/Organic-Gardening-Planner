@@ -156,13 +156,32 @@ export const deleteTaskTemplate = async (id: string): Promise<void> => {
   await deleteDoc(docRef);
 };
 
-export const markTaskDone = async (template: TaskTemplate, notes?: string, productUsed?: string): Promise<void> => {
+export const markTaskDone = async (template: TaskTemplate, notes?: string, productUsed?: string): Promise<boolean> => {
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
 
   const doneAt = new Date();
   const frequencyDays = Number.isFinite(template.frequency_days) ? template.frequency_days : 0;
   const nextDueAt = new Date(doneAt.getTime() + frequencyDays * 24 * 60 * 60 * 1000);
+  const startOfDay = new Date(doneAt);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(doneAt);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const existingLogs = await getTaskLogs(template.id);
+  const alreadyDoneToday = existingLogs.some(log => {
+    const logDate = new Date(log.done_at);
+    return logDate >= startOfDay && logDate <= endOfDay;
+  });
+
+  if (alreadyDoneToday) {
+    if (frequencyDays <= 0) {
+      await updateDoc(doc(db, TASKS_COLLECTION, template.id), {
+        enabled: false
+      });
+    }
+    return false;
+  }
 
   // Insert task log with optional notes
   await addDoc(collection(db, TASK_LOGS_COLLECTION), {
@@ -178,11 +197,19 @@ export const markTaskDone = async (template: TaskTemplate, notes?: string, produ
 
   // Update next due date
   const docRef = doc(db, TASKS_COLLECTION, template.id);
-  if (!Number.isNaN(nextDueAt.getTime())) {
-    await updateDoc(docRef, {
-      next_due_at: Timestamp.fromDate(nextDueAt)
-    });
+  const updates: { next_due_at?: Timestamp; enabled?: boolean } = {};
+  if (frequencyDays <= 0) {
+    updates.enabled = false;
+    updates.next_due_at = Timestamp.fromDate(doneAt);
+  } else if (!Number.isNaN(nextDueAt.getTime())) {
+    updates.next_due_at = Timestamp.fromDate(nextDueAt);
   }
+
+  if (Object.keys(updates).length > 0) {
+    await updateDoc(docRef, updates);
+  }
+
+  return true;
 };
 
 export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {

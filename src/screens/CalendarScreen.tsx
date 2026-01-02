@@ -8,6 +8,7 @@ import { getJournalEntries } from '../services/journal';
 import { TaskTemplate, Plant, TaskType, JournalEntry } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../theme';
 
 const TASK_COLORS: Record<TaskType, string> = {
@@ -33,6 +34,7 @@ export default function CalendarScreen() {
   const [selectedTask, setSelectedTask] = useState<TaskTemplate | null>(null);
   const [taskNotes, setTaskNotes] = useState('');
   const [productUsed, setProductUsed] = useState('');
+  const [isCompletingTask, setIsCompletingTask] = useState(false);
   const [taskType, setTaskType] = useState<TaskType>('water');
   const [selectedPlant, setSelectedPlant] = useState<string>('');
   const [frequencyDays, setFrequencyDays] = useState('7');
@@ -45,9 +47,24 @@ export default function CalendarScreen() {
   const [loading, setLoading] = useState(false);
   const [groupBy, setGroupBy] = useState<'none' | 'location' | 'type'>('none');
 
+  const setTodayView = () => {
+    const today = new Date();
+    setSelectedDate(today);
+    setCurrentWeekStart(getStartOfWeek(today));
+    setCurrentMonth(today);
+  };
+
   useEffect(() => {
     loadData();
+    setTodayView();
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadData();
+      setTodayView();
+    }, [])
+  );
 
   const loadData = async () => {
     try {
@@ -72,11 +89,21 @@ export default function CalendarScreen() {
   };
 
   const confirmTaskComplete = async () => {
-    if (!selectedTask) return;
+    if (!selectedTask || isCompletingTask) return;
     
+    setIsCompletingTask(true);
     try {
-      await markTaskDone(selectedTask, taskNotes || undefined, productUsed || undefined);
-      Alert.alert('✓', 'Task completed!');
+      const didMark = await markTaskDone(selectedTask, taskNotes || undefined, productUsed || undefined);
+      if (!didMark) {
+        Alert.alert('Already Completed', 'This task is already marked as done for today.');
+        setShowNotesModal(false);
+        setSelectedTask(null);
+        setTaskNotes('');
+        setProductUsed('');
+        loadData();
+        return;
+      }
+      Alert.alert('Success', 'Task completed!');
       setShowNotesModal(false);
       setSelectedTask(null);
       setTaskNotes('');
@@ -84,6 +111,8 @@ export default function CalendarScreen() {
       loadData();
     } catch (error: any) {
       Alert.alert('Error', error.message);
+    } finally {
+      setIsCompletingTask(false);
     }
   };
 
@@ -317,6 +346,8 @@ export default function CalendarScreen() {
       <Swipeable
         key={task.id}
         renderRightActions={renderRightActions}
+        friction={2}
+        rightThreshold={30}
         overshootRight={false}
       >
         <View style={[styles.taskCard, isOverdue && styles.taskCardOverdue]}>
@@ -694,12 +725,12 @@ export default function CalendarScreen() {
                     style={styles.picker}
                     itemStyle={styles.pickerItem}
                   >
-                    <Picker.Item label="💧 Water" value="water" color="#333" />
-                    <Picker.Item label="🌱 Fertilize" value="fertilise" color="#333" />
-                    <Picker.Item label="✂️ Prune" value="prune" color="#333" />
-                    <Picker.Item label="🪴 Repot" value="repot" color="#333" />
-                    <Picker.Item label="🧴 Spray (Pesticide/Neem)" value="spray" color="#333" />
-                    <Picker.Item label="🍂 Mulch" value="mulch" color="#333" />
+                    <Picker.Item label="💧 Water" value="water" color={theme.pickerText} />
+                    <Picker.Item label="🌱 Fertilize" value="fertilise" color={theme.pickerText} />
+                    <Picker.Item label="✂️ Prune" value="prune" color={theme.pickerText} />
+                    <Picker.Item label="🪴 Repot" value="repot" color={theme.pickerText} />
+                    <Picker.Item label="🧴 Spray (Pesticide/Neem)" value="spray" color={theme.pickerText} />
+                    <Picker.Item label="🍂 Mulch" value="mulch" color={theme.pickerText} />
                   </Picker>
                 </View>
 
@@ -711,9 +742,9 @@ export default function CalendarScreen() {
                     style={styles.picker}
                     itemStyle={styles.pickerItem}
                   >
-                    <Picker.Item label="General Task" value="" color="#333" />
+                    <Picker.Item label="General Task" value="" color={theme.pickerText} />
                     {plants.map(plant => (
-                      <Picker.Item key={plant.id} label={plant.name} value={plant.id} color="#333" />
+                      <Picker.Item key={plant.id} label={plant.name} value={plant.id} color={theme.pickerText} />
                     ))}
                   </Picker>
                 </View>
@@ -855,6 +886,7 @@ export default function CalendarScreen() {
                   value={frequencyDays}
                   onChangeText={setFrequencyDays}
                   keyboardType="numeric"
+                  placeholderTextColor={theme.inputPlaceholder}
                 />
 
                 {/* Preview */}
@@ -915,7 +947,7 @@ export default function CalendarScreen() {
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Complete Task</Text>
-                <TouchableOpacity onPress={() => setShowNotesModal(false)}>
+                <TouchableOpacity onPress={() => setShowNotesModal(false)} disabled={isCompletingTask}>
                   <Ionicons name="close" size={24} color="#333" />
                 </TouchableOpacity>
               </View>
@@ -942,6 +974,7 @@ export default function CalendarScreen() {
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
+                  placeholderTextColor={theme.inputPlaceholder}
                 />
 
                 <Text style={styles.label}>Product Used (Optional)</Text>
@@ -950,14 +983,23 @@ export default function CalendarScreen() {
                   placeholder="e.g., Neem oil, Compost..."
                   value={productUsed}
                   onChangeText={setProductUsed}
+                  placeholderTextColor={theme.inputPlaceholder}
                 />
 
                 <View style={styles.modalActions}>
                   <TouchableOpacity 
-                    style={[styles.actionButton, styles.skipButton]}
+                    style={[
+                      styles.actionButton,
+                      styles.skipButton,
+                      isCompletingTask && styles.actionButtonDisabled
+                    ]}
                     onPress={confirmTaskComplete}
+                    disabled={isCompletingTask}
+                    activeOpacity={isCompletingTask ? 1 : 0.7}
                   >
-                    <Text style={styles.skipButtonText}>Complete</Text>
+                    <Text style={styles.skipButtonText}>
+                      {isCompletingTask ? 'Completing...' : 'Complete'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
                 </View>
@@ -1413,8 +1455,11 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     backgroundColor: theme.pickerBackground,
     borderRadius: 12,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: theme.pickerBorder,
     overflow: 'hidden',
     minHeight: 56,
+    justifyContent: 'center',
   },
   picker: {
     height: 56,
@@ -1425,20 +1470,25 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     color: theme.pickerText,
   },
   input: {
-    backgroundColor: theme.background,
+    backgroundColor: theme.inputBackground,
     padding: 16,
     borderRadius: 12,
     fontSize: 16,
-    marginBottom: 8,
+    color: theme.inputText,
+    borderWidth: 1,
+    borderColor: theme.inputBorder,
+    marginBottom: 12,
   },
   dateButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: theme.background,
+    backgroundColor: theme.inputBackground,
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: theme.inputBorder,
   },
   dateButtonText: {
     fontSize: 16,
@@ -1596,6 +1646,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+  },
+  actionButtonDisabled: {
+    opacity: 0.6,
   },
   skipButton: {
     backgroundColor: theme.primary,

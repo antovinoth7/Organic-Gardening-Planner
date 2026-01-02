@@ -41,6 +41,8 @@ const PARENT_LOCATIONS = ['Mangarai', 'Velliavilai Home', 'Velliavilai Near Pond
 
 const CHILD_LOCATIONS = ['North', 'South', 'East', 'West', 'North-East', 'North-West', 'South-East', 'South-West', 'Center', 'Front', 'Back'];
 
+const NOTES_MAX_LENGTH = 500;
+
 export default function PlantFormScreen({ route, navigation }: any) {
   const { plantId } = route.params || {};
   const theme = useTheme();
@@ -109,8 +111,8 @@ export default function PlantFormScreen({ route, navigation }: any) {
     if (initialDataLoaded.current) {
       setHasUnsavedChanges(true);
     }
-  }, [name, plantType, plantVariety, spaceType, location, bedName, potSize, variety,
-      plantingDate, harvestSeason, harvestStartDate, harvestEndDate, notes, photoUri,
+  }, [name, plantType, plantVariety, spaceType, location, parentLocation, childLocation,
+      bedName, potSize, variety, plantingDate, harvestSeason, harvestStartDate, harvestEndDate, notes, photoUri,
       sunlight, soilType, waterRequirement, wateringFrequency, fertilisingFrequency,
       preferredFertiliser, mulchingUsed, healthStatus, companionPlants, expectedHarvestDate, pestDiseaseHistory]);
 
@@ -138,8 +140,6 @@ export default function PlantFormScreen({ route, navigation }: any) {
   useEffect(() => {
     if (parentLocation && childLocation) {
       setLocation(`${parentLocation} - ${childLocation}`);
-    } else if (parentLocation) {
-      setLocation(parentLocation);
     } else {
       setLocation('');
     }
@@ -220,6 +220,9 @@ export default function PlantFormScreen({ route, navigation }: any) {
         if (locationParts.length === 2) {
           setParentLocation(locationParts[0]);
           setChildLocation(locationParts[1]);
+        } else if (locationParts.length === 1 && locationParts[0]) {
+          setParentLocation(locationParts[0]);
+          setChildLocation('');
         } else {
           setParentLocation('');
           setChildLocation('');
@@ -259,7 +262,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
     }
   };
 
-  const pickImage = async () => {
+  const openImageLibrary = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission required', 'Please allow access to your photos');
@@ -278,6 +281,33 @@ export default function PlantFormScreen({ route, navigation }: any) {
     }
   };
 
+  const openCamera = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Please allow access to your camera');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setPhotoUri(result.assets[0].uri);
+    }
+  };
+
+  const pickImage = () => {
+    Alert.alert('Add Photo', 'Choose a source', [
+      { text: 'Camera', onPress: openCamera },
+      { text: 'Photo Library', onPress: openImageLibrary },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
   const handleSave = async () => {
     // Validate required fields
     if (!name.trim()) {
@@ -290,8 +320,18 @@ export default function PlantFormScreen({ route, navigation }: any) {
       return;
     }
 
-    if (!location.trim()) {
-      Alert.alert('Validation Error', 'Please enter a location');
+    if (!parentLocation.trim()) {
+      Alert.alert('Validation Error', 'Please select a main location');
+      return;
+    }
+
+    if (!childLocation.trim()) {
+      Alert.alert('Validation Error', 'Please select a direction/section');
+      return;
+    }
+
+    if (notes.length > NOTES_MAX_LENGTH) {
+      Alert.alert('Validation Error', `Notes must be ${NOTES_MAX_LENGTH} characters or less`);
       return;
     }
 
@@ -314,6 +354,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
     setHasUnsavedChanges(false); // Clear flag immediately to prevent navigation alert
     try {
       let photoUrl = photoUri;
+      const combinedLocation = `${parentLocation.trim()} - ${childLocation.trim()}`;
       
       // Upload new photo if changed
       if (photoUri && !photoUri.startsWith('http') && !photoUri.startsWith('data:')) {
@@ -327,7 +368,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
         plant_type: plantType,
         plant_variety: plantVariety.trim() || null,
         space_type: spaceType,
-        location: location.trim(),
+        location: combinedLocation,
         bed_name: spaceType === 'bed' ? bedName.trim() || null : null,
         pot_size: spaceType === 'pot' ? potSize.trim() || null : null,
         variety: variety.trim() || null,
@@ -748,7 +789,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
         {parentLocation !== '' && (
           <>
-            <Text style={styles.label}>Direction / Section</Text>
+            <Text style={styles.label}>Direction / Section *</Text>
             <View style={styles.pickerContainer}>
               <Picker
                 selectedValue={childLocation}
@@ -902,8 +943,12 @@ export default function PlantFormScreen({ route, navigation }: any) {
           onChangeText={setNotes}
           multiline
           numberOfLines={4}
+          maxLength={NOTES_MAX_LENGTH}
           placeholderTextColor="#999"
         />
+        <Text style={styles.noteCounter}>
+          {notes.length}/{NOTES_MAX_LENGTH}
+        </Text>
 
         {/* Pest/Disease Modal */}
         <Modal
@@ -1133,6 +1178,13 @@ const createStyles = (theme: any) => StyleSheet.create({
   textArea: {
     height: 100,
     textAlignVertical: 'top',
+  },
+  noteCounter: {
+    fontSize: 12,
+    color: theme.textTertiary,
+    textAlign: 'right',
+    marginTop: -4,
+    marginBottom: 12,
   },
   spaceTypeContainer: {
     flexDirection: 'row',
