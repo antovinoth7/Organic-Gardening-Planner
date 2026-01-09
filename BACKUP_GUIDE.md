@@ -99,6 +99,7 @@ The backup is a plain JSON file you can open in any text editor:
 5. Wait for import to complete
 
 **What happens**:
+
 - Existing items are kept
 - New items from backup are added
 - If same item exists in both, backup version wins
@@ -118,6 +119,7 @@ The backup is a plain JSON file you can open in any text editor:
 6. Wait for import to complete
 
 **What happens**:
+
 - ALL existing data is deleted
 - Backup data becomes your new data
 - Local image files are not affected
@@ -152,10 +154,12 @@ The backup is a plain JSON file you can open in any text editor:
 **Frequency**: Weekly + Monthly
 
 **Weekly**:
+
 1. Export backup
 2. Save to Google Drive
 
 **Monthly**:
+
 1. Export backup
 2. Save to Google Drive
 3. Download to external USB drive
@@ -214,11 +218,13 @@ If you want to move from one cloud storage to another:
 ### "Export Failed"
 
 **Possible causes**:
+
 - Not signed in
 - No internet connection (needs to fetch from Firebase)
 - Not enough storage space
 
 **Solutions**:
+
 - Check you're signed in
 - Connect to internet
 - Free up device storage
@@ -226,11 +232,13 @@ If you want to move from one cloud storage to another:
 ### "Import Failed"
 
 **Possible causes**:
+
 - Invalid backup file
 - Corrupted file
 - Wrong file selected
 
 **Solutions**:
+
 - Make sure it's a `garden-backup-*.json` file
 - Try exporting a fresh backup to test
 - Check file isn't corrupted (open in text editor)
@@ -240,6 +248,7 @@ If you want to move from one cloud storage to another:
 **This is normal** - images are not included in backups.
 
 **Solutions**:
+
 - Retake photos (recommended)
 - Manually copy `garden_images/` folder from old device
 - Use file sync tool (Syncthing, etc.)
@@ -247,6 +256,7 @@ If you want to move from one cloud storage to another:
 ### "Can't Find Backup File"
 
 **Solutions**:
+
 - Check your cloud storage app (Drive, OneDrive)
 - Use device's "Files" app to browse
 - Search for "garden-backup"
