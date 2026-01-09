@@ -11,7 +11,15 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { auth } from "../lib/firebase";
 import { signOut } from "firebase/auth";
-import { exportBackup, importBackup, getBackupStats } from "../services/backup";
+import { 
+  exportBackup, 
+  importBackup, 
+  getBackupStats,
+  exportBackupWithImages,
+  importBackupWithImages,
+  exportImagesOnly,
+  importImagesOnly
+} from "../services/backup";
 import { getImageStorageSize } from "../lib/imageStorage";
 import { useTheme, useThemeMode } from "../theme";
 
@@ -83,6 +91,125 @@ export default function SettingsScreen() {
               Alert.alert(
                 "Import Complete",
                 `Imported:\n• ${result.plants} plants\n• ${result.tasks} tasks\n• ${result.journal} journal entries`,
+                [{ text: "OK", onPress: loadStats }]
+              );
+            } catch (error: any) {
+              if (error.message !== "Import cancelled") {
+                Alert.alert("Import Failed", error.message);
+              }
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleExportBackupWithImages = async () => {
+    Alert.alert(
+      "Export Complete Backup",
+      "This will create a ZIP file containing all your data AND images. This file may be large.\n\nUse this for full device-to-device transfers.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Export",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await exportBackupWithImages();
+              Alert.alert(
+                "Complete Backup Created",
+                "Your garden data and images have been exported as a ZIP file. Save this to your cloud storage for complete device transfer.",
+                [{ text: "OK", onPress: loadStats }]
+              );
+            } catch (error: any) {
+              Alert.alert("Export Failed", error.message);
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleImportBackupWithImages = async (overwrite: boolean) => {
+    Alert.alert(
+      "Import Complete Backup",
+      overwrite
+        ? "This will REPLACE all your current data and images with the backup. Continue?"
+        : "This will MERGE the backup data and images with your current data. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Continue",
+          style: overwrite ? "destructive" : "default",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const result = await importBackupWithImages(overwrite);
+              Alert.alert(
+                "Import Complete",
+                `Imported:\n• ${result.plants} plants\n• ${result.tasks} tasks\n• ${result.journal} journal entries\n• ${result.images} images`,
+                [{ text: "OK", onPress: loadStats }]
+              );
+            } catch (error: any) {
+              if (error.message !== "Import cancelled") {
+                Alert.alert("Import Failed", error.message);
+              }
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleExportImagesOnly = async () => {
+    Alert.alert(
+      "Export Images Only",
+      "This will create a ZIP file containing ONLY your photos (no data). Useful for backing up images separately.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Export",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await exportImagesOnly();
+              Alert.alert(
+                "Images Exported",
+                "Your garden images have been exported as a ZIP file. This contains only photos, no data.",
+                [{ text: "OK", onPress: loadStats }]
+              );
+            } catch (error: any) {
+              Alert.alert("Export Failed", error.message);
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleImportImagesOnly = async () => {
+    Alert.alert(
+      "Import Images Only",
+      "This will import ONLY photos from a ZIP file. Your existing data will not be changed, only images will be added/replaced.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Import",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const count = await importImagesOnly();
+              Alert.alert(
+                "Images Imported",
+                `Successfully imported ${count} image(s). Your data remains unchanged.`,
                 [{ text: "OK", onPress: loadStats }]
               );
             } catch (error: any) {
@@ -189,11 +316,72 @@ export default function SettingsScreen() {
           </View>
         </View>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Data Backup</Text>
+          <Text style={styles.sectionTitle}>Data Backup (Text Only)</Text>
           <Text style={styles.sectionDescription}>
-            Your garden data is stored both locally and synced to Firestore.
-            Images are stored only on this device. Create manual backups to save
-            to your own cloud storage for long-term safety.
+            Quick backup of your text data (plants, tasks, journals). Images are NOT included.
+            Best for quick data sync or backup.
+          </Text>
+
+          <View style={styles.card}>
+            <View style={styles.statsContainer}>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>{stats.plantCount}</Text>
+                <Text style={styles.statLabel}>Plants</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>{stats.taskCount}</Text>
+                <Text style={styles.statLabel}>Tasks</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statValue}>{stats.journalCount}</Text>
+                <Text style={styles.statLabel}>Journal</Text>
+              </View>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.backupButton, styles.exportButton]}
+            onPress={handleExportBackup}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="download-outline" size={20} color="#fff" />
+                <Text style={styles.backupButtonText}>Export Data Only (JSON)</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.backupButton, styles.importButton]}
+            onPress={() => handleImportBackup(false)}
+            disabled={loading}
+          >
+            <Ionicons name="cloud-upload-outline" size={20} color="#2e7d32" />
+            <Text style={[styles.backupButtonText, { color: "#2e7d32" }]}>
+              Import & Merge
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.backupButton, styles.replaceButton]}
+            onPress={() => handleImportBackup(true)}
+            disabled={loading}
+          >
+            <Ionicons name="refresh-outline" size={20} color="#f57c00" />
+            <Text style={[styles.backupButtonText, { color: "#f57c00" }]}>
+              Import & Replace All
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Complete Backup (Data + Images)</Text>
+          <Text style={styles.sectionDescription}>
+            Full backup including all photos as a ZIP file. Use this for complete 
+            device-to-device transfers. File size: {formatBytes(imageStorageSize)} (approx).
           </Text>
 
           <View style={styles.card}>
@@ -221,45 +409,83 @@ export default function SettingsScreen() {
 
           <TouchableOpacity
             style={[styles.backupButton, styles.exportButton]}
-            onPress={handleExportBackup}
+            onPress={handleExportBackupWithImages}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Ionicons name="download-outline" size={20} color="#fff" />
-                <Text style={styles.backupButtonText}>Export Backup</Text>
+                <Ionicons name="archive-outline" size={20} color="#fff" />
+                <Text style={styles.backupButtonText}>Export Complete Backup (ZIP)</Text>
               </>
             )}
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.backupButton, styles.importButton]}
-            onPress={() => handleImportBackup(false)}
+            onPress={() => handleImportBackupWithImages(false)}
             disabled={loading}
           >
             <Ionicons name="cloud-upload-outline" size={20} color="#2e7d32" />
             <Text style={[styles.backupButtonText, { color: "#2e7d32" }]}>
-              Import & Merge
+              Import & Merge Complete Backup
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.backupButton, styles.replaceButton]}
-            onPress={() => handleImportBackup(true)}
+            onPress={() => handleImportBackupWithImages(true)}
             disabled={loading}
           >
             <Ionicons name="refresh-outline" size={20} color="#f57c00" />
             <Text style={[styles.backupButtonText, { color: "#f57c00" }]}>
-              Import & Replace All
+              Import & Replace All (with Images)
             </Text>
           </TouchableOpacity>
 
           <Text style={styles.backupNote}>
-            💡 Tip: Export backups regularly and save them to Google Drive,
-            OneDrive, or an external drive. Images are not included in backups -
-            they stay local to this device.
+            💡 Tip: Use "Complete Backup" when switching devices. Save the ZIP file 
+            to Google Drive, OneDrive, or external storage for safekeeping.
+          </Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Images-Only Backup</Text>
+          <Text style={styles.sectionDescription}>
+            Export or import ONLY your photos without any data. Useful for backing up 
+            images separately or transferring photos between devices. Total size: {formatBytes(imageStorageSize)}.
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.backupButton, styles.exportButton]}
+            onPress={handleExportImagesOnly}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="images-outline" size={20} color="#fff" />
+                <Text style={styles.backupButtonText}>Export Images Only (ZIP)</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.backupButton, styles.importButton]}
+            onPress={handleImportImagesOnly}
+            disabled={loading}
+          >
+            <Ionicons name="image-outline" size={20} color="#2e7d32" />
+            <Text style={[styles.backupButtonText, { color: "#2e7d32" }]}>
+              Import Images Only
+            </Text>
+          </TouchableOpacity>
+
+          <Text style={styles.backupNote}>
+            📸 Note: Images are stored with their original filenames. When imported, 
+            they'll automatically match with your existing plants and journal entries.
           </Text>
         </View>
 
