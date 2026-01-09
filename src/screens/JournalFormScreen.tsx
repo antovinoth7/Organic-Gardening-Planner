@@ -106,14 +106,42 @@ export default function JournalFormScreen({ navigation, route }: any) {
   };
 
   const handleSave = async () => {
+    // Input validation
     if (!content.trim()) {
-      Alert.alert('Error', 'Please write something in your journal');
+      Alert.alert('Validation Error', 'Please write something in your journal');
       return;
     }
 
-    if (entryType === 'harvest' && !harvestQuantity) {
-      Alert.alert('Error', 'Please enter harvest quantity');
+    if (content.trim().length < 3) {
+      Alert.alert('Validation Error', 'Journal entry must be at least 3 characters long');
       return;
+    }
+
+    if (content.trim().length > 5000) {
+      Alert.alert('Validation Error', 'Journal entry must be less than 5000 characters');
+      return;
+    }
+
+    if (entryType === 'harvest') {
+      if (!harvestQuantity || harvestQuantity.trim() === '') {
+        Alert.alert('Validation Error', 'Please enter harvest quantity');
+        return;
+      }
+      
+      const quantity = parseFloat(harvestQuantity);
+      if (isNaN(quantity) || quantity <= 0) {
+        Alert.alert('Validation Error', 'Harvest quantity must be a positive number');
+        return;
+      }
+      
+      if (quantity > 100000) {
+        Alert.alert('Validation Error', 'Harvest quantity seems too large. Please check your input.');
+        return;
+      }
+    }
+
+    if (loading) {
+      return; // Prevent multiple submissions
     }
 
     setLoading(true);

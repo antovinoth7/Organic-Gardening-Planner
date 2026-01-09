@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Alert, Modal, TextInput } from 'react-native';
 import { getTodayTasks, markTaskDone, updateTaskTemplate, getTaskLogs } from '../services/tasks';
 import { getPlants } from '../services/plants';
@@ -20,6 +20,8 @@ export default function TodayScreen({ navigation }: any) {
   const [selectedTask, setSelectedTask] = useState<TaskTemplate | null>(null);
   const [skipReason, setSkipReason] = useState('');
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  const [skippingTask, setSkippingTask] = useState(false);
+  const isMountedRef = React.useRef(true);
   const completedTemplateIds = useMemo(
     () => new Set(taskLogs.map(log => log.template_id)),
     [taskLogs]
@@ -32,6 +34,8 @@ export default function TodayScreen({ navigation }: any) {
         getPlants(),
         getTaskLogs(),
       ]);
+      
+      if (!isMountedRef.current) return;
       
       // Filter logs for today only
       const today = new Date();
@@ -46,14 +50,21 @@ export default function TodayScreen({ navigation }: any) {
       setPlants(plantsData);
       setTaskLogs(todayLogs);
     } catch (error: any) {
+      if (!isMountedRef.current) return;
       Alert.alert('Error', error.message);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
+    isMountedRef.current = true;
     loadData();
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
   // Refresh data when screen comes into focus
@@ -89,8 +100,9 @@ export default function TodayScreen({ navigation }: any) {
   };
 
   const handleSkipTask = async () => {
-    if (!selectedTask) return;
+    if (!selectedTask || skippingTask) return;
     
+    setSkippingTask(true);
     try {
       // Postpone to tomorrow
       const tomorrow = new Date();
@@ -107,6 +119,8 @@ export default function TodayScreen({ navigation }: any) {
       loadData();
     } catch (error: any) {
       Alert.alert('Error', error.message);
+    } finally {
+      setSkippingTask(false);
     }
   };
 
@@ -126,14 +140,14 @@ export default function TodayScreen({ navigation }: any) {
     }
   };
 
-  const getPlantName = (plantId: string | null) => {
+  const getPlantName = useCallback((plantId: string | null) => {
     if (!plantId) return 'General';
     if (!plants || plants.length === 0) return 'Unknown';
     const plant = plants.find(p => p.id === plantId);
     return plant?.name || 'Unknown';
-  };
+  }, [plants]);
 
-  const getDaysSince = (dateValue?: string | null) => {
+  const getDaysSince = useCallback((dateValue?: string | null) => {
     if (!dateValue) return null;
     const date = new Date(dateValue);
     if (Number.isNaN(date.getTime())) return null;
@@ -142,7 +156,7 @@ export default function TodayScreen({ navigation }: any) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return Math.floor((today.getTime() - startOfDate.getTime()) / (1000 * 60 * 60 * 24));
-  };
+  }, []);
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -178,22 +192,26 @@ export default function TodayScreen({ navigation }: any) {
     };
   }, [tasks, plants, completedTemplateIds]);
 
-  const overdueTasks = (tasks || []).filter(t => {
-    if (!t || !t.next_due_at) return false;
-    if (completedTemplateIds.has(t.id)) return false;
-    const dueDate = new Date(t.next_due_at);
+  const overdueTasks = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return dueDate < today;
-  });
+    return (tasks || []).filter(t => {
+      if (!t || !t.next_due_at) return false;
+      if (completedTemplateIds.has(t.id)) return false;
+      const dueDate = new Date(t.next_due_at);
+      return dueDate < today;
+    });
+  }, [tasks, completedTemplateIds]);
   
-  const todayTasks = (tasks || []).filter(t => {
-    if (!t || !t.next_due_at) return false;
-    if (completedTemplateIds.has(t.id)) return false;
-    const dueDate = new Date(t.next_due_at);
+  const todayTasks = useMemo(() => {
     const today = new Date();
-    return dueDate.toDateString() === today.toDateString();
-  });
+    return (tasks || []).filter(t => {
+      if (!t || !t.next_due_at) return false;
+      if (completedTemplateIds.has(t.id)) return false;
+      const dueDate = new Date(t.next_due_at);
+      return dueDate.toDateString() === today.toDateString();
+    });
+  }, [tasks, completedTemplateIds]);
 
   return (
     <ScrollView 
@@ -469,8 +487,11 @@ export default function TodayScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonConfirm]}
                 onPress={handleSkipTask}
+                disabled={skippingTask}
               >
-                <Text style={styles.modalButtonText}>Skip to Tomorrow</Text>
+                <Text style={styles.modalButtonText}>
+                  {skippingTask ? 'Skipping...' : 'Skip to Tomorrow'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -578,11 +599,13 @@ const createStyles = (theme: any) => StyleSheet.create({
     borderRadius: 12,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: theme.error,
+    borderColor: theme.error + '40',
+    overflow: 'hidden',
+    position: 'relative',
   },
   alertCardWarning: {
     backgroundColor: theme.warningLight,
-    borderColor: theme.warning,
+    borderColor: theme.warning + '40',
   },
   alertIcon: {
     width: 36,
@@ -630,9 +653,12 @@ const createStyles = (theme: any) => StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.error + '40',
   },
   priorityMedium: {
     backgroundColor: theme.warningLight,
+    borderColor: theme.warning + '40',
   },
   priorityText: {
     fontSize: 10,

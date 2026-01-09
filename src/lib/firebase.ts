@@ -17,6 +17,9 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
+// For React Native, we need to set up auth persistence manually
+// This is done by importing and using the right Firebase modules
+
 // Your Firebase configuration
 // Get these from Firebase Console -> Project Settings -> General -> Your apps
 const firebaseConfig = {
@@ -31,7 +34,8 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase Auth (React Native automatically uses AsyncStorage for persistence)
+// Initialize Firebase Auth
+// React Native/Expo will use AsyncStorage automatically for persistence
 const auth = getAuth(app);
 
 // Initialize Firestore (text data only - no images!)

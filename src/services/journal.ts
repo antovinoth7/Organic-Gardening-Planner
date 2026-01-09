@@ -15,6 +15,8 @@ import {
 } from 'firebase/firestore';
 import { saveImageLocally, deleteImageLocally } from '../lib/imageStorage';
 import { getData, setData, KEYS } from '../lib/storage';
+import { withTimeoutAndRetry } from '../utils/firestoreTimeout';
+import { logError } from '../utils/errorLogging';
 
 const JOURNAL_COLLECTION = 'journal_entries';
 
@@ -32,7 +34,11 @@ export const getJournalEntries = async (): Promise<JournalEntry[]> => {
       orderBy('created_at', 'desc')
     );
     
-    const snapshot = await getDocs(q);
+    const snapshot = await withTimeoutAndRetry(
+      () => getDocs(q),
+      { timeoutMs: 15000, maxRetries: 2 }
+    );
+    
     const entries = snapshot.docs.map(doc => {
       const data = doc.data();
       // Migrate legacy photo_url to photo_urls array
@@ -52,6 +58,7 @@ export const getJournalEntries = async (): Promise<JournalEntry[]> => {
     return entries;
   } catch (error) {
     console.warn('Failed to fetch from Firestore, using cached data:', error);
+    logError('network', 'Failed to fetch journal entries', error as Error);
     const cachedEntries = await getData<JournalEntry>(KEYS.JOURNAL);
     // Ensure cached entries also have photo_urls migrated
     return cachedEntries.map(entry => ({
@@ -77,7 +84,10 @@ export const createJournalEntry = async (
     created_at: Timestamp.now(),
   };
   
-  const docRef = await addDoc(collection(db, JOURNAL_COLLECTION), newEntry);
+  const docRef = await withTimeoutAndRetry(
+    () => addDoc(collection(db, JOURNAL_COLLECTION), newEntry),
+    { timeoutMs: 15000, maxRetries: 2 }
+  );
   
   const result = {
     id: docRef.id,
@@ -102,10 +112,16 @@ export const updateJournalEntry = async (
   const docRef = doc(db, JOURNAL_COLLECTION, id);
   
   // CRITICAL: photo_url should already be a local file URI
-  await updateDoc(docRef, updates as any);
+  await withTimeoutAndRetry(
+    () => updateDoc(docRef, updates as any),
+    { timeoutMs: 15000, maxRetries: 2 }
+  );
   
   // Use direct document read instead of query for better performance
-  const docSnap = await getDoc(docRef);
+  const docSnap = await withTimeoutAndRetry(
+    () => getDoc(docRef),
+    { timeoutMs: 10000, maxRetries: 2 }
+  );
   
   if (!docSnap.exists()) throw new Error('Journal entry not found');
   

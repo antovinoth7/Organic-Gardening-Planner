@@ -149,7 +149,7 @@ export default function SettingsScreen() {
                       mode === "system" && styles.themeButtonTextActive,
                     ]}
                   >
-                    System
+                    Automatic
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity

@@ -18,6 +18,8 @@ import {
 } from 'firebase/firestore';
 import { saveImageLocally, deleteImageLocally } from '../lib/imageStorage';
 import { getData, setData, KEYS } from '../lib/storage';
+import { withTimeoutAndRetry } from '../utils/firestoreTimeout';
+import { logError } from '../utils/errorLogging';
 
 const PLANTS_COLLECTION = 'plants';
 const DEFAULT_PAGE_SIZE = 50;
@@ -54,7 +56,12 @@ export const getPlants = async (
       );
     }
     
-    const snapshot = await getDocs(q);
+    // Wrap Firestore call with timeout
+    const snapshot = await withTimeoutAndRetry(
+      () => getDocs(q),
+      { timeoutMs: 15000, maxRetries: 2 }
+    );
+    
     const plants = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
@@ -73,6 +80,7 @@ export const getPlants = async (
     };
   } catch (error) {
     console.warn('Failed to fetch from Firestore, using cached data:', error);
+    logError('network', 'Failed to fetch plants from Firestore', error as Error, { userId: user.uid });
     // Fall back to cached data if offline
     const cachedPlants = await getData<Plant>(KEYS.PLANTS);
     return { plants: cachedPlants };
@@ -81,7 +89,11 @@ export const getPlants = async (
 
 export const getPlant = async (id: string): Promise<Plant | null> => {
   const docRef = doc(db, PLANTS_COLLECTION, id);
-  const docSnap = await getDoc(docRef);
+  
+  const docSnap = await withTimeoutAndRetry(
+    () => getDoc(docRef),
+    { timeoutMs: 10000, maxRetries: 2 }
+  );
   
   if (!docSnap.exists()) return null;
   
@@ -104,7 +116,10 @@ export const createPlant = async (plant: Omit<Plant, 'id' | 'user_id' | 'created
     created_at: Timestamp.now(),
   };
   
-  const docRef = await addDoc(collection(db, PLANTS_COLLECTION), newPlant);
+  const docRef = await withTimeoutAndRetry(
+    () => addDoc(collection(db, PLANTS_COLLECTION), newPlant),
+    { timeoutMs: 15000, maxRetries: 2 }
+  );
   
   const result = {
     id: docRef.id,
@@ -124,7 +139,10 @@ export const updatePlant = async (id: string, updates: Partial<Plant>): Promise<
   
   // CRITICAL: photo_url should already be a local file URI
   // Only the URI string (not the image data) is stored in Firestore
-  await updateDoc(docRef, updates as any);
+  await withTimeoutAndRetry(
+    () => updateDoc(docRef, updates as any),
+    { timeoutMs: 15000, maxRetries: 2 }
+  );
   
   const updated = await getPlant(id);
   if (!updated) throw new Error('Plant not found');

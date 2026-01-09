@@ -1,10 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeGetData, safeSetData, safeGetItem, safeSetItem } from '../utils/safeStorage';
+import { logStorageError } from '../utils/errorLogging';
+import { Plant, TaskTemplate, TaskLog, JournalEntry } from '../types/database.types';
 
 export interface StorageData {
-  plants: any[];
-  tasks: any[];
-  taskLogs: any[];
-  journalEntries: any[];
+  plants: Plant[];
+  tasks: TaskTemplate[];
+  taskLogs: TaskLog[];
+  journalEntries: JournalEntry[];
 }
 
 const STORAGE_KEYS = {
@@ -16,23 +19,24 @@ const STORAGE_KEYS = {
   OFFLINE_QUEUE: '@garden_offline_queue',
 };
 
-// Generic storage functions
+// Export as KEYS for backwards compatibility
+export const KEYS = STORAGE_KEYS;
+
+// Generic storage functions with safe wrapper
 export const getData = async <T>(key: string): Promise<T[]> => {
   try {
-    const jsonValue = await AsyncStorage.getItem(key);
-    return jsonValue != null ? JSON.parse(jsonValue) : [];
+    return await safeGetData<T>(key);
   } catch (e) {
-    console.error(`Error reading ${key}:`, e);
+    logStorageError(`Error reading ${key}`, e as Error);
     return [];
   }
 };
 
 export const setData = async <T>(key: string, value: T[]): Promise<void> => {
   try {
-    const jsonValue = JSON.stringify(value);
-    await AsyncStorage.setItem(key, jsonValue);
+    await safeSetData(key, value);
   } catch (e) {
-    console.error(`Error saving ${key}:`, e);
+    logStorageError(`Error saving ${key}`, e as Error);
   }
 };
 
@@ -70,47 +74,3 @@ export const getItemById = async <T extends { id: string }>(
   const items = await getData<T>(key);
   return items.find((item) => item.id === id) || null;
 };
-
-// Offline sync management
-export const getLastSyncTime = async (): Promise<string | null> => {
-  try {
-    return await AsyncStorage.getItem(STORAGE_KEYS.LAST_SYNC);
-  } catch (e) {
-    console.error('Error reading last sync time:', e);
-    return null;
-  }
-};
-
-export const setLastSyncTime = async (timestamp: string): Promise<void> => {
-  try {
-    await AsyncStorage.setItem(STORAGE_KEYS.LAST_SYNC, timestamp);
-  } catch (e) {
-    console.error('Error saving last sync time:', e);
-  }
-};
-
-export const addToOfflineQueue = async (operation: {
-  type: 'create' | 'update' | 'delete';
-  collection: string;
-  id?: string;
-  data?: any;
-}): Promise<void> => {
-  try {
-    const queue = await getData<any>(STORAGE_KEYS.OFFLINE_QUEUE);
-    queue.push({ ...operation, timestamp: new Date().toISOString() });
-    await setData(STORAGE_KEYS.OFFLINE_QUEUE, queue);
-  } catch (e) {
-    console.error('Error adding to offline queue:', e);
-  }
-};
-
-export const getOfflineQueue = async (): Promise<any[]> => {
-  return getData(STORAGE_KEYS.OFFLINE_QUEUE);
-};
-
-export const clearOfflineQueue = async (): Promise<void> => {
-  await setData(STORAGE_KEYS.OFFLINE_QUEUE, []);
-};
-
-// Specific storage keys
-export const KEYS = STORAGE_KEYS;

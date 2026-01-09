@@ -4,6 +4,7 @@ import { Plant } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import { imageExists } from '../lib/imageStorage';
+import { getYearsOld } from '../utils/dateHelpers';
 
 interface PlantCardProps {
   plant: Plant;
@@ -20,7 +21,12 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete }: PlantCar
   // Check if the local image file exists
   useEffect(() => {
     if (plant.photo_url) {
-      imageExists(plant.photo_url).then(setImageAvailable);
+      imageExists(plant.photo_url)
+        .then(setImageAvailable)
+        .catch(error => {
+          console.warn('PlantCard: Error checking image existence:', error);
+          setImageAvailable(false);
+        });
     }
   }, [plant.photo_url]);
 
@@ -51,7 +57,7 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete }: PlantCar
   };
 
   const isTree = ['fruit_tree', 'timber_tree', 'coconut_tree'].includes(plant.plant_type);
-  const age = plant.planting_date ? Math.floor((new Date().getTime() - new Date(plant.planting_date).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : null;
+  const age = getYearsOld(plant.planting_date);
 
   const getHealthIcon = () => {
     const icons: Record<string, string> = {

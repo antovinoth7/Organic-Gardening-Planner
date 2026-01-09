@@ -212,8 +212,7 @@ Handles local caching via AsyncStorage:
 - `addItem()`: Add item to cached array
 - `updateItem()`: Update cached item
 - `deleteItem()`: Remove cached item
-- `getLastSyncTime()`: Track sync status
-- `addToOfflineQueue()`: Queue changes made offline
+- `getItemById()`: Get specific item by ID
 
 ### Services
 

@@ -55,10 +55,18 @@ export default function JournalScreen({ navigation }: any) {
   };
 
   useEffect(() => {
+    let isMounted = true;
+    
     const unsubscribe = navigation.addListener('focus', () => {
-      loadData();
+      if (isMounted) {
+        loadData();
+      }
     });
-    return unsubscribe;
+    
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [navigation]);
 
   const getPlantName = (plantId: string | null) => {

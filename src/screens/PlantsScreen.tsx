@@ -34,7 +34,7 @@ export default function PlantsScreen({ navigation }: any) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [activeCategory, setActiveCategory] = useState<FilterCategory>('type');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<SortOption>('name');
+  const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [filters, setFilters] = useState<ActiveFilters>({
     type: 'all',
@@ -59,10 +59,18 @@ export default function PlantsScreen({ navigation }: any) {
   };
 
   useEffect(() => {
+    let isMounted = true;
+    
     const unsubscribe = navigation.addListener('focus', () => {
-      loadPlants();
+      if (isMounted) {
+        loadPlants();
+      }
     });
-    return unsubscribe;
+    
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [navigation]);
 
   const handleDelete = async (id: string) => {

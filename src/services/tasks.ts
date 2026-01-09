@@ -14,6 +14,8 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { getData, setData, KEYS } from '../lib/storage';
+import { withTimeoutAndRetry } from '../utils/firestoreTimeout';
+import { logError } from '../utils/errorLogging';
 
 const TASKS_COLLECTION = 'task_templates';
 const TASK_LOGS_COLLECTION = 'task_logs';
@@ -32,7 +34,11 @@ export const getTaskTemplates = async (): Promise<TaskTemplate[]> => {
       orderBy('created_at', 'desc')
     );
     
-    const snapshot = await getDocs(q);
+    const snapshot = await withTimeoutAndRetry(
+      () => getDocs(q),
+      { timeoutMs: 15000, maxRetries: 2 }
+    );
+    
     const tasks = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
@@ -46,6 +52,7 @@ export const getTaskTemplates = async (): Promise<TaskTemplate[]> => {
     return tasks;
   } catch (error) {
     console.warn('Failed to fetch from Firestore, using cached data:', error);
+    logError('network', 'Failed to fetch task templates', error as Error);
     return getData<TaskTemplate>(KEYS.TASKS);
   }
 };
@@ -67,7 +74,11 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
       where('enabled', '==', true)
     );
     
-    const snapshot = await getDocs(q);
+    const snapshot = await withTimeoutAndRetry(
+      () => getDocs(q),
+      { timeoutMs: 15000, maxRetries: 2 }
+    );
+    
     let tasks = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
@@ -88,6 +99,7 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
     return tasks;
   } catch (error) {
     console.warn('Failed to fetch from Firestore, using cached data:', error);
+    logError('network', 'Failed to fetch today tasks', error as Error);
     const cachedTasks = await getData<TaskTemplate>(KEYS.TASKS);
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
     const filtered = cachedTasks.filter(task => {
@@ -113,7 +125,10 @@ export const createTaskTemplate = async (
     next_due_at: template.next_due_at ? Timestamp.fromDate(new Date(template.next_due_at)) : null
   };
   
-  const docRef = await addDoc(collection(db, TASKS_COLLECTION), newTemplate);
+  const docRef = await withTimeoutAndRetry(
+    () => addDoc(collection(db, TASKS_COLLECTION), newTemplate),
+    { timeoutMs: 15000, maxRetries: 2 }
+  );
   
   return {
     id: docRef.id,
@@ -130,15 +145,21 @@ export const updateTaskTemplate = async (
 ): Promise<TaskTemplate> => {
   const docRef = doc(db, TASKS_COLLECTION, id);
   
-  const firestoreUpdates: any = { ...updates };
+  const firestoreUpdates: Record<string, any> = { ...updates };
   if (updates.next_due_at) {
     firestoreUpdates.next_due_at = Timestamp.fromDate(new Date(updates.next_due_at));
   }
   
-  await updateDoc(docRef, firestoreUpdates);
+  await withTimeoutAndRetry(
+    () => updateDoc(docRef, firestoreUpdates),
+    { timeoutMs: 15000, maxRetries: 2 }
+  );
   
   // Use direct document read instead of query for better performance
-  const docSnap = await getDoc(docRef);
+  const docSnap = await withTimeoutAndRetry(
+    () => getDoc(docRef),
+    { timeoutMs: 10000, maxRetries: 2 }
+  );
   
   if (!docSnap.exists()) throw new Error('Task template not found');
   
@@ -153,7 +174,10 @@ export const updateTaskTemplate = async (
 
 export const deleteTaskTemplate = async (id: string): Promise<void> => {
   const docRef = doc(db, TASKS_COLLECTION, id);
-  await deleteDoc(docRef);
+  await withTimeoutAndRetry(
+    () => deleteDoc(docRef),
+    { timeoutMs: 10000, maxRetries: 2 }
+  );
 };
 
 export const markTaskDone = async (template: TaskTemplate, notes?: string, productUsed?: string): Promise<boolean> => {
@@ -262,7 +286,7 @@ export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {
  * Generate recurring tasks from plant care schedules
  * This will create task templates for plants that have care schedules configured
  */
-export const generateRecurringTasksFromPlants = async (plants: any[]): Promise<void> => {
+export const generateRecurringTasksFromPlants = async (plants: Plant[]): Promise<void> => {
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
 

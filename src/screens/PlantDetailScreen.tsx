@@ -14,6 +14,7 @@ import { getJournalEntries } from '../services/journal';
 import { Plant, TaskTemplate, TaskType, JournalEntry } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
+import { getYearsOld } from '../utils/dateHelpers';
 
 export default function PlantDetailScreen({ route, navigation }: any) {
   const theme = useTheme();
@@ -23,11 +24,16 @@ export default function PlantDetailScreen({ route, navigation }: any) {
   const [tasks, setTasks] = useState<TaskTemplate[]>([]);
   const [harvestEntries, setHarvestEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const isMountedRef = React.useRef(true);
 
   useEffect(() => {
+    isMountedRef.current = true;
     if (plantId) {
       loadData();
     }
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [plantId]);
 
   const loadData = async () => {
@@ -37,6 +43,9 @@ export default function PlantDetailScreen({ route, navigation }: any) {
         getTaskTemplates(),
         getJournalEntries(),
       ]);
+      
+      if (!isMountedRef.current) return;
+      
       setPlant(plantData);
       setTasks(allTasks.filter(t => t.plant_id === plantId));
       const plantHarvests = allJournalEntries.filter(
@@ -44,9 +53,12 @@ export default function PlantDetailScreen({ route, navigation }: any) {
       ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setHarvestEntries(plantHarvests);
     } catch (error: any) {
+      if (!isMountedRef.current) return;
       Alert.alert('Error', error.message);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -126,7 +138,7 @@ export default function PlantDetailScreen({ route, navigation }: any) {
             <View style={styles.infoRow}>
               <Ionicons name="calendar" size={20} color={theme.textSecondary} />
               <Text style={styles.infoText}>
-                Planted {plant.planting_date} ({Math.floor((new Date().getTime() - new Date(plant.planting_date).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} years old)
+                Planted {plant.planting_date} ({getYearsOld(plant.planting_date) ?? 0} years old)
               </Text>
             </View>
           )}

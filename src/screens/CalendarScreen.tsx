@@ -46,6 +46,7 @@ export default function CalendarScreen() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
   const [groupBy, setGroupBy] = useState<'none' | 'location' | 'type'>('none');
+  const isMountedRef = React.useRef(true);
 
   const setTodayView = () => {
     const today = new Date();
@@ -55,8 +56,12 @@ export default function CalendarScreen() {
   };
 
   useEffect(() => {
+    isMountedRef.current = true;
     loadData();
     setTodayView();
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
   useFocusEffect(
@@ -73,10 +78,14 @@ export default function CalendarScreen() {
         getPlants(),
         getJournalEntries(),
       ]);
+      
+      if (!isMountedRef.current) return;
+      
       setTasks(tasksData.filter(t => t.enabled));
       setPlants(plantsData);
       setHarvestEntries(journalData.filter(e => e.entry_type === 'harvest'));
     } catch (error) {
+      if (!isMountedRef.current) return;
       console.error(error);
     }
   };

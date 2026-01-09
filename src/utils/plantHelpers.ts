@@ -115,46 +115,61 @@ export const YEARS_TO_FIRST_HARVEST: Record<string, number> = {
  * Calculate expected harvest date based on plant variety and planting date
  */
 export function calculateExpectedHarvestDate(
-  plantVariety: string,
-  plantingDate: string,
-  plantType: PlantType
+  plantVariety: string | null | undefined,
+  plantingDate: string | null | undefined,
+  plantType: PlantType | null | undefined
 ): string | null {
-  if (!plantingDate) return null;
+  // Comprehensive null checks
+  if (!plantVariety || !plantingDate || !plantType) return null;
   
   const plantDate = new Date(plantingDate);
   if (Number.isNaN(plantDate.getTime())) return null;
+  
   let daysToAdd = 0;
   
   // Check if it's a fruit tree or coconut tree
   if (plantType === 'fruit_tree' || plantType === 'coconut_tree') {
     const years = YEARS_TO_FIRST_HARVEST[plantVariety];
-    if (years) {
+    if (years && years > 0) {
       daysToAdd = years * 365;
     }
   } else {
     // For vegetables and herbs
-    daysToAdd = DAYS_TO_HARVEST[plantVariety] || 0;
+    const days = DAYS_TO_HARVEST[plantVariety];
+    if (days && days > 0) {
+      daysToAdd = days;
+    }
   }
   
   if (daysToAdd === 0) return null;
   
-  const harvestDate = new Date(plantDate);
-  harvestDate.setDate(harvestDate.getDate() + daysToAdd);
-  
-  return harvestDate.toISOString().split('T')[0];
+  try {
+    const harvestDate = new Date(plantDate);
+    harvestDate.setDate(harvestDate.getDate() + daysToAdd);
+    
+    // Validate the resulting date
+    if (Number.isNaN(harvestDate.getTime())) return null;
+    
+    return harvestDate.toISOString().split('T')[0];
+  } catch (error) {
+    console.warn('Error calculating harvest date:', error);
+    return null;
+  }
 }
 
 /**
  * Get companion plant suggestions for a given plant variety
  */
-export function getCompanionSuggestions(plantVariety: string): string[] {
+export function getCompanionSuggestions(plantVariety: string | null | undefined): string[] {
+  if (!plantVariety) return [];
   return COMPANION_PLANTS[plantVariety] || [];
 }
 
 /**
  * Get incompatible plants for a given plant variety
  */
-export function getIncompatiblePlants(plantVariety: string): string[] {
+export function getIncompatiblePlants(plantVariety: string | null | undefined): string[] {
+  if (!plantVariety) return [];
   return INCOMPATIBLE_PLANTS[plantVariety] || [];
 }
 
@@ -195,13 +210,15 @@ export const COMMON_PESTS_DISEASES: Record<PlantType, { pests: string[], disease
 /**
  * Get common pests for a plant type
  */
-export function getCommonPests(plantType: PlantType): string[] {
+export function getCommonPests(plantType: PlantType | null | undefined): string[] {
+  if (!plantType) return [];
   return COMMON_PESTS_DISEASES[plantType]?.pests || [];
 }
 
 /**
  * Get common diseases for a plant type
  */
-export function getCommonDiseases(plantType: PlantType): string[] {
+export function getCommonDiseases(plantType: PlantType | null | undefined): string[] {
+  if (!plantType) return [];
   return COMMON_PESTS_DISEASES[plantType]?.diseases || [];
 }

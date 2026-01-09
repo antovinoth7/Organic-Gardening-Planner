@@ -23,6 +23,7 @@ import { getPlants } from './plants';
 import { getTaskTemplates, getTaskLogs } from './tasks';
 import { getJournalEntries } from './journal';
 import { Plant, TaskTemplate, TaskLog, JournalEntry } from '../types/database.types';
+import { withTimeoutAndRetry } from '../utils/firestoreTimeout';
 
 export interface BackupData {
   version: string;
@@ -43,11 +44,16 @@ export const exportBackup = async (): Promise<string> => {
   try {
     console.log('Starting backup export...');
     
-    // Fetch all data from Firestore (or use cached if offline)
-    const { plants } = await getPlants();
-    const tasks = await getTaskTemplates();
-    const taskLogs = await getTaskLogs();
-    const journal = await getJournalEntries();
+    // Fetch all data from Firestore (or use cached if offline) with timeout
+    const [{ plants }, tasks, taskLogs, journal] = await withTimeoutAndRetry(
+      () => Promise.all([
+        getPlants(),
+        getTaskTemplates(),
+        getTaskLogs(),
+        getJournalEntries(),
+      ]),
+      { timeoutMs: 20000 } // 20 second timeout for backup export
+    );
     
     // Create backup object
     const backup: BackupData = {
@@ -122,14 +128,55 @@ export const importBackup = async (overwrite: boolean = false): Promise<{
       encoding: 'utf8',
     });
     
-    const backup: BackupData = JSON.parse(fileContent);
+    let backup: BackupData;
+    try {
+      backup = JSON.parse(fileContent);
+    } catch (parseError) {
+      throw new Error('Invalid JSON format in backup file');
+    }
     
-    // Validate backup structure
-    if (!backup.version || !backup.plants || !backup.tasks || !backup.journal) {
-      throw new Error('Invalid backup file format');
+    // Comprehensive validation of backup structure
+    if (!backup.version || typeof backup.version !== 'string') {
+      throw new Error('Invalid or missing backup version');
+    }
+    
+    if (!Array.isArray(backup.plants)) {
+      throw new Error('Invalid backup: plants data is missing or corrupted');
+    }
+    
+    if (!Array.isArray(backup.tasks)) {
+      throw new Error('Invalid backup: tasks data is missing or corrupted');
+    }
+    
+    if (!Array.isArray(backup.journal)) {
+      throw new Error('Invalid backup: journal data is missing or corrupted');
+    }
+    
+    if (!Array.isArray(backup.taskLogs)) {
+      backup.taskLogs = []; // Optional field, default to empty array
+    }
+    
+    // Validate data integrity - check that items have required fields
+    const invalidPlants = backup.plants.filter((p) => !p.id || !p.name);
+    if (invalidPlants.length > 0) {
+      throw new Error(`Backup contains ${invalidPlants.length} invalid plant(s) missing ID or name`);
+    }
+    
+    const invalidTasks = backup.tasks.filter((t) => !t.id || !t.task_type);
+    if (invalidTasks.length > 0) {
+      throw new Error(`Backup contains ${invalidTasks.length} invalid task(s) missing ID or type`);
+    }
+    
+    const invalidJournal = backup.journal.filter((j) => !j.id || !j.entry_type);
+    if (invalidJournal.length > 0) {
+      throw new Error(`Backup contains ${invalidJournal.length} invalid journal entry(ies) missing ID or type`);
     }
     
     console.log(`Importing backup from ${backup.exportDate}`);
+    console.log(`- Plants: ${backup.plants.length}`);
+    console.log(`- Tasks: ${backup.tasks.length}`);
+    console.log(`- Task Logs: ${backup.taskLogs.length}`);
+    console.log(`- Journal Entries: ${backup.journal.length}`);
     
     // Import data based on overwrite mode
     if (overwrite) {
@@ -208,15 +255,4 @@ export const getBackupStats = async (): Promise<{
     journalCount: journal.length,
     lastExport: null, // Could be tracked in AsyncStorage if needed
   };
-};
-
-/**
- * Clear all local data (use with caution!)
- */
-export const clearAllLocalData = async (): Promise<void> => {
-  await setData(KEYS.PLANTS, []);
-  await setData(KEYS.TASKS, []);
-  await setData(KEYS.TASK_LOGS, []);
-  await setData(KEYS.JOURNAL, []);
-  console.log('All local data cleared');
 };

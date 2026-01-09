@@ -6,6 +6,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth } from './src/lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { ThemeProvider, useTheme, useThemeMode } from './src/theme';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { logAuthError, setErrorLogUserId } from './src/utils/errorLogging';
+import { Alert } from 'react-native';
 
 // Screens
 import AuthScreen from './src/screens/AuthScreen';
@@ -133,14 +136,41 @@ const AppRoot = () => {
   };
 
   useEffect(() => {
-    // Listen for auth state changes
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('Auth state changed:', user ? `Logged in as ${user.email}` : 'Logged out');
-      setUser(user);
-      setLoading(false);
-    });
+    let isMounted = true;
+    
+    // Listen for auth state changes with error handling
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (user) => {
+        if (!isMounted) return;
+        
+        console.log('Auth state changed:', user ? `Logged in as ${user.email}` : 'Logged out');
+        setUser(user);
+        setLoading(false);
+        
+        // Update error logging context
+        setErrorLogUserId(user?.uid);
+      },
+      (error) => {
+        if (!isMounted) return;
+        
+        console.error('Auth state change error:', error);
+        logAuthError('Auth state listener error', error);
+        setLoading(false);
+        
+        // Show user-friendly error
+        Alert.alert(
+          'Authentication Error',
+          'There was a problem with your session. Please restart the app.',
+          [{ text: 'OK' }]
+        );
+      }
+    );
 
-    return unsubscribe;
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   if (loading) return null; // Show splash screen
@@ -160,9 +190,11 @@ const AppRoot = () => {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AppRoot />
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AppRoot />
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

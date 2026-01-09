@@ -34,6 +34,7 @@ export default function TaskCard({ task, plantName, onMarkDone, isOverdue, disab
 
   return (
     <View style={[styles.card, isOverdue && styles.overdueCard]}>
+      {isOverdue && <View style={styles.overdueBorder} />}
       <View style={[styles.iconContainer, { backgroundColor: color + '20' }]}>
         <Ionicons name={icon} size={24} color={color} />
       </View>
@@ -73,10 +74,23 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    overflow: 'hidden',
+    position: 'relative',
   },
   overdueCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: theme.error,
+    backgroundColor: theme.errorLight,
+    borderWidth: 1,
+    borderColor: theme.error + '40',
+  },
+  overdueBorder: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    backgroundColor: theme.error,
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
   },
   iconContainer: {
     width: 48,
