@@ -14,7 +14,7 @@ This app is architected to run **free for 10-15+ years** with zero subscription 
 
 ## System Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────┐
 │                    User's Device                         │
 │                                                          │
@@ -81,7 +81,7 @@ This app is architected to run **free for 10-15+ years** with zero subscription 
 
 ### 1. Creating a Plant with Photo
 
-```
+```text
 User selects/takes photo
          │
          ▼
@@ -105,7 +105,7 @@ User selects/takes photo
 
 ### 2. Syncing Between Devices
 
-```
+```text
 Device A                          Firebase                  Device B
    │                                 │                         │
    │ Add plant                       │                         │
@@ -122,7 +122,7 @@ Device B sees plant metadata but not the image (it's local to Device A).
 
 ### 3. Manual Backup/Restore
 
-```
+```text
 User exports backup
          │
          ▼
@@ -140,7 +140,7 @@ User exports backup
 User saves to Google Drive/OneDrive
 ```
 
-```
+```text
 User imports backup on new device
          │
          ▼
@@ -159,7 +159,7 @@ App reloads with restored data
 
 ## File Structure
 
-```
+```text
 src/
 ├── lib/
 │   ├── firebase.ts           # Firebase config (Auth + Firestore only)
@@ -197,6 +197,7 @@ src/
 ### imageStorage.ts
 
 Handles all local image file operations:
+
 - `saveImageLocally()`: Saves image from picker to app directory
 - `deleteImageLocally()`: Removes image file
 - `imageExists()`: Checks if file exists
@@ -207,6 +208,7 @@ Handles all local image file operations:
 ### storage.ts
 
 Handles local caching via AsyncStorage:
+
 - `getData()`: Read cached array
 - `setData()`: Write cached array
 - `addItem()`: Add item to cached array
@@ -226,6 +228,7 @@ Each service (`plants.ts`, `tasks.ts`, `journal.ts`) follows this pattern:
 ### backup.ts
 
 Provides manual backup/restore:
+
 - `exportBackup()`: Creates JSON file with all text data
 - `importBackup()`: Restores from JSON file (merge or replace)
 - `getBackupStats()`: Shows data counts for UI
@@ -251,7 +254,7 @@ Provides manual backup/restore:
 
 ### Local Storage (Device - Images)
 
-```
+```text
 garden_images/
 ├── plant_1735480000_a1b2c3.jpg       (2.5 MB)
 ├── plant_1735490000_d4e5f6.jpg       (1.8 MB)
@@ -262,7 +265,7 @@ garden_images/
 
 ### AsyncStorage (Device - Cache)
 
-```
+```text
 @garden_plants: [...]           (~50 KB for 100 plants)
 @garden_tasks: [...]            (~15 KB for 50 tasks)
 @garden_task_logs: [...]        (~73 KB for 365 logs)
@@ -277,6 +280,7 @@ garden_images/
 **Limits**: 50K reads, 20K writes, 1GB storage per day
 
 **Typical Usage (Single User)**:
+
 - Daily reads: ~100 (opening app, viewing plants/tasks)
 - Daily writes: ~10 (adding tasks, marking done)
 - Total storage: ~180KB text data
@@ -373,6 +377,7 @@ If Firebase ever changes free tier or is shut down:
 4. **Effort**: 1 day of setup
 
 **All options preserve data** because:
+
 - Text data: Plain JSON exports
 - Images: Standard JPEG files
 - No proprietary formats
@@ -415,6 +420,7 @@ describe('plants service', () => {
 ### Local Database Upgrade
 
 Replace AsyncStorage with SQLite for better querying:
+
 - Faster search/filter
 - Better complex queries
 - Still local-first
@@ -423,6 +429,7 @@ Replace AsyncStorage with SQLite for better querying:
 ### Peer-to-Peer Sync
 
 Use Syncthing or similar to sync images between devices:
+
 - User installs Syncthing
 - Points to `garden_images/` folder
 - Images sync automatically
@@ -431,6 +438,7 @@ Use Syncthing or similar to sync images between devices:
 ### Progressive Web App
 
 Make it work in browser:
+
 - IndexedDB instead of AsyncStorage
 - Web APIs for file system
 - Same codebase

@@ -14,7 +14,7 @@ This app is designed to be **free to run for 10-15+ years** with zero subscripti
 
 ## 🏗️ Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────┐
 │              Your Device                        │
 │  ┌─────────────────────────────────────────┐   │
@@ -40,6 +40,7 @@ This app is designed to be **free to run for 10-15+ years** with zero subscripti
 ## ✨ Features
 
 ### 🪴 Plant Management
+
 - Track plants with photos (stored locally)
 - Organize by pots, beds, or ground
 - Store location, variety, planting dates, and notes
@@ -47,6 +48,7 @@ This app is designed to be **free to run for 10-15+ years** with zero subscripti
 - Full CRUD operations
 
 ### 📋 Task Management
+
 - Create recurring tasks (water, fertilise, prune, repot, spray, mulch)
 - Set frequency in days
 - Specify preferred times
@@ -56,18 +58,21 @@ This app is designed to be **free to run for 10-15+ years** with zero subscripti
 - Task history and logs
 
 ### 📅 Calendar View
+
 - Monthly calendar showing task due dates
 - Visual task indicators on dates
 - Upcoming tasks list
 - Navigate between months
 
 ### 📖 Garden Journal
+
 - Write text entries about your garden
 - Attach photos to entries (stored locally)
 - Link entries to specific plants
 - Track your gardening journey over time
 
 ### 💾 Backup & Restore
+
 - **Export backup**: Creates a JSON file with all text data
 - **Import & Merge**: Combines backup with current data
 - **Import & Replace**: Overwrites all data with backup
@@ -75,6 +80,7 @@ This app is designed to be **free to run for 10-15+ years** with zero subscripti
 - Backup files are plain JSON - readable and portable
 
 ### ⚙️ Settings
+
 - View data statistics (plants, tasks, journal entries, image storage size)
 - Architecture overview
 - Manual backup/restore
@@ -109,7 +115,7 @@ npm install
 
 ### 2. Firebase Setup
 
-1. Create a Firebase account at https://firebase.google.com
+1. Create a Firebase account at <https://firebase.google.com>
 2. Create a new project (free Spark plan)
 3. Enable **Firebase Authentication** (Email/Password provider)
 4. Enable **Cloud Firestore** (Start in production mode or test mode)
@@ -156,7 +162,7 @@ npm run web      # Web browser (limited functionality)
 
 ## 📁 Project Structure
 
-```
+```text
 organic-gardening-app/
 ├── src/
 │   ├── lib/
@@ -233,18 +239,21 @@ organic-gardening-app/
 ## 💾 Data Sync & Backup Flow
 
 ### Normal Operation (Online)
+
 1. User makes changes (add plant, complete task, etc.)
 2. Data saved to Firebase Firestore immediately
 3. Local cache updated for offline access
 4. Images saved only to local device storage
 
 ### Offline Mode
+
 1. User makes changes while offline
 2. Data saved to local cache (AsyncStorage)
 3. When online again, Firestore auto-syncs
 4. Conflict resolution uses "last write wins"
 
 ### Manual Backup/Restore
+
 1. **Export**: User taps "Export Backup" in Settings
    - Creates JSON file with all text data
    - Shares file via system share sheet
@@ -262,6 +271,7 @@ organic-gardening-app/
 ## 📱 Screens Overview
 
 ### Today
+
 - Shows overdue tasks (red indicator)
 - Shows today's tasks
 - "Mark Done" button logs task and updates next due date
@@ -269,6 +279,7 @@ organic-gardening-app/
 - Works offline with cached data
 
 ### Plants
+
 - Grid/list of plants with photos (local)
 - Add new plant button
 - Edit and delete actions
@@ -276,17 +287,20 @@ organic-gardening-app/
 - Links to plant form
 
 ### Calendar
+
 - Monthly view with task indicators
 - Navigate months
 - Upcoming tasks list below calendar
 
 ### Journal
+
 - Chronological entries
 - Photo support
 - Plant tags
 - Delete entries
 
 ### Settings
+
 - Data backup statistics (plants, tasks, journal, image storage size)
 - Export backup button
 - Import & Merge backup button
@@ -300,6 +314,7 @@ organic-gardening-app/
 ### Task Types
 
 Supported task types (defined in `database.types.ts`):
+
 - `water` - Watering plants
 - `fertilise` - Fertilizing/feeding
 - `prune` - Pruning/trimming
@@ -310,6 +325,7 @@ Supported task types (defined in `database.types.ts`):
 ### Space Types
 
 Plants can be in:
+
 - `pot` - Container/pot (with pot size)
 - `bed` - Garden bed (with bed name)
 - `ground` - Directly in ground
@@ -327,28 +343,33 @@ Plants can be in:
 ## 🐛 Troubleshooting
 
 ### "Invalid API credentials"
+
 - Check your `.env` file exists
 - Verify Firebase config values are correct
 - Restart Expo dev server after changing `.env`
 
 ### Images not showing
+
 - Images are stored locally - they won't sync between devices automatically
 - If you see a 📷 icon on a plant card, the image file is missing
 - Use manual backup/restore or file sync tools to move images between devices
 
 ### Tasks not appearing
+
 - Ensure `next_due_at` is set correctly
 - Check task is `enabled = true`
 - Verify task date is today or earlier
 - Check offline cache in Settings
 
 ### Auth not working
+
 - Check Firebase Authentication is enabled in Firebase Console
 - Enable Email/Password provider
 - Check network connection
 - For production, configure authorized domains in Firebase
 
 ### Backup/Restore issues
+
 - Ensure you have the required packages: `expo-file-system`, `expo-sharing`, `expo-document-picker`
 - Check file permissions on your device
 - Backup files are JSON - you can inspect them in any text editor
@@ -397,6 +418,7 @@ This app is designed to keep working for 10-15+ years:
 ## 📦 Dependencies
 
 Main dependencies:
+
 - `expo` - React Native framework
 - `firebase` - Firebase SDK (Auth + Firestore)
 - `@react-navigation/native` - Navigation
@@ -464,6 +486,7 @@ This is a personal project designed for individual use, but feel free to fork an
 ## 📞 Support
 
 For issues with:
+
 - **Expo**: Check [Expo documentation](https://docs.expo.dev/)
 - **Firebase**: Check [Firebase documentation](https://firebase.google.com/docs)
 - **React Navigation**: Check [React Navigation docs](https://reactnavigation.org/)

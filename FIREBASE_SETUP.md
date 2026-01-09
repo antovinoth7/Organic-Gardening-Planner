@@ -164,9 +164,11 @@ This way you'll know if something's wrong before hitting limits.
 
 1. Save all changes to your `.env` file
 2. Restart your development server:
+
    ```bash
    npx expo start --clear
    ```
+
 3. The app will now use Firebase for authentication and data sync!
 
 ## Firestore Collections Structure
@@ -174,7 +176,8 @@ This way you'll know if something's wrong before hitting limits.
 Your app will create these collections automatically:
 
 ### plants
-```
+
+```typescript
 {
   id: string,
   user_id: string,
@@ -188,7 +191,8 @@ Your app will create these collections automatically:
 ```
 
 ### task_templates
-```
+
+```typescript
 {
   id: string,
   user_id: string,
@@ -201,7 +205,8 @@ Your app will create these collections automatically:
 ```
 
 ### task_logs
-```
+
+```typescript
 {
   id: string,
   user_id: string,
@@ -213,7 +218,8 @@ Your app will create these collections automatically:
 ```
 
 ### journal_entries
-```
+
+```typescript
 {
   id: string,
   user_id: string,
@@ -227,6 +233,7 @@ Your app will create these collections automatically:
 ## Local Storage Structure
 
 Images are stored on device at:
+
 - `{app_directory}/garden_images/plant_{timestamp}_{random}.jpg`
 - `{app_directory}/garden_images/journal_{timestamp}_{random}.jpg`
 
@@ -235,21 +242,25 @@ These are **never uploaded to Firebase** - only the local path strings are store
 ## Troubleshooting
 
 ### "Firebase: Error (auth/invalid-api-key)"
+
 - Check that your API key in `.env` is correct
 - Make sure you're using `EXPO_PUBLIC_` prefix
 - Restart Expo with `npx expo start --clear`
 
 ### "Missing or insufficient permissions"
+
 - Verify Firestore security rules are published
 - Make sure you're signed in (check auth state)
 - Check that `user_id` field matches authenticated user
 
 ### "Images not showing"
+
 - Images are local-only and won't sync between devices automatically
 - Use the backup/restore feature or manual file sync for cross-device images
 - If you see a 📷 icon, the image file is missing from this device
 
 ### App not loading config
+
 - Restart Metro bundler with `npx expo start --clear`
 - Verify `.env` file is in project root
 - Check all env variables start with `EXPO_PUBLIC_`
@@ -267,6 +278,7 @@ These are **never uploaded to Firebase** - only the local path strings are store
 ## Free Tier Limits
 
 Firebase Free (Spark) plan includes:
+
 - **Firestore**: 50K reads, 20K writes, 1GB storage per day
 - **Authentication**: Unlimited users
 - **No credit card required**
@@ -276,6 +288,7 @@ For a single personal user, this is effectively unlimited. Your text-only data w
 ## Data Size Estimation
 
 Typical usage for one user:
+
 - 100 plants × 500 bytes = 50KB
 - 50 tasks × 300 bytes = 15KB
 - 365 task logs × 200 bytes = 73KB
