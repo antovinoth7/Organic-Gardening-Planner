@@ -387,8 +387,10 @@ export default function JournalFormScreen({ navigation, route }: any) {
           multiline
           textAlignVertical="top"
           placeholderTextColor="#999"
-          autoFocus
         />
+        
+        {/* Extra spacing for keyboard */}
+        <View style={{ height: 300 }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -425,6 +427,7 @@ const createStyles = (theme: any) => StyleSheet.create({
   content: {
     flex: 1,
     padding: 16,
+    paddingBottom: 16,
   },
   photosGrid: {
     flexDirection: 'row',
@@ -506,7 +509,8 @@ const createStyles = (theme: any) => StyleSheet.create({
     borderRadius: 12,
     fontSize: 16,
     color: theme.inputText,
-    minHeight: 200,
+    minHeight: 150,
+    maxHeight: 300,
     borderWidth: 1,
     borderColor: theme.inputBorder,
   },

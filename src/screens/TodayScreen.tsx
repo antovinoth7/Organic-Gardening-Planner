@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Alert, Modal, TextInput } from 'react-native';
 import { getTodayTasks, markTaskDone, updateTaskTemplate, getTaskLogs } from '../services/tasks';
 import { getPlants } from '../services/plants';
@@ -12,6 +12,7 @@ import { useTheme } from '../theme';
 export default function TodayScreen({ navigation }: any) {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const scrollViewRef = useRef<ScrollView>(null);
   const [tasks, setTasks] = useState<TaskTemplate[]>([]);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +71,8 @@ export default function TodayScreen({ navigation }: any) {
   // Refresh data when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
+      // Reset scroll to top
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
       loadData();
     }, [])
   );
@@ -215,6 +218,7 @@ export default function TodayScreen({ navigation }: any) {
 
   return (
     <ScrollView 
+      ref={scrollViewRef}
       style={styles.container}
       refreshControl={
         <RefreshControl refreshing={loading} onRefresh={loadData} />

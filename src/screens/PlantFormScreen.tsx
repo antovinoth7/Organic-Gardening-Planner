@@ -31,8 +31,8 @@ const PLANT_VARIETIES: Record<PlantType, string[]> = {
   vegetable: ['Tomato', 'Carrot', 'Lettuce', 'Cabbage', 'Broccoli', 'Cucumber', 'Pepper', 'Eggplant', 'Spinach', 'Radish', 'Potato', 'Onion', 'Garlic', 'Beans', 'Peas'],
   herb: ['Basil', 'Mint', 'Coriander', 'Parsley', 'Rosemary', 'Thyme', 'Oregano', 'Sage', 'Dill', 'Lemongrass', 'Curry Leaf'],
   flower: ['Rose', 'Sunflower', 'Marigold', 'Lily', 'Tulip', 'Jasmine', 'Hibiscus', 'Dahlia', 'Chrysanthemum', 'Orchid'],
-  fruit_tree: ['Mango', 'Apple', 'Orange', 'Banana', 'Guava', 'Papaya', 'Lemon', 'Pomegranate', 'Fig', 'Avocado', 'Jackfruit'],
-  timber_tree: ['Teak', 'Mahogany', 'Oak', 'Pine', 'Rosewood', 'Sandalwood', 'Eucalyptus', 'Acacia', 'Cedar', 'Bamboo'],
+  fruit_tree: ['Mango', 'Orange', 'Banana', 'Guava', 'Papaya', 'Lemon', 'Pomegranate', 'Fig', 'Avocado', 'Jackfruit', 'Chikoo', 'Water Apple', 'Soursop', 'Mangosteen', 'Rambutan'],
+  timber_tree: ['Teak', 'Mahogany', 'Rosewood', 'Sandalwood', 'Bamboo', 'Wild Jack', 'Neem'],
   coconut_tree: ['Dwarf Coconut', 'Tall Coconut', 'Hybrid Coconut', 'King Coconut'],
   shrub: ['Hibiscus', 'Bougainvillea', 'Jasmine', 'Azalea', 'Gardenia', 'Lavender', 'Boxwood', 'Holly'],
 };

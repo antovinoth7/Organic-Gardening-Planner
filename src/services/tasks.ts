@@ -1,4 +1,4 @@
-import { TaskTemplate, TaskLog } from '../types/database.types';
+import { TaskTemplate, TaskLog, Plant } from '../types/database.types';
 import { db, auth } from '../lib/firebase';
 import { 
   collection, 

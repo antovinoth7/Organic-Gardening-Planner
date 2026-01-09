@@ -57,7 +57,7 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete }: PlantCar
   };
 
   const isTree = ['fruit_tree', 'timber_tree', 'coconut_tree'].includes(plant.plant_type);
-  const age = getYearsOld(plant.planting_date);
+  const age = getYearsOld(plant.planting_date ?? null);
 
   const getHealthIcon = () => {
     const icons: Record<string, string> = {

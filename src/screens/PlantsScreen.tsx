@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl, Alert, ActivityIndicator, ScrollView, TextInput } from 'react-native';
 import { getPlants, deletePlant } from '../services/plants';
 import { Plant, PlantType, SpaceType, HealthStatus, SunlightLevel, WaterRequirement } from '../types/database.types';
@@ -28,6 +28,7 @@ const CHILD_LOCATIONS = ['North', 'South', 'East', 'West', 'North-East', 'North-
 export default function PlantsScreen({ navigation }: any) {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const flatListRef = useRef<FlatList>(null);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE);
@@ -63,6 +64,8 @@ export default function PlantsScreen({ navigation }: any) {
     
     const unsubscribe = navigation.addListener('focus', () => {
       if (isMounted) {
+        // Reset scroll to top
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
         loadPlants();
       }
     });
@@ -591,6 +594,7 @@ export default function PlantsScreen({ navigation }: any) {
       </View>
 
       <FlatList
+        ref={flatListRef}
         data={displayedPlants}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (

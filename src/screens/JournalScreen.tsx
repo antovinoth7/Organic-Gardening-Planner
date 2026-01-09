@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ const { width } = Dimensions.get('window');
 export default function JournalScreen({ navigation }: any) {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const scrollViewRef = useRef<ScrollView>(null);
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +60,8 @@ export default function JournalScreen({ navigation }: any) {
     
     const unsubscribe = navigation.addListener('focus', () => {
       if (isMounted) {
+        // Reset scroll to top
+        scrollViewRef.current?.scrollTo({ y: 0, animated: false });
         loadData();
       }
     });
@@ -225,7 +228,15 @@ export default function JournalScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
         </View>
-        
+      </View>
+
+      <ScrollView 
+        ref={scrollViewRef}
+        style={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={loading} onRefresh={loadData} />
+        }
+      >
         {/* Statistics Dashboard */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsScroll}>
           <View style={styles.statCard}>
@@ -257,88 +268,83 @@ export default function JournalScreen({ navigation }: any) {
           </View>
         </ScrollView>
         
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color={theme.textSecondary} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search entries..."
-            placeholderTextColor={theme.textSecondary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery !== '' && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
-            </TouchableOpacity>
-          )}
-        </View>
-        
-        {/* Filter Chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
-          <TouchableOpacity 
-            style={[styles.filterChip, dateFilter === 'week' && styles.filterChipActive]}
-            onPress={() => setDateFilter(dateFilter === 'week' ? 'all' : 'week')}
-          >
-            <Text style={[styles.filterChipText, dateFilter === 'week' && styles.filterChipTextActive]}>
-              This Week
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.filterChip, dateFilter === 'month' && styles.filterChipActive]}
-            onPress={() => setDateFilter(dateFilter === 'month' ? 'all' : 'month')}
-          >
-            <Text style={[styles.filterChipText, dateFilter === 'month' && styles.filterChipTextActive]}>
-              This Month
-            </Text>
-          </TouchableOpacity>
+        {/* Search Bar and Filters in One Row */}
+        <View style={styles.searchFilterRow}>
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color={theme.textSecondary} style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search entries..."
+              placeholderTextColor={theme.textSecondary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery !== '' && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
           
-          <TouchableOpacity 
-            style={[styles.filterChip, selectedType === 'harvest' && styles.filterChipActive]}
-            onPress={() => setSelectedType(selectedType === 'harvest' ? null : 'harvest')}
-          >
-            <Ionicons name="basket" size={14} color={selectedType === 'harvest' ? '#fff' : theme.textSecondary} />
-            <Text style={[styles.filterChipText, selectedType === 'harvest' && styles.filterChipTextActive]}>
-              Harvest
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.filterChip, selectedType === 'observation' && styles.filterChipActive]}
-            onPress={() => setSelectedType(selectedType === 'observation' ? null : 'observation')}
-          >
-            <Ionicons name="eye" size={14} color={selectedType === 'observation' ? '#fff' : theme.textSecondary} />
-            <Text style={[styles.filterChipText, selectedType === 'observation' && styles.filterChipTextActive]}>
-              Observation
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.filterChip, selectedType === 'issue' && styles.filterChipActive]}
-            onPress={() => setSelectedType(selectedType === 'issue' ? null : 'issue')}
-          >
-            <Ionicons name="alert-circle" size={14} color={selectedType === 'issue' ? '#fff' : theme.textSecondary} />
-            <Text style={[styles.filterChipText, selectedType === 'issue' && styles.filterChipTextActive]}>
-              Issue
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.filterChip, selectedType === 'milestone' && styles.filterChipActive]}
-            onPress={() => setSelectedType(selectedType === 'milestone' ? null : 'milestone')}
-          >
-            <Ionicons name="flag" size={14} color={selectedType === 'milestone' ? '#fff' : theme.textSecondary} />
-            <Text style={[styles.filterChipText, selectedType === 'milestone' && styles.filterChipTextActive]}>
-              Milestone
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
+            <TouchableOpacity 
+              style={[styles.filterChip, dateFilter === 'week' && styles.filterChipActive]}
+              onPress={() => setDateFilter(dateFilter === 'week' ? 'all' : 'week')}
+            >
+              <Text style={[styles.filterChipText, dateFilter === 'week' && styles.filterChipTextActive]}>
+                This Week
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.filterChip, dateFilter === 'month' && styles.filterChipActive]}
+              onPress={() => setDateFilter(dateFilter === 'month' ? 'all' : 'month')}
+            >
+              <Text style={[styles.filterChipText, dateFilter === 'month' && styles.filterChipTextActive]}>
+                This Month
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.filterChip, selectedType === 'harvest' && styles.filterChipActive]}
+              onPress={() => setSelectedType(selectedType === 'harvest' ? null : 'harvest')}
+            >
+              <Ionicons name="basket" size={14} color={selectedType === 'harvest' ? '#fff' : theme.textSecondary} />
+              <Text style={[styles.filterChipText, selectedType === 'harvest' && styles.filterChipTextActive]}>
+                Harvest
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.filterChip, selectedType === 'observation' && styles.filterChipActive]}
+              onPress={() => setSelectedType(selectedType === 'observation' ? null : 'observation')}
+            >
+              <Ionicons name="eye" size={14} color={selectedType === 'observation' ? '#fff' : theme.textSecondary} />
+              <Text style={[styles.filterChipText, selectedType === 'observation' && styles.filterChipTextActive]}>
+                Observation
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.filterChip, selectedType === 'issue' && styles.filterChipActive]}
+              onPress={() => setSelectedType(selectedType === 'issue' ? null : 'issue')}
+            >
+              <Ionicons name="alert-circle" size={14} color={selectedType === 'issue' ? '#fff' : theme.textSecondary} />
+              <Text style={[styles.filterChipText, selectedType === 'issue' && styles.filterChipTextActive]}>
+                Issue
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.filterChip, selectedType === 'milestone' && styles.filterChipActive]}
+              onPress={() => setSelectedType(selectedType === 'milestone' ? null : 'milestone')}
+            >
+              <Ionicons name="flag" size={14} color={selectedType === 'milestone' ? '#fff' : theme.textSecondary} />
+              <Text style={[styles.filterChipText, selectedType === 'milestone' && styles.filterChipTextActive]}>
+                Milestone
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
 
-      {viewMode === 'list' ? (
-        <ScrollView 
-          style={styles.content}
-          refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={loadData} />
-          }
-        >
+        {viewMode === 'list' ? (
+          <View style={styles.entriesContainer}>
           {filteredEntries.map(entry => {
             const plantName = getPlantName(entry.plant_id);
             const date = new Date(entry.created_at).toLocaleDateString('en-US', {
@@ -437,14 +443,8 @@ export default function JournalScreen({ navigation }: any) {
               </Text>
             </View>
           )}
-        </ScrollView>
-      ) : (
-        <ScrollView 
-          style={styles.content}
-          refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={loadData} />
-          }
-        >
+          </View>
+        ) : (
           <View style={styles.galleryGrid}>
             {allPhotos.map((photo, idx) => (
               <TouchableOpacity 
@@ -455,17 +455,17 @@ export default function JournalScreen({ navigation }: any) {
                 <Image source={{ uri: photo.uri }} style={styles.galleryImage} />
               </TouchableOpacity>
             ))}
-          </View>
           
-          {allPhotos.length === 0 && !loading && (
-            <View style={styles.emptyState}>
-              <Ionicons name="images-outline" size={64} color={theme.border} />
-              <Text style={styles.emptyText}>No photos yet</Text>
-              <Text style={styles.emptySubtext}>Add photos to your journal entries</Text>
-            </View>
-          )}
-        </ScrollView>
-      )}
+            {allPhotos.length === 0 && !loading && (
+              <View style={styles.emptyState}>
+                <Ionicons name="images-outline" size={64} color={theme.border} />
+                <Text style={styles.emptyText}>No photos yet</Text>
+                <Text style={styles.emptySubtext}>Add photos to your journal entries</Text>
+              </View>
+            )}
+          </View>
+        )}
+      </ScrollView>
       
       {/* Floating Action Button */}
       <TouchableOpacity 
@@ -510,7 +510,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     backgroundColor: theme.card,
     paddingTop: 48,
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
   },
@@ -518,7 +518,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
   },
   title: {
     fontSize: 28,
@@ -558,56 +557,64 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     elevation: 6,
   },
   statsScroll: {
-    marginBottom: 12,
+    marginTop: 12,
+    marginBottom: 10,
   },
   statCard: {
     backgroundColor: theme.backgroundSecondary,
-    borderRadius: 12,
-    padding: 12,
-    marginRight: 12,
+    borderRadius: 10,
+    padding: 8,
+    marginRight: 8,
     alignItems: 'center',
-    minWidth: 80,
+    minWidth: 70,
   },
   statNumber: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: 'bold',
     color: theme.text,
-    marginTop: 4,
+    marginTop: 2,
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: theme.textSecondary,
-    marginTop: 2,
+    marginTop: 1,
     textAlign: 'center',
+  },
+  searchFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    marginBottom: 12,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.backgroundSecondary,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 12,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    width: 120,
   },
   searchIcon: {
-    marginRight: 8,
+    marginRight: 6,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 14,
     color: theme.text,
   },
   filtersScroll: {
-    marginBottom: 8,
+    flex: 1,
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.backgroundSecondary,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 6,
     gap: 4,
   },
   filterChipActive: {
@@ -622,7 +629,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 16,
+  },
+  entriesContainer: {
+    padding: 12,
     paddingBottom: 120,
   },
   card: {
@@ -740,6 +749,8 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   },
   galleryGrid: {
     flexDirection: 'row',
+    padding: 12,
+    paddingBottom: 120,
     flexWrap: 'wrap',
     gap: 4,
   },

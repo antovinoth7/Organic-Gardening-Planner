@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Animated, Platform } from 'react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -23,6 +23,8 @@ const TASK_COLORS: Record<TaskType, string> = {
 export default function CalendarScreen() {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const weekScrollRef = useRef<ScrollView>(null);
   const [tasks, setTasks] = useState<TaskTemplate[]>([]);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [harvestEntries, setHarvestEntries] = useState<JournalEntry[]>([]);
@@ -50,9 +52,27 @@ export default function CalendarScreen() {
 
   const setTodayView = () => {
     const today = new Date();
-    setSelectedDate(today);
+    // Don't auto-select today, just set the week/month view to show today
+    // This way users see "Today's Tasks" section instead of "Selected Date Tasks"
+    setSelectedDate(null);
     setCurrentWeekStart(getStartOfWeek(today));
     setCurrentMonth(today);
+    
+    // Scroll to today in week view after a short delay to ensure render
+    setTimeout(() => {
+      scrollToToday();
+    }, 100);
+  };
+
+  const scrollToToday = () => {
+    if (selectedView === 'week' && weekScrollRef.current) {
+      const today = new Date();
+      const weekStart = getStartOfWeek(today);
+      const daysDiff = Math.floor((today.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24));
+      const dayWidth = 100; // Approximate width of each day card
+      const scrollX = daysDiff * dayWidth;
+      weekScrollRef.current.scrollTo({ x: scrollX, animated: true });
+    }
   };
 
   useEffect(() => {
@@ -66,10 +86,21 @@ export default function CalendarScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
+      // Reset scroll to top
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
       loadData();
       setTodayView();
     }, [])
   );
+
+  // Scroll to today when switching to week view or when week changes
+  useEffect(() => {
+    if (selectedView === 'week') {
+      setTimeout(() => {
+        scrollToToday();
+      }, 100);
+    }
+  }, [selectedView, currentWeekStart]);
 
   const loadData = async () => {
     try {
@@ -427,7 +458,7 @@ export default function CalendarScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.weekDaysScroll}>
+        <ScrollView ref={weekScrollRef} horizontal showsHorizontalScrollIndicator={false} style={styles.weekDaysScroll}>
           {weekDays.map((date, index) => {
             const dayTasks = tasks.filter(task => {
               const dueDate = new Date(task.next_due_at);
@@ -620,7 +651,7 @@ export default function CalendarScreen() {
         {/* Week or Month View */}
         {selectedView === 'week' ? renderWeekView() : renderMonthView()}
 
-        <ScrollView style={styles.content}>
+        <ScrollView ref={scrollViewRef} style={styles.content}>
           {/* Selected Date Tasks */}
           {selectedDate && (
             <View style={styles.section}>

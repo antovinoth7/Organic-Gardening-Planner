@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -22,11 +22,13 @@ import {
 } from "../services/backup";
 import { getImageStorageSize } from "../lib/imageStorage";
 import { useTheme, useThemeMode } from "../theme";
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function SettingsScreen() {
   const theme = useTheme();
   const { mode, setMode } = useThemeMode();
   const styles = createStyles(theme);
+  const scrollViewRef = useRef<ScrollView>(null);
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<{
     plantCount: number;
@@ -39,6 +41,13 @@ export default function SettingsScreen() {
   useEffect(() => {
     loadStats();
   }, []);
+
+  // Reset scroll to top when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    }, [])
+  );
 
   const loadStats = async () => {
     try {
@@ -243,7 +252,7 @@ export default function SettingsScreen() {
         <Text style={styles.title}>Settings</Text>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView ref={scrollViewRef} style={styles.content}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
 

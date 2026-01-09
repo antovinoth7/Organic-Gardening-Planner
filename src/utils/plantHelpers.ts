@@ -43,6 +43,13 @@ export const COMPANION_PLANTS: Record<string, string[]> = {
   'Dahlia': ['Marigold', 'Zinnia', 'Nasturtium'],
   'Chrysanthemum': ['Roses', 'Asters', 'Daisies'],
   'Orchid': ['Ferns', 'Bromeliads', 'Anthuriums'],
+  
+  // Tropical Fruit Trees
+  'Chikoo': ['Banana', 'Papaya', 'Curry Leaf', 'Lemongrass'],
+  'Water Apple': ['Banana', 'Papaya', 'Guava', 'Pineapple'],
+  'Soursop': ['Banana', 'Papaya', 'Citrus', 'Lemongrass'],
+  'Mangosteen': ['Durian', 'Rambutan', 'Banana', 'Coconut'],
+  'Rambutan': ['Mangosteen', 'Durian', 'Banana', 'Coconut'],
 };
 
 // Plants to avoid together (incompatible companions)
@@ -95,7 +102,6 @@ export const DAYS_TO_HARVEST: Record<string, number> = {
 // Days to maturity for fruit trees (years converted to days)
 export const YEARS_TO_FIRST_HARVEST: Record<string, number> = {
   'Mango': 3,
-  'Apple': 3,
   'Orange': 3,
   'Banana': 1,
   'Guava': 2,
@@ -105,6 +111,11 @@ export const YEARS_TO_FIRST_HARVEST: Record<string, number> = {
   'Fig': 2,
   'Avocado': 3,
   'Jackfruit': 4,
+  'Chikoo': 3,        // Sapodilla/Chikoo - 3-5 years to first harvest
+  'Water Apple': 2,   // Rose apple/Jambu - 2-3 years to first harvest
+  'Soursop': 3,       // Graviola/Guanabana - 3-5 years to first harvest
+  'Mangosteen': 8,    // Mangosteen - 7-9 years to first harvest (slow growing)
+  'Rambutan': 5,      // Rambutan - 4-6 years to first harvest
   'Dwarf Coconut': 3,
   'Tall Coconut': 6,
   'Hybrid Coconut': 4,
