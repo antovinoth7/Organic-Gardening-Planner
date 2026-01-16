@@ -47,12 +47,16 @@ class ErrorTracker {
    * Track an error
    */
   async trackError(message: string, error?: Error, context?: Record<string, any>) {
+    const normalizedContext = context || {};
+    const type = typeof normalizedContext.type === 'string' ? normalizedContext.type : 'error';
+    const level: 'warning' | 'error' | 'fatal' = type === 'warning' ? 'warning' : type === 'crash' ? 'fatal' : 'error';
+
     const errorLog: ErrorLog = {
       timestamp: new Date().toISOString(),
       message,
       error: error?.message,
       stack: error?.stack,
-      context,
+      context: normalizedContext,
       appVersion: '1.0.0', // You can import from package.json
     };
 
@@ -74,11 +78,20 @@ class ErrorTracker {
     // Log to console in development
     logger.error(message, error, { metadata: context });
 
-    // TODO: Send to analytics service in production
-    // Example integrations:
-    // - Firebase Crashlytics: crashlytics().recordError(error);
-    // - Sentry: Sentry.captureException(error);
-    // - Custom API: sendToErrorAPI(errorLog);
+    // Send to Sentry (dev and production)
+    import('@sentry/react-native').then((Sentry) => {
+      const captureContext = {
+        level: level as 'warning' | 'error' | 'fatal' | 'info' | 'debug',
+        contexts: { custom: normalizedContext },
+        tags: { source: 'error_tracker', type },
+      };
+
+      if (error) {
+        Sentry.captureException(error, captureContext);
+      } else {
+        Sentry.captureMessage(message, captureContext);
+      }
+    });
   }
 
   /**

@@ -45,7 +45,7 @@ export const logError = (
     console.error(`[${type.toUpperCase()}]`, message, error, context);
   }
 
-  // Send to error tracking service
+  // Send to error tracker (can forward to Sentry)
   import('../utils/errorTracker').then(({ errorTracker }) => {
     errorTracker.trackError(message, error, { ...context, type });
   });

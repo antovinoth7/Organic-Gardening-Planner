@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { TaskTemplate } from '../types/database.types';
-import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme';
+import React from "react";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { TaskTemplate } from "../types/database.types";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../theme";
 
 interface TaskCardProps {
   task: TaskTemplate;
@@ -13,29 +13,35 @@ interface TaskCardProps {
 }
 
 const taskIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
-  water: 'water',
-  fertilise: 'nutrition',
-  prune: 'cut',
-  repot: 'move',
+  water: "water",
+  fertilise: "nutrition",
+  prune: "cut",
+  repot: "move",
 };
 
 const taskColors: Record<string, string> = {
-  water: '#2196F3',
-  fertilise: '#FF9800',
-  prune: '#9C27B0',
-  repot: '#4CAF50',
+  water: "#2196F3",
+  fertilise: "#FF9800",
+  prune: "#9C27B0",
+  repot: "#4CAF50",
 };
 
-export default function TaskCard({ task, plantName, onMarkDone, isOverdue, disabled }: TaskCardProps) {
+export default function TaskCard({
+  task,
+  plantName,
+  onMarkDone,
+  isOverdue,
+  disabled,
+}: TaskCardProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
   const color = taskColors[task.task_type] || theme.textSecondary;
-  const icon = taskIcons[task.task_type] || 'ellipse';
+  const icon = taskIcons[task.task_type] || "ellipse";
 
   return (
     <View style={[styles.card, isOverdue && styles.overdueCard]}>
       {isOverdue && <View style={styles.overdueBorder} />}
-      <View style={[styles.iconContainer, { backgroundColor: color + '20' }]}>
+      <View style={[styles.iconContainer, { backgroundColor: color + "20" }]}>
         <Ionicons name={icon} size={24} color={color} />
       </View>
 
@@ -49,8 +55,12 @@ export default function TaskCard({ task, plantName, onMarkDone, isOverdue, disab
         )}
       </View>
 
-      <TouchableOpacity 
-        style={[styles.button, { backgroundColor: color }, disabled && styles.buttonDisabled]} 
+      <TouchableOpacity
+        style={[
+          styles.button,
+          { backgroundColor: color },
+          disabled && styles.buttonDisabled,
+        ]}
         onPress={onMarkDone}
         disabled={disabled}
         activeOpacity={disabled ? 1 : 0.7}
@@ -61,71 +71,74 @@ export default function TaskCard({ task, plantName, onMarkDone, isOverdue, disab
   );
 }
 
-const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  overdueCard: {
-    backgroundColor: theme.errorLight,
-    borderWidth: 1,
-    borderColor: theme.error + '40',
-  },
-  overdueBorder: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
-    backgroundColor: theme.error,
-    borderTopLeftRadius: 12,
-    borderBottomLeftRadius: 12,
-  },
-  iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  content: {
-    flex: 1,
-  },
-  taskType: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.text,
-  },
-  plantName: {
-    fontSize: 14,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  time: {
-    fontSize: 12,
-    color: theme.textTertiary,
-    marginTop: 2,
-  },
-  button: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-});
+const createStyles = (theme: ReturnType<typeof useTheme>) =>
+  StyleSheet.create({
+    card: {
+      flexDirection: "row",
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.border,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+      overflow: "hidden",
+      position: "relative",
+    },
+    overdueCard: {
+      backgroundColor: theme.errorLight,
+      borderWidth: 2,
+      borderColor: theme.error,
+    },
+    overdueBorder: {
+      position: "absolute",
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: 4,
+      backgroundColor: theme.error,
+      borderTopLeftRadius: 12,
+      borderBottomLeftRadius: 12,
+    },
+    iconContainer: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 16,
+    },
+    content: {
+      flex: 1,
+    },
+    taskType: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: theme.text,
+    },
+    plantName: {
+      fontSize: 14,
+      color: theme.textSecondary,
+      marginTop: 2,
+    },
+    time: {
+      fontSize: 12,
+      color: theme.textTertiary,
+      marginTop: 2,
+    },
+    button: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    buttonDisabled: {
+      opacity: 0.5,
+    },
+  });

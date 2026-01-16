@@ -26,7 +26,17 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [],
+    "plugins": [
+      "expo-secure-store",
+      [
+        "@sentry/react-native",
+        {
+          "url": "https://sentry.io/",
+          "project": "organic-gardening-app",
+          "organization": "antovinoth7"
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "b6c9a180-9c28-445a-9d74-7d2de79f2740"

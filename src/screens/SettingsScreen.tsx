@@ -11,18 +11,19 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { auth } from "../lib/firebase";
 import { signOut } from "firebase/auth";
-import { 
-  exportBackup, 
-  importBackup, 
+import {
+  exportBackup,
+  importBackup,
   getBackupStats,
   exportBackupWithImages,
   importBackupWithImages,
   exportImagesOnly,
-  importImagesOnly
+  importImagesOnly,
 } from "../services/backup";
 import { getImageStorageSize } from "../lib/imageStorage";
 import { useTheme, useThemeMode } from "../theme";
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from "@react-navigation/native";
+import { testSentryLogging } from "../utils/sentryTest";
 
 export default function SettingsScreen() {
   const theme = useTheme();
@@ -30,6 +31,7 @@ export default function SettingsScreen() {
   const styles = createStyles(theme);
   const scrollViewRef = useRef<ScrollView>(null);
   const [loading, setLoading] = useState(false);
+  const allowSentryProdTest = process.env.EXPO_PUBLIC_SENTRY_TEST === "1";
   const [stats, setStats] = useState<{
     plantCount: number;
     taskCount: number;
@@ -234,6 +236,78 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleTestSentry = () => {
+    Alert.alert(
+      "Test Sentry Logging",
+      "Choose a test type to verify Sentry integration:",
+      [
+        {
+          text: "Info Message",
+          onPress: () => {
+            testSentryLogging.testInfo();
+            Alert.alert("✅ Info Logged", "Check console and Sentry dashboard");
+          },
+        },
+        {
+          text: "Warning",
+          onPress: () => {
+            testSentryLogging.testWarning();
+            Alert.alert(
+              "⚠️  Warning Logged",
+              "Check console and Sentry dashboard"
+            );
+          },
+        },
+        {
+          text: "Error Exception",
+          onPress: () => {
+            testSentryLogging.testError();
+            Alert.alert(
+              "🔴 Error Logged",
+              "Check console and Sentry dashboard"
+            );
+          },
+        },
+        {
+          text: "Test Breadcrumbs",
+          onPress: () => {
+            testSentryLogging.testBreadcrumbs();
+            Alert.alert(
+              "🍞 Breadcrumbs Logged",
+              "Check event in Sentry for breadcrumb trail"
+            );
+          },
+        },
+        {
+          text: "Test Context & Tags",
+          onPress: () => {
+            testSentryLogging.testWithContext();
+            Alert.alert(
+              "📊 Context Logged",
+              "Check event in Sentry for custom context"
+            );
+          },
+        },
+        { text: "Cancel", style: "cancel" },
+      ]
+    );
+  };
+
+  const handleProdSentryTest = async () => {
+    try {
+      await testSentryLogging.testProduction();
+      Alert.alert(
+        "Sentry Production Test",
+        "Test event sent. Check Sentry for environment=production and tag test_type:production."
+      );
+    } catch (error: any) {
+      Alert.alert(
+        "Sentry Production Test Failed",
+        error?.message || "Unknown error"
+      );
+    }
+  };
+
   const handleSignOut = async () => {
     console.log("Sign out button pressed");
     try {
@@ -327,8 +401,8 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Data Backup (Text Only)</Text>
           <Text style={styles.sectionDescription}>
-            Quick backup of your text data (plants, tasks, journals). Images are NOT included.
-            Best for quick data sync or backup.
+            Quick backup of your text data (plants, tasks, journals). Images are
+            NOT included. Best for quick data sync or backup.
           </Text>
 
           <View style={styles.card}>
@@ -358,7 +432,9 @@ export default function SettingsScreen() {
             ) : (
               <>
                 <Ionicons name="download-outline" size={20} color="#fff" />
-                <Text style={styles.backupButtonText}>Export Data Only (JSON)</Text>
+                <Text style={styles.backupButtonText}>
+                  Export Data Only (JSON)
+                </Text>
               </>
             )}
           </TouchableOpacity>
@@ -387,10 +463,13 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Complete Backup (Data + Images)</Text>
+          <Text style={styles.sectionTitle}>
+            Complete Backup (Data + Images)
+          </Text>
           <Text style={styles.sectionDescription}>
-            Full backup including all photos as a ZIP file. Use this for complete 
-            device-to-device transfers. File size: {formatBytes(imageStorageSize)} (approx).
+            Full backup including all photos as a ZIP file. Use this for
+            complete device-to-device transfers. File size:{" "}
+            {formatBytes(imageStorageSize)} (approx).
           </Text>
 
           <View style={styles.card}>
@@ -426,7 +505,9 @@ export default function SettingsScreen() {
             ) : (
               <>
                 <Ionicons name="archive-outline" size={20} color="#fff" />
-                <Text style={styles.backupButtonText}>Export Complete Backup (ZIP)</Text>
+                <Text style={styles.backupButtonText}>
+                  Export Complete Backup (ZIP)
+                </Text>
               </>
             )}
           </TouchableOpacity>
@@ -454,16 +535,17 @@ export default function SettingsScreen() {
           </TouchableOpacity>
 
           <Text style={styles.backupNote}>
-            💡 Tip: Use "Complete Backup" when switching devices. Save the ZIP file 
-            to Google Drive, OneDrive, or external storage for safekeeping.
+            💡 Tip: Use "Complete Backup" when switching devices. Save the ZIP
+            file to Google Drive, OneDrive, or external storage for safekeeping.
           </Text>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Images-Only Backup</Text>
           <Text style={styles.sectionDescription}>
-            Export or import ONLY your photos without any data. Useful for backing up 
-            images separately or transferring photos between devices. Total size: {formatBytes(imageStorageSize)}.
+            Export or import ONLY your photos without any data. Useful for
+            backing up images separately or transferring photos between devices.
+            Total size: {formatBytes(imageStorageSize)}.
           </Text>
 
           <TouchableOpacity
@@ -476,7 +558,9 @@ export default function SettingsScreen() {
             ) : (
               <>
                 <Ionicons name="images-outline" size={20} color="#fff" />
-                <Text style={styles.backupButtonText}>Export Images Only (ZIP)</Text>
+                <Text style={styles.backupButtonText}>
+                  Export Images Only (ZIP)
+                </Text>
               </>
             )}
           </TouchableOpacity>
@@ -493,10 +577,62 @@ export default function SettingsScreen() {
           </TouchableOpacity>
 
           <Text style={styles.backupNote}>
-            📸 Note: Images are stored with their original filenames. When imported, 
-            they'll automatically match with your existing plants and journal entries.
+            📸 Note: Images are stored with their original filenames. When
+            imported, they'll automatically match with your existing plants and
+            journal entries.
           </Text>
         </View>
+
+        {allowSentryProdTest && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Sentry Production Test</Text>
+            <Text style={styles.sectionDescription}>
+              This section appears only when EXPO_PUBLIC_SENTRY_TEST=1 to verify
+              production logging. Remove the flag after testing.
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.backupButton, styles.testButton]}
+              onPress={handleProdSentryTest}
+            >
+              <Ionicons name="bug-outline" size={20} color="#9c27b0" />
+              <Text style={[styles.backupButtonText, { color: "#9c27b0" }]}>
+                Send Production Test Event
+              </Text>
+            </TouchableOpacity>
+
+            <Text style={styles.backupNote}>
+              Check the Sentry dashboard for environment=production and tag
+              test_type:production.
+            </Text>
+          </View>
+        )}
+
+        {__DEV__ && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Developer Tools</Text>
+            <Text style={styles.sectionDescription}>
+              Test Sentry error logging and monitoring. These tools are only
+              visible in development mode.
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.backupButton, styles.testButton]}
+              onPress={handleTestSentry}
+            >
+              <Ionicons name="bug-outline" size={20} color="#9c27b0" />
+              <Text style={[styles.backupButtonText, { color: "#9c27b0" }]}>
+                Test Sentry Logging
+              </Text>
+            </TouchableOpacity>
+
+            <Text style={styles.backupNote}>
+              🔧 Tests include: Info messages, warnings, errors, breadcrumbs,
+              and custom contexts. Check your terminal for confirmation logs,
+              then verify events in the Sentry dashboard.
+            </Text>
+          </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Architecture</Text>
@@ -739,6 +875,11 @@ const createStyles = (theme: any) =>
       backgroundColor: "#fff",
       borderWidth: 2,
       borderColor: "#f57c00",
+    },
+    testButton: {
+      backgroundColor: "#fff",
+      borderWidth: 2,
+      borderColor: "#9c27b0",
     },
     backupButtonText: {
       fontSize: 16,

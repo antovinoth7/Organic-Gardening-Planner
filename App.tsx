@@ -1,25 +1,105 @@
-import React, { useEffect, useState } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
-import { auth } from './src/lib/firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { ThemeProvider, useTheme, useThemeMode } from './src/theme';
-import { ErrorBoundary } from './src/components/ErrorBoundary';
-import { logAuthError, setErrorLogUserId } from './src/utils/errorLogging';
-import { Alert } from 'react-native';
+import React, { useEffect, useState } from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { Ionicons } from "@expo/vector-icons";
+import { auth } from "./src/lib/firebase";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { ThemeProvider, useTheme, useThemeMode } from "./src/theme";
+import { ErrorBoundary } from "./src/components/ErrorBoundary";
+import { logAuthError, setErrorLogUserId } from "./src/utils/errorLogging";
+import { Alert } from "react-native";
+import * as Sentry from "@sentry/react-native";
+import packageJson from "./package.json";
 
 // Screens
-import AuthScreen from './src/screens/AuthScreen';
-import TodayScreen from './src/screens/TodayScreen';
-import PlantsScreen from './src/screens/PlantsScreen';
-import PlantFormScreen from './src/screens/PlantFormScreen';
-import PlantDetailScreen from './src/screens/PlantDetailScreen';
-import CalendarScreen from './src/screens/CalendarScreen';
-import JournalScreen from './src/screens/JournalScreen';
-import JournalFormScreen from './src/screens/JournalFormScreen';
-import SettingsScreen from './src/screens/SettingsScreen';
+import AuthScreen from "./src/screens/AuthScreen";
+import TodayScreen from "./src/screens/TodayScreen";
+import PlantsScreen from "./src/screens/PlantsScreen";
+import PlantFormScreen from "./src/screens/PlantFormScreen";
+import PlantDetailScreen from "./src/screens/PlantDetailScreen";
+import CalendarScreen from "./src/screens/CalendarScreen";
+import JournalScreen from "./src/screens/JournalScreen";
+import JournalFormScreen from "./src/screens/JournalFormScreen";
+import SettingsScreen from "./src/screens/SettingsScreen";
+
+const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+const isDev = __DEV__;
+
+// Only log Sentry config in development
+if (isDev) {
+  console.log("🔧 Sentry DSN loaded:", sentryDsn ? "YES" : "NO");
+  console.log("🔧 Environment:", isDev ? "development" : "production");
+}
+
+Sentry.init({
+  dsn: sentryDsn,
+  enabled: !!sentryDsn,
+  debug: isDev, // Debug logs only in development
+
+  // Performance Monitoring
+  tracesSampleRate: isDev ? 1.0 : 0.2, // 100% in dev, 20% in prod
+  enableAutoSessionTracking: true,
+  sessionTrackingIntervalMillis: 10000,
+
+  // Environment
+  environment: isDev ? "development" : "production",
+  release: `${packageJson.name}@${packageJson.version}`,
+  dist: packageJson.version,
+
+  // Native crash handling
+  enableNative: true,
+  enableNativeCrashHandling: true,
+
+  // Breadcrumbs - track user actions
+  maxBreadcrumbs: 50,
+
+  // Data scrubbing for privacy
+  beforeSend(event, hint) {
+    // Remove sensitive data
+    if (event.request?.headers) {
+      delete event.request.headers["Authorization"];
+      delete event.request.headers["Cookie"];
+    }
+
+    // Filter out sensitive user data
+    if (event.user?.email) {
+      event.user.email = event.user.email.replace(/(.{2}).*@/, "$1***@");
+    }
+
+    // Log in development only
+    if (isDev) {
+      console.log("📤 Sentry event:", {
+        eventId: event.event_id,
+        level: event.level,
+        message: event.message,
+        exception: event.exception?.values?.[0]?.value,
+      });
+    }
+
+    return event;
+  },
+
+  // Filter noisy breadcrumbs
+  beforeBreadcrumb(breadcrumb, hint) {
+    // Skip console logs in production
+    if (!isDev && breadcrumb.category === "console") {
+      return null;
+    }
+    return breadcrumb;
+  },
+
+  // Ignore known non-critical errors
+  ignoreErrors: [
+    "Network request failed",
+    "cancelled",
+    /timeout of \d+ms exceeded/,
+  ],
+});
+
+if (isDev) {
+  console.log("✅ Sentry initialized");
+}
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -41,17 +121,17 @@ const JournalStack = () => (
 
 const AppTabs = () => {
   const theme = useTheme();
-  
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap = 'home';
-          if (route.name === 'Home') iconName = 'home';
-          else if (route.name === 'Plants') iconName = 'leaf';
-          else if (route.name === 'Care Plan') iconName = 'calendar';
-          else if (route.name === 'Journal') iconName = 'book';
-          else if (route.name === 'Settings') iconName = 'settings';
+          let iconName: keyof typeof Ionicons.glyphMap = "home";
+          if (route.name === "Home") iconName = "home";
+          else if (route.name === "Plants") iconName = "leaf";
+          else if (route.name === "Care Plan") iconName = "calendar";
+          else if (route.name === "Journal") iconName = "book";
+          else if (route.name === "Settings") iconName = "settings";
           return <Ionicons name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: theme.tabBarActive,
@@ -63,38 +143,38 @@ const AppTabs = () => {
         headerShown: false,
       })}
     >
-    <Tab.Screen name="Home" component={TodayScreen} />
-    <Tab.Screen 
-      name="Plants" 
-      component={PlantStack}
-      listeners={({ navigation }) => ({
-        tabPress: (e) => {
-          e.preventDefault();
-          // Always reset to the root of Plants stack when tab is pressed
-          navigation.navigate('Plants', { 
-            screen: 'PlantsList',
-            params: {},
-          });
-        },
-      })}
-    />
-    <Tab.Screen name="Care Plan" component={CalendarScreen} />
-    <Tab.Screen 
-      name="Journal" 
-      component={JournalStack}
-      listeners={({ navigation }) => ({
-        tabPress: (e) => {
-          e.preventDefault();
-          // Always reset to the root of Journal stack when tab is pressed
-          navigation.navigate('Journal', { 
-            screen: 'JournalList',
-            params: {},
-          });
-        },
-      })}
-    />
-    <Tab.Screen name="Settings" component={SettingsScreen} />
-  </Tab.Navigator>
+      <Tab.Screen name="Home" component={TodayScreen} />
+      <Tab.Screen
+        name="Plants"
+        component={PlantStack}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            // Always reset to the root of Plants stack when tab is pressed
+            navigation.navigate("Plants", {
+              screen: "PlantsList",
+              params: {},
+            });
+          },
+        })}
+      />
+      <Tab.Screen name="Care Plan" component={CalendarScreen} />
+      <Tab.Screen
+        name="Journal"
+        component={JournalStack}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            // Always reset to the root of Journal stack when tab is pressed
+            navigation.navigate("Journal", {
+              screen: "JournalList",
+              params: {},
+            });
+          },
+        })}
+      />
+      <Tab.Screen name="Settings" component={SettingsScreen} />
+    </Tab.Navigator>
   );
 };
 
@@ -106,7 +186,7 @@ const AppRoot = () => {
 
   // Configure navigation theme
   const navigationTheme = {
-    dark: resolvedMode === 'dark',
+    dark: resolvedMode === "dark",
     colors: {
       primary: theme.primary,
       background: theme.background,
@@ -117,52 +197,69 @@ const AppRoot = () => {
     },
     fonts: {
       regular: {
-        fontFamily: 'System',
-        fontWeight: '400' as const,
+        fontFamily: "System",
+        fontWeight: "400" as const,
       },
       medium: {
-        fontFamily: 'System',
-        fontWeight: '500' as const,
+        fontFamily: "System",
+        fontWeight: "500" as const,
       },
       bold: {
-        fontFamily: 'System',
-        fontWeight: '700' as const,
+        fontFamily: "System",
+        fontWeight: "700" as const,
       },
       heavy: {
-        fontFamily: 'System',
-        fontWeight: '900' as const,
+        fontFamily: "System",
+        fontWeight: "900" as const,
       },
     },
   };
 
   useEffect(() => {
     let isMounted = true;
-    
+
     // Listen for auth state changes with error handling
     const unsubscribe = onAuthStateChanged(
       auth,
       (user) => {
         if (!isMounted) return;
-        
-        console.log('Auth state changed:', user ? `Logged in as ${user.email}` : 'Logged out');
+
+        if (isDev) {
+          console.log(
+            "Auth state changed:",
+            user ? `Logged in as ${user.email}` : "Logged out"
+          );
+        }
         setUser(user);
         setLoading(false);
-        
+
         // Update error logging context
         setErrorLogUserId(user?.uid);
+
+        // Set Sentry user context
+        if (user) {
+          Sentry.setUser({
+            id: user.uid,
+            email: user.email || undefined,
+          });
+          Sentry.setTag("user_authenticated", "true");
+        } else {
+          Sentry.setUser(null);
+          Sentry.setTag("user_authenticated", "false");
+        }
       },
       (error) => {
         if (!isMounted) return;
-        
-        console.error('Auth state change error:', error);
-        logAuthError('Auth state listener error', error);
+
+        console.error("Auth state change error:", error);
+        logAuthError("Auth state listener error", error);
         setLoading(false);
-        
+
         // Show user-friendly error
         Alert.alert(
-          'Authentication Error',
-          'There was a problem with your session. Please restart the app.',
-          [{ text: 'OK' }]
+          "Authentication Error",
+          "There was a problem with your session. Please restart the app.",
+          [{ text: "OK" }]
         );
       }
     );
@@ -188,7 +285,7 @@ const AppRoot = () => {
   );
 };
 
-export default function App() {
+function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
@@ -198,3 +295,4 @@ export default function App() {
   );
 }
 
+export default Sentry.wrap(App);

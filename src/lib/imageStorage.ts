@@ -133,9 +133,8 @@ export const pickImage = async (): Promise<string | null> => {
     
     // Launch image picker
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
+      mediaTypes: ImagePicker.MediaType.Images,
+      allowsEditing: false, // Let user choose original photo without forced crop
       quality: 0.8, // Compress to save space
     });
     
@@ -165,8 +164,7 @@ export const takePhoto = async (): Promise<string | null> => {
     
     // Launch camera
     const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
+      allowsEditing: false, // No forced crop - use original photo
       quality: 0.8, // Compress to save space
     });
     

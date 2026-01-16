@@ -7,6 +7,7 @@ export type SoilType = 'garden_soil' | 'potting_mix' | 'coco_peat' | 'custom';
 export type WaterRequirement = 'low' | 'medium' | 'high';
 export type HealthStatus = 'healthy' | 'stressed' | 'recovering' | 'sick';
 export type FertiliserType = 'compost' | 'vermicompost' | 'fish_emulsion' | 'seaweed' | 'neem_cake' | 'other';
+export type GrowthStage = 'seedling' | 'vegetative' | 'flowering' | 'fruiting' | 'dormant' | 'mature';
 
 export interface PestDiseaseRecord {
   id?: string;
@@ -59,6 +60,11 @@ export interface Plant {
   companion_plants?: string[] | null;
   // Expected Harvest Date
   expected_harvest_date?: string | null;
+  // PHASE 1: Growth Stage & Pruning
+  growth_stage?: GrowthStage | null;
+  pruning_frequency_days?: number | null;
+  last_pruned_date?: string | null;
+  pruning_notes?: string | null;
   // Recurring Care Schedule (for auto-generating tasks)
   care_schedule?: {
     water_frequency_days?: number;
@@ -78,6 +84,10 @@ export interface TaskTemplate {
   preferred_time: string | null;
   enabled: boolean;
   next_due_at: string;
+  // PHASE 1: Smart Scheduling
+  skip_if_raining?: boolean | null;
+  adjust_for_season?: boolean | null;
+  priority_level?: 'critical' | 'high' | 'medium' | 'low' | null;
   created_at: string;
 }
 
