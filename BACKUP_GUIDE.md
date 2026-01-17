@@ -2,70 +2,98 @@
 
 ## Why Manual Backups?
 
-This app uses **manual backups** instead of automatic cloud backup for several reasons:
+This app uses manual backups instead of automatic cloud backup for several reasons:
 
-1. **Cost**: No ongoing cloud storage costs
-2. **Control**: You choose where to store your backups (Google Drive, OneDrive, external drive, etc.)
-3. **Privacy**: Your data goes where you want it
-4. **Longevity**: Plain JSON files readable for decades
-5. **Portability**: Easy to move between services
+1. Cost: No ongoing cloud storage costs
+2. Control: You choose where to store your backups (Google Drive, OneDrive, external drive, etc.)
+3. Privacy: Your data goes where you want it
+4. Longevity: Plain JSON and ZIP files are readable for decades
+5. Portability: Easy to move between services and devices
+
+## Backup Types (Current Code)
+
+### 1) Data-only backup (JSON)
+- Includes plants, tasks, task logs, and journal entries
+- Includes image URI strings only (no actual photos)
+- File name: `garden-backup-YYYY-MM-DD.json`
+
+### 2) Complete backup with images (ZIP)
+- Includes all data plus images
+- ZIP contains `backup.json` and an `images/` folder
+- File name: `garden-backup-YYYY-MM-DD.zip`
+- Available in the backup service; UI may not expose this in every build
+
+### 3) Images-only backup (ZIP)
+- Includes photos only plus a small manifest in `backup.json`
+- Does not change data; only restores images and updates their URIs
+- File name: `garden-backup-YYYY-MM-DD.zip`
+- Available in Settings > Images-Only Backup
+- Images are matched by original filename during import
 
 ## What Gets Backed Up?
 
-### ✅ Included in Backup
+### Included in data-only JSON
+- Plants (all fields, including `photo_url` string)
+- Tasks (templates and schedules)
+- Task logs (completion history)
+- Journal entries (including `photo_urls` strings)
 
-- **Plants**: All plant data (name, type, location, notes, health, dates, etc.)
-- **Tasks**: All task templates and schedules
-- **Task Logs**: Complete history of completed tasks
-- **Journal Entries**: All journal text content
-- **Image URIs**: File paths to images (as strings)
+### Not included in data-only JSON
+- Image files
+- User credentials (Firebase Auth handles sign-in)
 
-### ❌ NOT Included in Backup
+### Included in complete ZIP
+- Everything in data-only JSON
+- All plant and journal photos stored on the device
 
-- **Actual Image Files**: Photos remain on your device
-- **User Credentials**: Firebase handles auth separately
+### Included in images-only ZIP
+- All plant and journal photos stored on the device
+- A small manifest (`exportDate`, `imageCount`, `note`)
 
-### Why Images Aren't Backed Up
+## How to Export
 
-- Images are large (2-5 MB each)
-- Would make backup files huge and slow
-- You can manually copy images separately if needed
-- For most users, retaking photos on new device is easier
+### Images-only ZIP (current Settings UI)
+1. Open the app and go to Settings.
+2. Open the "Images-Only Backup" section.
+3. Tap "Export Images Only (ZIP)".
+4. Save the file using the share sheet.
 
-## How to Export a Backup
+### Data-only JSON (if your build exposes Data Backup)
+1. Open Settings and go to Data Backup.
+2. Tap "Export Backup".
+3. Save `garden-backup-YYYY-MM-DD.json`.
 
-### Step 1: Open Settings
+### Complete ZIP with images (if exposed)
+1. Open Settings and go to Data Backup.
+2. Tap "Export Complete Backup (ZIP)".
+3. Save `garden-backup-YYYY-MM-DD.zip`.
 
-1. Launch the Garden Planner app
-2. Tap the **Settings** tab at the bottom
+### Where to save backups
+- Google Drive
+- OneDrive
+- Dropbox
+- Files app (local or iCloud)
+- External drive
+- Email (not recommended for large ZIPs)
 
-### Step 2: Export
+## How to Import
 
-1. Scroll to the **Data Backup** section
-2. You'll see statistics:
-   - Number of plants
-   - Number of tasks
-   - Number of journal entries
-   - Total image storage used
-3. Tap **Export Backup** button
-4. Wait a few seconds while the backup is created
+### Data-only JSON
+- Import & Merge: keeps existing items, adds new ones; backup wins on ID conflicts
+- Import & Replace All: replaces all local data with the backup
 
-### Step 3: Save Backup File
+### Complete ZIP with images
+- Same merge/replace behavior for data
+- Images are extracted to local storage and image URIs are updated to new paths
 
-1. Your device's share sheet will appear
-2. Choose where to save:
-   - **Google Drive**: Best for cross-platform
-   - **OneDrive**: Good for Windows/Office users
-   - **Dropbox**: Another good option
-   - **Files app**: Save to device/iCloud
-   - **Email**: Send to yourself (not recommended for large backups)
+### Images-only ZIP
+- Does not change plants, tasks, or journal content
+- Updates image URIs by matching original filenames
+- Best results if photos have not been renamed
 
-3. The file will be named: `garden-backup-YYYY-MM-DD.json`
+## Backup File Contents
 
-### Backup File Contents
-
-The backup is a plain JSON file you can open in any text editor:
-
+### Data-only JSON example
 ```json
 {
   "version": "1.0.0",
@@ -80,272 +108,153 @@ The backup is a plain JSON file you can open in any text editor:
       "created_at": "2024-03-01T10:00:00Z"
     }
   ],
-  "tasks": [...],
-  "taskLogs": [...],
-  "journal": [...]
+  "tasks": [],
+  "taskLogs": [],
+  "journal": [
+    {
+      "id": "journal_123",
+      "entry_type": "observation",
+      "content": "First flowers today",
+      "photo_urls": ["file:///path/to/image.jpg"],
+      "created_at": "2024-03-10T08:00:00Z"
+    }
+  ]
 }
 ```
 
-## How to Import a Backup
+### ZIP structure
+```
+garden-backup-YYYY-MM-DD.zip
+- backup.json
+- images/
+  - plant_1700000000000_ab12cd.jpg
+  - journal_1700000000000_ef34gh.jpg
+```
 
-### Option 1: Import & Merge
+Images-only ZIPs also contain `backup.json`, but it is only a small manifest.
 
-**Use this when**: You want to combine backup data with existing data
+## Restoring on a New Device
 
-1. Open Settings → Data Backup
-2. Tap **Import & Merge**
-3. Confirm the action
-4. Choose your backup file from cloud storage
-5. Wait for import to complete
-
-**What happens**:
-
-- Existing items are kept
-- New items from backup are added
-- If same item exists in both, backup version wins
-- Nothing is deleted
-
-### Option 2: Import & Replace All
-
-**Use this when**: You want to completely replace current data with backup
-
-⚠️ **Warning**: This will DELETE all your current data and replace it with the backup.
-
-1. Open Settings → Data Backup
-2. Tap **Import & Replace All**
-3. Read the warning carefully
-4. Confirm if you're sure
-5. Choose your backup file
-6. Wait for import to complete
-
-**What happens**:
-
-- ALL existing data is deleted
-- Backup data becomes your new data
-- Local image files are not affected
+1. Install the app and sign in with the same account.
+2. Text data syncs from Firestore.
+3. Restore photos using one of these options:
+   - Images-only ZIP import (Settings > Images-Only Backup)
+   - Complete ZIP import (if available in your build)
+4. Import a JSON backup if you need to restore or merge data.
 
 ## Backup Strategies
 
 ### Strategy 1: Personal Use (Single Device)
-
-**Frequency**: Monthly
-
-1. Export backup once a month
-2. Save to Google Drive
-3. Keep last 3 backups (delete older ones)
-
-**Why**: Simple, low maintenance, protects against accidental deletion
+- Frequency: monthly
+- Export a data-only JSON or complete ZIP
+- Keep the last 3 backups
 
 ### Strategy 2: Multi-Device User
-
-**Frequency**: Weekly
-
-1. Export backup weekly from your main device
-2. Save to cloud storage (Google Drive/OneDrive)
-3. When switching devices:
-   - Install app on new device
-   - Sign in (text data syncs automatically)
-   - Import backup if needed
-
-**Why**: Text syncs via Firebase, but images are device-local
+- Frequency: weekly
+- Export data-only JSON
+- Export images-only ZIP when moving to a new device
 
 ### Strategy 3: Paranoid User
-
-**Frequency**: Weekly + Monthly
-
-**Weekly**:
-
-1. Export backup
-2. Save to Google Drive
-
-**Monthly**:
-
-1. Export backup
-2. Save to Google Drive
-3. Download to external USB drive
-4. Store drive safely
-
-**Why**: Maximum protection, survives cloud service changes
+- Weekly: export data-only JSON or complete ZIP to cloud storage
+- Monthly: save a copy to an external drive
 
 ### Strategy 4: Casual User
-
-**Frequency**: Before major changes
-
-1. Before deleting many plants: Export backup
-2. Before app updates: Export backup
-3. Before device changes: Export backup
-
-**Why**: Minimal effort, still protected when it matters
-
-## Restoring on a New Device
-
-### Scenario 1: Got a New Phone
-
-**Text data (plants, tasks, journals)** syncs automatically:
-
-1. Install Garden Planner on new phone
-2. Sign in with same email/password
-3. Wait a few seconds
-4. All text data appears (via Firebase sync)
-
-**Images** don't sync automatically:
-
-- Option A: Retake photos (easiest)
-- Option B: Manually copy `garden_images/` folder from old phone
-- Option C: Use Syncthing or similar to sync the folder
-
-### Scenario 2: Reinstalling the App
-
-If you deleted the app and reinstalled:
-
-1. Sign in
-2. Text data syncs from Firebase
-3. Images are gone (were deleted with app)
-4. Import backup to restore data (if needed)
-5. Retake photos
-
-### Scenario 3: Switching to Different Cloud
-
-If you want to move from one cloud storage to another:
-
-1. Export backup from current setup
-2. Save to your computer
-3. Upload to new cloud service
-4. Done - backup is just a file, works anywhere
+- Export before deleting many plants, app updates, or device changes
 
 ## Troubleshooting
 
-### "Export Failed"
-
-**Possible causes**:
-
+### "Export failed"
+Possible causes:
 - Not signed in
-- No internet connection (needs to fetch from Firebase)
+- No internet connection (Firestore fetch timeout)
 - Not enough storage space
 
-**Solutions**:
+### "Import failed" (JSON)
+- Wrong file type
+- Invalid JSON
+- Missing required fields
 
-- Check you're signed in
-- Connect to internet
-- Free up device storage
+### "Import failed" (ZIP)
+- ZIP does not contain `backup.json`
+- Corrupted ZIP file
 
-### "Import Failed"
+### "No images found to export"
+- You have not saved any photos yet
 
-**Possible causes**:
+### "Images missing after import"
+- JSON backups do not include image files
+- Images-only ZIP import requires matching filenames
 
-- Invalid backup file
-- Corrupted file
-- Wrong file selected
+## Advanced: Manual Image Copy
 
-**Solutions**:
-
-- Make sure it's a `garden-backup-*.json` file
-- Try exporting a fresh backup to test
-- Check file isn't corrupted (open in text editor)
-
-### "Images Missing After Import"
-
-**This is normal** - images are not included in backups.
-
-**Solutions**:
-
-- Retake photos (recommended)
-- Manually copy `garden_images/` folder from old device
-- Use file sync tool (Syncthing, etc.)
-
-### "Can't Find Backup File"
-
-**Solutions**:
-
-- Check your cloud storage app (Drive, OneDrive)
-- Use device's "Files" app to browse
-- Search for "garden-backup"
-- Check Downloads folder
-
-## Advanced: Manual Backup of Images
-
-If you want to manually backup images too:
+If you cannot use ZIP export/import:
 
 ### Android
-
 1. Connect phone to computer via USB
-2. Navigate to: `Android/data/com.yourapp/files/garden_images/`
-3. Copy entire `garden_images` folder to computer
-4. Store in Google Drive/external drive
+2. Navigate to:
+   `Android/data/com.antovinoth7.organicgardeningapp/files/garden_images/`
+3. Copy the entire `garden_images` folder
 
 ### iOS
+1. Use Finder or iTunes file sharing (if enabled)
+2. Copy the `garden_images` folder
 
-1. Use iTunes/Finder file sharing
-2. Or use iCloud Drive (enable for app)
-3. Copy `garden_images` folder
+### Restore
+1. Copy `garden_images` back into the app documents directory
+2. Restart the app
 
-### Restore Images
-
-1. Copy `garden_images` folder back to device
-2. Place in app's documents directory
-3. App will recognize images automatically
-
-## Backup File Format
-
-For developers or advanced users:
+## Backup File Format (For Developers)
 
 ```typescript
 interface BackupData {
-  version: string;           // Backup format version (e.g., "1.0.0")
-  exportDate: string;        // ISO timestamp
-  plants: Plant[];           // Array of plant objects
-  tasks: TaskTemplate[];     // Array of task templates
-  taskLogs: TaskLog[];       // Array of task completion logs
-  journal: JournalEntry[];   // Array of journal entries
+  version: string;
+  exportDate: string;
+  plants: Plant[];
+  tasks: TaskTemplate[];
+  taskLogs: TaskLog[];
+  journal: JournalEntry[];
+}
+
+interface ImagesOnlyManifest {
+  exportDate: string;
+  imageCount: number;
+  note: string;
 }
 ```
 
-Each object includes all fields from the TypeScript types in `src/types/database.types.ts`.
+Types are defined in `src/types/database.types.ts`.
 
 ## Best Practices
 
-### ✅ Do
-
-- Export backups regularly (weekly or monthly)
-- Store backups in multiple places (cloud + external drive)
+### Do
+- Export backups regularly
+- Store backups in multiple places
 - Test importing a backup occasionally
 - Keep at least 2-3 recent backups
 - Export before major app updates
-- Name your backups descriptively if you customize them
 
-### ❌ Don't
-
-- Rely only on Firebase (it's not a backup system)
+### Don't
+- Rely only on sync as a backup
 - Store backups only on the same device
-- Forget to verify backups occasionally
+- Rename images inside a ZIP (breaks matching)
 - Share backup files (they contain your data)
-- Edit backup JSON manually (unless you know what you're doing)
 
 ## Long-Term Safety (10-15 Years)
 
 This backup system is designed for longevity:
 
-1. **Plain JSON**: Still readable in 2040
-2. **Simple format**: Easy to parse in any language
-3. **No proprietary formats**: Not locked to any vendor
-4. **Human-readable**: You can open it in any text editor
-5. **Future-proof**: Can be imported into other apps if needed
-
-Even if this app stops working in 10 years, your data is safe in JSON format and can be imported into whatever app exists then.
+1. Plain JSON and standard ZIP formats
+2. Human-readable and easy to parse
+3. No proprietary formats
+4. Easy migration to other apps
 
 ## Emergency Recovery
 
-If something goes wrong:
-
-1. **App won't open**: Uninstall, reinstall, sign in, import backup
-2. **Data looks wrong**: Import backup (use "Replace All")
-3. **Syncing issues**: Export backup, sign out, sign in, import backup
-4. **Everything lost**: Sign in, import backup from cloud storage
-
-As long as you have a backup file, your data is safe.
+1. App will not open: reinstall, sign in, import backup
+2. Data looks wrong: import backup (Replace All)
+3. Images missing: import images-only ZIP or complete ZIP
+4. Sync issues: export backup, sign out, sign in, import
 
 ---
 
-**Remember**: The best backup is the one you actually do regularly!
-
-Set a calendar reminder to export a backup monthly. It takes 30 seconds.
+Remember: the best backup is the one you do regularly.
