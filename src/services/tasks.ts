@@ -213,6 +213,71 @@ export const deleteTaskTemplate = async (id: string): Promise<void> => {
   });
 };
 
+export const deleteTasksForPlantIds = async (
+  plantIds: string[]
+): Promise<void> => {
+  const uniquePlantIds = Array.from(
+    new Set(plantIds.filter((plantId) => plantId && plantId.trim() !== ""))
+  );
+  if (uniquePlantIds.length === 0) return;
+
+  const user = auth.currentUser;
+  if (!user) throw new Error("Not authenticated");
+
+  const plantIdSet = new Set(uniquePlantIds);
+  const tasks = await getTaskTemplates();
+  const logs = await getTaskLogs();
+
+  const tasksToDelete = tasks.filter(
+    (task) => task.plant_id && plantIdSet.has(task.plant_id)
+  );
+  const logsToDelete = logs.filter(
+    (log) => log.plant_id && plantIdSet.has(log.plant_id)
+  );
+
+  for (const task of tasksToDelete) {
+    try {
+      await withTimeoutAndRetry(
+        () => deleteDoc(doc(db, TASKS_COLLECTION, task.id)),
+        { timeoutMs: 10000, maxRetries: 2 }
+      );
+    } catch (error) {
+      console.warn(`Failed to delete task template ${task.id}:`, error);
+    }
+  }
+
+  for (const log of logsToDelete) {
+    try {
+      await withTimeoutAndRetry(
+        () => deleteDoc(doc(db, TASK_LOGS_COLLECTION, log.id)),
+        { timeoutMs: 10000, maxRetries: 2 }
+      );
+    } catch (error) {
+      console.warn(`Failed to delete task log ${log.id}:`, error);
+    }
+  }
+
+  const cachedTasks = await getData<TaskTemplate>(KEYS.TASKS);
+  if (cachedTasks.length > 0) {
+    const filteredTasks = cachedTasks.filter(
+      (task) => !task.plant_id || !plantIdSet.has(task.plant_id)
+    );
+    await setData(KEYS.TASKS, filteredTasks);
+  }
+
+  const cachedLogs = await getData<TaskLog>(KEYS.TASK_LOGS);
+  if (cachedLogs.length > 0) {
+    const filteredLogs = cachedLogs.filter(
+      (log) => !log.plant_id || !plantIdSet.has(log.plant_id)
+    );
+    await setData(KEYS.TASK_LOGS, filteredLogs);
+  }
+};
+
+export const deleteTasksForPlant = async (plantId: string): Promise<void> => {
+  await deleteTasksForPlantIds([plantId]);
+};
+
 export const markTaskDone = async (
   template: TaskTemplate,
   notes?: string,

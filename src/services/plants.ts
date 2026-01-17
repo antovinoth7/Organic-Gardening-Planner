@@ -20,6 +20,7 @@ import { saveImageLocally, deleteImageLocally } from '../lib/imageStorage';
 import { getData, setData, KEYS } from '../lib/storage';
 import { withTimeoutAndRetry } from '../utils/firestoreTimeout';
 import { logError } from '../utils/errorLogging';
+import { deleteTasksForPlant } from './tasks';
 
 const PLANTS_COLLECTION = 'plants';
 const DEFAULT_PAGE_SIZE = 50;
@@ -169,6 +170,12 @@ export const deletePlant = async (id: string): Promise<void> => {
   // Delete the local image file if it exists
   if (plant?.photo_url) {
     await deleteImageLocally(plant.photo_url);
+  }
+
+  try {
+    await deleteTasksForPlant(id);
+  } catch (error) {
+    console.warn(`Failed to delete tasks for plant ${id}:`, error);
   }
   
   // Update local cache

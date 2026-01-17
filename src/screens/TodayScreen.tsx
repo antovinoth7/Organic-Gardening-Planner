@@ -29,6 +29,9 @@ export default function TodayScreen({ navigation }: any) {
   );
 
   const loadData = async () => {
+    if (isMountedRef.current) {
+      setLoading(true);
+    }
     try {
       const [tasksData, { plants: plantsData }, logs] = await Promise.all([
         getTodayTasks(),

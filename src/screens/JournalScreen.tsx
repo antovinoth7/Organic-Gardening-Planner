@@ -43,6 +43,7 @@ export default function JournalScreen({ navigation }: any) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const loadData = async () => {
+    setLoading(true);
     try {
       const [entriesData, { plants: plantsData }] = await Promise.all([
         getJournalEntries(),

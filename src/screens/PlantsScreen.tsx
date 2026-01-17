@@ -48,6 +48,7 @@ export default function PlantsScreen({ navigation }: any) {
   });
 
   const loadPlants = async () => {
+    setLoading(true);
     try {
       const { plants: data } = await getPlants();
       setPlants(data);

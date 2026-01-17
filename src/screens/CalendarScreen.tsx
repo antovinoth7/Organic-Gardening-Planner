@@ -2,14 +2,15 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Animated, Platform } from 'react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { getTaskTemplates, createTaskTemplate, markTaskDone, generateRecurringTasksFromPlants } from '../services/tasks';
-import { getPlants } from '../services/plants';
+import { getTaskTemplates, createTaskTemplate, markTaskDone, generateRecurringTasksFromPlants, deleteTasksForPlantIds } from '../services/tasks';
+import { getPlant, getPlants } from '../services/plants';
 import { getJournalEntries } from '../services/journal';
 import { TaskTemplate, Plant, TaskType, JournalEntry } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../theme';
+import { isNetworkAvailable } from '../utils/networkState';
 
 const TASK_COLORS: Record<TaskType, string> = {
   water: '#2196F3',
@@ -111,10 +112,42 @@ export default function CalendarScreen() {
       ]);
       
       if (!isMountedRef.current) return;
-      
-      setTasks(tasksData.filter(t => t.enabled));
+
+      const plantIds = new Set(plantsData.map((plant) => plant.id));
+      const filteredTasks = tasksData.filter((task) =>
+        task.enabled && (!task.plant_id || plantIds.has(task.plant_id))
+      );
+      const orphanPlantIds = Array.from(
+        new Set(
+          tasksData
+            .filter((task) => task.plant_id && !plantIds.has(task.plant_id))
+            .map((task) => task.plant_id as string)
+        )
+      );
+
+      setTasks(filteredTasks);
       setPlants(plantsData);
       setHarvestEntries(journalData.filter(e => e.entry_type === 'harvest'));
+
+      if (orphanPlantIds.length > 0 && isNetworkAvailable()) {
+        const confirmedOrphans = (
+          await Promise.all(
+            orphanPlantIds.map(async (plantId) => {
+              try {
+                const plant = await getPlant(plantId);
+                return plant ? null : plantId;
+              } catch (error) {
+                console.warn(`Failed to verify plant ${plantId}:`, error);
+                return null;
+              }
+            })
+          )
+        ).filter((plantId): plantId is string => Boolean(plantId));
+
+        if (confirmedOrphans.length > 0) {
+          await deleteTasksForPlantIds(confirmedOrphans);
+        }
+      }
     } catch (error) {
       if (!isMountedRef.current) return;
       console.error(error);

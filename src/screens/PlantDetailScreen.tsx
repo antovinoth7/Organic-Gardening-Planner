@@ -42,6 +42,9 @@ export default function PlantDetailScreen({ route, navigation }: any) {
   }, [plantId]);
 
   const loadData = async () => {
+    if (isMountedRef.current) {
+      setLoading(true);
+    }
     try {
       const [plantData, allTasks, allJournalEntries] = await Promise.all([
         getPlant(plantId),
@@ -70,7 +73,18 @@ export default function PlantDetailScreen({ route, navigation }: any) {
     }
   };
 
-  if (loading || !plant) {
+  if (!plantId) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <Text>Plant not found</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Text style={styles.link}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
         <Text>Loading...</Text>
@@ -78,7 +92,7 @@ export default function PlantDetailScreen({ route, navigation }: any) {
     );
   }
 
-  if (!plantId) {
+  if (!plant) {
     return (
       <View style={[styles.container, styles.centered]}>
         <Text>Plant not found</Text>
