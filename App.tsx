@@ -9,6 +9,7 @@ import { ThemeProvider, useTheme, useThemeMode } from "./src/theme";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import { logAuthError, setErrorLogUserId } from "./src/utils/errorLogging";
 import { Alert } from "react-native";
+import Constants from "expo-constants";
 import * as Sentry from "@sentry/react-native";
 import packageJson from "./package.json";
 
@@ -23,7 +24,19 @@ import JournalScreen from "./src/screens/JournalScreen";
 import JournalFormScreen from "./src/screens/JournalFormScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
 
-const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+const expoExtra = (Constants.expoConfig?.extra ?? {}) as Record<
+  string,
+  unknown
+>;
+const sentryDsnFromExtra =
+  typeof expoExtra["sentryDsn"] === "string"
+    ? (expoExtra["sentryDsn"] as string)
+    : undefined;
+const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN || sentryDsnFromExtra;
+const captureConsoleBreadcrumbs =
+  process.env.EXPO_PUBLIC_SENTRY_CAPTURE_CONSOLE === "1" ||
+  expoExtra["sentryCaptureConsole"] === "1" ||
+  expoExtra["sentryCaptureConsole"] === true;
 const isDev = __DEV__;
 
 // Only log Sentry config in development
@@ -83,7 +96,7 @@ Sentry.init({
   // Filter noisy breadcrumbs
   beforeBreadcrumb(breadcrumb, hint) {
     // Skip console logs in production
-    if (!isDev && breadcrumb.category === "console") {
+    if (!isDev && !captureConsoleBreadcrumbs && breadcrumb.category === "console") {
       return null;
     }
     return breadcrumb;

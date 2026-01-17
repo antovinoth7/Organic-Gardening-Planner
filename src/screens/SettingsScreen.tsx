@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import Constants from "expo-constants";
 import { auth } from "../lib/firebase";
 import { signOut } from "firebase/auth";
 import {
@@ -31,7 +32,14 @@ export default function SettingsScreen() {
   const styles = createStyles(theme);
   const scrollViewRef = useRef<ScrollView>(null);
   const [loading, setLoading] = useState(false);
-  const allowSentryProdTest = process.env.EXPO_PUBLIC_SENTRY_TEST === "1";
+  const expoExtra = (Constants.expoConfig?.extra ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const allowSentryProdTest =
+    process.env.EXPO_PUBLIC_SENTRY_TEST === "1" ||
+    expoExtra["sentryTest"] === "1" ||
+    expoExtra["sentryTest"] === true;
   const [stats, setStats] = useState<{
     plantCount: number;
     taskCount: number;
