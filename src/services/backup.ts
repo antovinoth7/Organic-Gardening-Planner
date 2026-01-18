@@ -32,16 +32,9 @@ import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
 import { createZipWithImages, extractZipWithImages } from "../utils/zipHelper";
 import { Platform } from "react-native";
 import { db, auth } from "../lib/firebase";
-import {
-  collection,
-  doc,
-  updateDoc,
-  query,
-  where,
-  getDocs,
-} from "firebase/firestore";
+import { doc, updateDoc } from "firebase/firestore";
 
-export interface BackupData {
+interface BackupData {
   version: string;
   exportDate: string;
   plants: Plant[];
@@ -156,7 +149,7 @@ export const importBackup = async (
     let backup: BackupData;
     try {
       backup = JSON.parse(fileContent);
-    } catch (parseError) {
+    } catch {
       throw new Error("Invalid JSON format in backup file");
     }
 
@@ -679,7 +672,6 @@ export const importImagesOnly = async (): Promise<number> => {
     // Update journal photo URIs in local cache
     const updatedJournal = journal.map((entry) => {
       let updated = false;
-      let entryPhotos: string[] = [];
 
       // Handle photo_urls array
       if (entry.photo_urls && entry.photo_urls.length > 0) {

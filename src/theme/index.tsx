@@ -1,11 +1,10 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useColorScheme } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { lightTheme, darkTheme, Theme } from './colors';
 import { safeGetItem, safeSetItem } from '../utils/safeStorage';
 import { logStorageError } from '../utils/errorLogging';
 
-export type ThemeMode = 'light' | 'dark' | 'system';
+type ThemeMode = 'light' | 'dark' | 'system';
 
 interface ThemeContextValue {
   mode: ThemeMode;

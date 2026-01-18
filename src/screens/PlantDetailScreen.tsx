@@ -9,14 +9,9 @@ import {
   Alert,
 } from "react-native";
 import { getPlant } from "../services/plants";
-import { getTaskTemplates, createTaskTemplate } from "../services/tasks";
+import { getTaskTemplates, getSeasonalCareReminder } from "../services/tasks";
 import { getJournalEntries } from "../services/journal";
-import {
-  Plant,
-  TaskTemplate,
-  TaskType,
-  JournalEntry,
-} from "../types/database.types";
+import { Plant, TaskTemplate, JournalEntry } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../theme";
 import { getYearsOld } from "../utils/dateHelpers";
@@ -102,6 +97,8 @@ export default function PlantDetailScreen({ route, navigation }: any) {
       </View>
     );
   }
+
+  const seasonalReminder = getSeasonalCareReminder(plant);
 
   return (
     <ScrollView style={styles.container}>
@@ -301,6 +298,12 @@ export default function PlantDetailScreen({ route, navigation }: any) {
               </Text>
             </View>
           )}
+          {seasonalReminder && (
+            <View style={styles.seasonBox}>
+              <Text style={styles.seasonTitle}>Seasonal Tip</Text>
+              <Text style={styles.seasonText}>{seasonalReminder}</Text>
+            </View>
+          )}
         </View>
 
         {/* PHASE 1: Growth & Pruning Section */}
@@ -428,7 +431,7 @@ export default function PlantDetailScreen({ route, navigation }: any) {
 
                 {/* Recent Harvests */}
                 <Text style={styles.recentTitle}>Recent Harvests</Text>
-                {harvestEntries.slice(0, 5).map((entry, index) => (
+                {harvestEntries.slice(0, 5).map((entry) => (
                   <View key={entry.id} style={styles.harvestItem}>
                     <View style={styles.harvestLeft}>
                       <Text style={styles.harvestDate}>

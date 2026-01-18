@@ -28,7 +28,7 @@ interface PlantCareProfile {
 /**
  * Plant care database organized by variety
  */
-export const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {
+const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {
   // VEGETABLES
   Tomato: {
     waterRequirement: "high",
@@ -194,10 +194,6 @@ export function getPlantCareProfile(
 /**
  * Get a list of all plants that have care profiles
  */
-export function getPlantsWithProfiles(): string[] {
-  return Object.keys(PLANT_CARE_PROFILES);
-}
-
 /**
  * Check if a plant variety has a care profile
  */

@@ -23,7 +23,6 @@ import {
   savePlantImage,
 } from "../services/plants";
 import {
-  Plant,
   SpaceType,
   PlantType,
   SunlightLevel,
@@ -38,6 +37,7 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   calculateExpectedHarvestDate,
   getCompanionSuggestions,
+  getIncompatiblePlants,
   getCommonPests,
   getCommonDiseases,
 } from "../utils/plantHelpers";
@@ -592,10 +592,6 @@ export default function PlantFormScreen({ route, navigation }: any) {
         photoUrl = await savePlantImage(photoUri);
       }
 
-      const isTree = ["fruit_tree", "timber_tree", "coconut_tree"].includes(
-        plantType
-      );
-
       const plantData: any = {
         name: name.trim(),
         plant_type: plantType,
@@ -652,10 +648,6 @@ export default function PlantFormScreen({ route, navigation }: any) {
       isSaving.current = false;
     }
   };
-
-  const isTree = ["fruit_tree", "timber_tree", "coconut_tree"].includes(
-    plantType
-  );
 
   return (
     <KeyboardAvoidingView
@@ -1263,6 +1255,29 @@ export default function PlantFormScreen({ route, navigation }: any) {
             </View>
           )}
 
+          {plantVariety && getIncompatiblePlants(plantVariety).length > 0 && (
+            <View style={styles.infoCard}>
+              <View style={styles.infoCardHeader}>
+                <Ionicons name="warning" size={20} color="#f57c00" />
+                <Text style={styles.infoCardTitle}>Avoid Planting With</Text>
+              </View>
+              <Text style={styles.infoCardSubtext}>
+                These plants tend to compete with {plantVariety}:
+              </Text>
+              <View style={styles.chipContainer}>
+                {getIncompatiblePlants(plantVariety).map(
+                  (incompatible, index) => (
+                    <View key={index} style={styles.incompatibleChip}>
+                      <Text style={styles.incompatibleChipText}>
+                        {incompatible}
+                      </Text>
+                    </View>
+                  )
+                )}
+              </View>
+            </View>
+          )}
+
           {/* Pest & Disease History */}
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionHeaderText}>
@@ -1812,6 +1827,19 @@ const createStyles = (theme: any) =>
     },
     companionChipTextSelected: {
       color: theme.accent,
+      fontWeight: "600",
+    },
+    incompatibleChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 16,
+      backgroundColor: theme.warningLight,
+      borderWidth: 1,
+      borderColor: theme.warning,
+    },
+    incompatibleChipText: {
+      fontSize: 13,
+      color: theme.warning,
       fontWeight: "600",
     },
     sectionHeaderRow: {

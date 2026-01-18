@@ -44,4 +44,4 @@ const db = getFirestore(app);
 // NOTE: Firebase Storage is NOT initialized because we don't use it
 // Images are stored locally on the device to avoid any cloud storage costs
 
-export { app, auth, db };
+export { auth, db };

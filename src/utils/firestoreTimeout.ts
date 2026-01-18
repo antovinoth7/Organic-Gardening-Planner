@@ -6,7 +6,7 @@
 
 import { isNetworkAvailable } from './networkState';
 
-export interface TimeoutOptions {
+interface TimeoutOptions {
   timeoutMs?: number;
   throwOnTimeout?: boolean;
   fallbackValue?: any;
@@ -17,7 +17,7 @@ const DEFAULT_TIMEOUT = 15000; // 15 seconds
 /**
  * Wraps a Firestore operation with timeout and network check
  */
-export async function withTimeout<T>(
+async function withTimeout<T>(
   operation: () => Promise<T>,
   options: TimeoutOptions = {}
 ): Promise<T> {
@@ -76,7 +76,7 @@ export async function withTimeout<T>(
  * Retry wrapper for Firestore operations
  * Automatically retries failed operations with exponential backoff
  */
-export async function withRetry<T>(
+async function withRetry<T>(
   operation: () => Promise<T>,
   maxRetries: number = 3,
   baseDelayMs: number = 1000
@@ -137,17 +137,3 @@ export async function withTimeoutAndRetry<T>(
   );
 }
 
-/**
- * Batch operations with timeout
- * Useful for executing multiple Firestore operations in parallel
- */
-export async function withTimeoutBatch<T>(
-  operations: Array<() => Promise<T>>,
-  timeoutMs: number = DEFAULT_TIMEOUT
-): Promise<Array<T | null>> {
-  const promises = operations.map(op =>
-    withTimeout(op, { timeoutMs, throwOnTimeout: false, fallbackValue: null })
-  );
-
-  return Promise.all(promises);
-}

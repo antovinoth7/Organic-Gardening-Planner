@@ -225,29 +225,3 @@ const uint8ArrayToBase64 = (bytes: Uint8Array): string => {
   return btoa(binary);
 };
 
-/**
- * Get size of a ZIP file in bytes
- */
-export const getZipSize = async (zipUri: string): Promise<number> => {
-  if (Platform.OS === 'web') {
-    const response = await fetch(zipUri);
-    const blob = await response.blob();
-    return blob.size;
-  } else {
-    const fileInfo = await FileSystem.getInfoAsync(zipUri);
-    return fileInfo.exists && 'size' in fileInfo ? fileInfo.size : 0;
-  }
-};
-
-/**
- * Format bytes to human readable string
- */
-export const formatBytes = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes';
-  
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-};

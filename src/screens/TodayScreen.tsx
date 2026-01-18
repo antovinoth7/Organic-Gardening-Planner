@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Alert, Modal, TextInput } from 'react-native';
-import { getTodayTasks, markTaskDone, updateTaskTemplate, getTaskLogs } from '../services/tasks';
+import { getTodayTasks, markTaskDone, updateTaskTemplate, getTaskLogs, calculateTaskPriority } from '../services/tasks';
 import { getPlants } from '../services/plants';
 import { TaskTemplate, Plant, TaskLog } from '../types/database.types';
 import TaskCard from '../components/TaskCard';
@@ -151,6 +151,12 @@ export default function TodayScreen({ navigation }: any) {
     if (!plants || plants.length === 0) return 'Unknown';
     const plant = plants.find(p => p.id === plantId);
     return plant?.name || 'Unknown';
+  }, [plants]);
+
+  const getPlantById = useCallback((plantId: string | null) => {
+    if (!plantId) return null;
+    if (!plants || plants.length === 0) return null;
+    return plants.find(p => p.id === plantId) || null;
   }, [plants]);
 
   const getDaysSince = useCallback((dateValue?: string | null) => {
@@ -358,36 +364,42 @@ export default function TodayScreen({ navigation }: any) {
               <Text style={styles.priorityText}>HIGH</Text>
             </View>
           </View>
-          {overdueTasks.map(task => (
-            <View key={task.id} style={styles.taskWrapper}>
-              <TaskCard
-                task={task}
-                plantName={getPlantName(task.plant_id)}
-                onMarkDone={() => handleMarkDone(task)}
-                isOverdue
-                disabled={completingTaskId === task.id || completedTemplateIds.has(task.id)}
-              />
-              <View style={styles.quickActions}>
-                <TouchableOpacity 
-                  style={styles.actionButton}
-                  onPress={() => handleSnooze(task, 2)}
-                >
-                  <Ionicons name="time-outline" size={16} color="#2196f3" />
-                  <Text style={styles.actionText}>Snooze 2h</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.actionButton}
-                  onPress={() => {
-                    setSelectedTask(task);
-                    setShowSkipModal(true);
-                  }}
-                >
-                  <Ionicons name="play-skip-forward-outline" size={16} color="#ff9800" />
-                  <Text style={styles.actionText}>Skip</Text>
-                </TouchableOpacity>
+          {overdueTasks.map(task => {
+            const plant = getPlantById(task.plant_id);
+            const priority = calculateTaskPriority(task, plant);
+
+            return (
+              <View key={task.id} style={styles.taskWrapper}>
+                <TaskCard
+                  task={task}
+                  plantName={getPlantName(task.plant_id)}
+                  onMarkDone={() => handleMarkDone(task)}
+                  isOverdue
+                  priority={priority}
+                  disabled={completingTaskId === task.id || completedTemplateIds.has(task.id)}
+                />
+                <View style={styles.quickActions}>
+                  <TouchableOpacity 
+                    style={styles.actionButton}
+                    onPress={() => handleSnooze(task, 2)}
+                  >
+                    <Ionicons name="time-outline" size={16} color="#2196f3" />
+                    <Text style={styles.actionText}>Snooze 2h</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.actionButton}
+                    onPress={() => {
+                      setSelectedTask(task);
+                      setShowSkipModal(true);
+                    }}
+                  >
+                    <Ionicons name="play-skip-forward-outline" size={16} color="#ff9800" />
+                    <Text style={styles.actionText}>Skip</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       )}
 
@@ -399,35 +411,41 @@ export default function TodayScreen({ navigation }: any) {
               <Text style={styles.priorityText}>MEDIUM</Text>
             </View>
           </View>
-          {todayTasks.map(task => (
-            <View key={task.id} style={styles.taskWrapper}>
-              <TaskCard
-                task={task}
-                plantName={getPlantName(task.plant_id)}
-                onMarkDone={() => handleMarkDone(task)}
-                disabled={completingTaskId === task.id || completedTemplateIds.has(task.id)}
-              />
-              <View style={styles.quickActions}>
-                <TouchableOpacity 
-                  style={styles.actionButton}
-                  onPress={() => handleSnooze(task, 4)}
-                >
-                  <Ionicons name="time-outline" size={16} color="#2196f3" />
-                  <Text style={styles.actionText}>Snooze 4h</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.actionButton}
-                  onPress={() => {
-                    setSelectedTask(task);
-                    setShowSkipModal(true);
-                  }}
-                >
-                  <Ionicons name="play-skip-forward-outline" size={16} color="#ff9800" />
-                  <Text style={styles.actionText}>Skip</Text>
-                </TouchableOpacity>
+          {todayTasks.map(task => {
+            const plant = getPlantById(task.plant_id);
+            const priority = calculateTaskPriority(task, plant);
+
+            return (
+              <View key={task.id} style={styles.taskWrapper}>
+                <TaskCard
+                  task={task}
+                  plantName={getPlantName(task.plant_id)}
+                  onMarkDone={() => handleMarkDone(task)}
+                  priority={priority}
+                  disabled={completingTaskId === task.id || completedTemplateIds.has(task.id)}
+                />
+                <View style={styles.quickActions}>
+                  <TouchableOpacity 
+                    style={styles.actionButton}
+                    onPress={() => handleSnooze(task, 4)}
+                  >
+                    <Ionicons name="time-outline" size={16} color="#2196f3" />
+                    <Text style={styles.actionText}>Snooze 4h</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.actionButton}
+                    onPress={() => {
+                      setSelectedTask(task);
+                      setShowSkipModal(true);
+                    }}
+                  >
+                    <Ionicons name="play-skip-forward-outline" size={16} color="#ff9800" />
+                    <Text style={styles.actionText}>Skip</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       )}
 

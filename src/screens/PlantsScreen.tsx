@@ -157,13 +157,14 @@ export default function PlantsScreen({ navigation }: any) {
         return sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       case 'oldest':
         return sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-      case 'health':
+      case 'health': {
         const healthOrder = { healthy: 0, recovering: 1, stressed: 2, sick: 3 };
         return sorted.sort((a, b) => {
           const aHealth = a.health_status || 'healthy';
           const bHealth = b.health_status || 'healthy';
           return healthOrder[aHealth] - healthOrder[bHealth];
         });
+      }
       case 'age':
         return sorted.sort((a, b) => {
           const aDate = a.planting_date ? new Date(a.planting_date).getTime() : 0;

@@ -161,31 +161,3 @@ class ErrorTracker {
 // Export singleton instance
 export const errorTracker = new ErrorTracker();
 
-// Convenience exports
-export const trackError = (message: string, error?: Error, context?: Record<string, any>) =>
-  errorTracker.trackError(message, error, context);
-
-export const trackWarning = (message: string, context?: Record<string, any>) =>
-  errorTracker.trackWarning(message, context);
-
-/**
- * Global error handler setup
- * Call this in your App.tsx to catch unhandled errors
- */
-export const setupGlobalErrorHandler = () => {
-  // Handle unhandled promise rejections
-  const originalHandler = global.Promise.prototype.catch;
-  global.Promise.prototype.catch = function (onRejected) {
-    return originalHandler.call(this, (error: Error) => {
-      errorTracker.trackError('Unhandled Promise Rejection', error, {
-        type: 'promise-rejection',
-      });
-      if (onRejected) {
-        return onRejected(error);
-      }
-      throw error;
-    });
-  };
-
-  logger.info('Global error handler initialized');
-};

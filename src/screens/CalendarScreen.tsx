@@ -44,7 +44,6 @@ export default function CalendarScreen() {
   const [isOneTimeTask, setIsOneTimeTask] = useState(false);
   const [startDate, setStartDate] = useState(new Date());
   const [preferredTime, setPreferredTime] = useState<'morning' | 'afternoon' | 'evening' | null>(null);
-  const [taskDescription, setTaskDescription] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
@@ -288,10 +287,9 @@ export default function CalendarScreen() {
     setIsOneTimeTask(false);
     setStartDate(new Date());
     setPreferredTime(null);
-    setTaskDescription('');
   };
 
-  const applyFrequencyPreset = (days: number, label: string) => {
+  const applyFrequencyPreset = (days: number, _label: string) => {
     try {
       setFrequencyDays(days.toString());
     } catch (error) {

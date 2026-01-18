@@ -17,7 +17,7 @@ if (Platform.OS === "android") {
     if (UIManager.setLayoutAnimationEnabledExperimental) {
       UIManager.setLayoutAnimationEnabledExperimental(true);
     }
-  } catch (e) {
+  } catch {
     // Silently ignore - not needed in New Architecture
   }
 }

@@ -68,7 +68,6 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
 
   // Get today's date range (start and end of day)
   const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const todayEnd = new Date(
     now.getFullYear(),
     now.getMonth(),
@@ -203,14 +202,6 @@ export const updateTaskTemplate = async (
     next_due_at:
       doc_data.next_due_at?.toDate?.()?.toISOString() || doc_data.next_due_at,
   } as TaskTemplate;
-};
-
-export const deleteTaskTemplate = async (id: string): Promise<void> => {
-  const docRef = doc(db, TASKS_COLLECTION, id);
-  await withTimeoutAndRetry(() => deleteDoc(docRef), {
-    timeoutMs: 10000,
-    maxRetries: 2,
-  });
 };
 
 export const deleteTasksForPlantIds = async (
@@ -368,7 +359,7 @@ export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {
     }
 
     const snapshot = await getDocs(q);
-    let logs = snapshot.docs.map((doc) => ({
+    const logs = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
       done_at:
@@ -390,7 +381,7 @@ export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {
   } catch (error) {
     console.warn("Failed to fetch from Firestore, using cached data:", error);
     const cachedLogs = await getData<TaskLog>(KEYS.TASK_LOGS);
-    let filtered = templateId
+    const filtered = templateId
       ? cachedLogs.filter((log) => log.template_id === templateId)
       : cachedLogs;
     filtered.sort(
@@ -476,35 +467,6 @@ export const generateRecurringTasksFromPlants = async (
       }
     }
   }
-};
-
-/**
- * Get the appropriate frequency for a task based on plant settings
- * (Simplified version - seasonal adjustments removed)
- */
-export const getSmartTaskFrequency = (
-  plant: Plant,
-  taskType: "water" | "fertilise"
-): number => {
-  if (taskType === "water") {
-    return plant.watering_frequency_days || 3;
-  } else if (taskType === "fertilise") {
-    return plant.fertilising_frequency_days || 14;
-  }
-
-  // Default fallback
-  return taskType === "water" ? 3 : 14;
-};
-
-/**
- * Check if a watering task should be skipped based on plant preferences
- * (Simplified version - weather intelligence features removed)
- */
-export const shouldSkipWateringTask = (
-  plant: Plant
-): { skip: boolean; reason?: string } => {
-  // Always proceed with watering (no advanced weather checks)
-  return { skip: false };
 };
 
 /**

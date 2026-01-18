@@ -68,7 +68,7 @@ Sentry.init({
   maxBreadcrumbs: 50,
 
   // Data scrubbing for privacy
-  beforeSend(event, hint) {
+  beforeSend(event, _hint) {
     // Remove sensitive data
     if (event.request?.headers) {
       delete event.request.headers["Authorization"];
@@ -94,7 +94,7 @@ Sentry.init({
   },
 
   // Filter noisy breadcrumbs
-  beforeBreadcrumb(breadcrumb, hint) {
+  beforeBreadcrumb(breadcrumb, _hint) {
     // Skip console logs in production
     if (!isDev && !captureConsoleBreadcrumbs && breadcrumb.category === "console") {
       return null;

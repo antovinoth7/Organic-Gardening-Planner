@@ -13,7 +13,6 @@
  */
 
 import * as FileSystem from 'expo-file-system/legacy';
-import * as ImagePicker from 'expo-image-picker';
 import { Platform } from 'react-native';
 
 // Directory for storing all garden images
@@ -22,7 +21,7 @@ const IMAGES_DIR = Platform.OS === 'web' ? null : `${FileSystem.documentDirector
 /**
  * Initialize the images directory if it doesn't exist
  */
-export const initImageStorage = async (): Promise<void> => {
+const initImageStorage = async (): Promise<void> => {
   // Skip on web platform
   if (Platform.OS === 'web' || !IMAGES_DIR) return;
   
@@ -113,69 +112,8 @@ export const imageExists = async (imageUri: string | null): Promise<boolean> => 
   try {
     const fileInfo = await FileSystem.getInfoAsync(imageUri);
     return fileInfo.exists;
-  } catch (error) {
+  } catch {
     return false;
-  }
-};
-
-/**
- * Pick an image from the device gallery
- * @returns The selected image URI, or null if cancelled
- */
-export const pickImage = async (): Promise<string | null> => {
-  try {
-    // Request permissions
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
-    if (!permissionResult.granted) {
-      throw new Error('Permission to access media library is required');
-    }
-    
-    // Launch image picker
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaType.Images,
-      allowsEditing: false, // Let user choose original photo without forced crop
-      quality: 0.8, // Compress to save space
-    });
-    
-    if (!result.canceled && result.assets[0]) {
-      return result.assets[0].uri;
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Error picking image:', error);
-    throw error;
-  }
-};
-
-/**
- * Take a photo with the device camera
- * @returns The captured photo URI, or null if cancelled
- */
-export const takePhoto = async (): Promise<string | null> => {
-  try {
-    // Request permissions
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    
-    if (!permissionResult.granted) {
-      throw new Error('Permission to access camera is required');
-    }
-    
-    // Launch camera
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: false, // No forced crop - use original photo
-      quality: 0.8, // Compress to save space
-    });
-    
-    if (!result.canceled && result.assets[0]) {
-      return result.assets[0].uri;
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Error taking photo:', error);
-    throw error;
   }
 };
 
@@ -210,22 +148,3 @@ export const getImageStorageSize = async (): Promise<number> => {
   }
 };
 
-/**
- * Get all image URIs in storage
- * @returns Array of image URIs
- */
-export const getAllImageUris = async (): Promise<string[]> => {
-  // On web, we can't list images from local storage
-  if (Platform.OS === 'web') return [];
-  
-  try {
-    await initImageStorage();
-    if (!IMAGES_DIR) return [];
-    
-    const files = await FileSystem.readDirectoryAsync(IMAGES_DIR);
-    return files.map(file => `${IMAGES_DIR}${file}`);
-  } catch (error) {
-    console.error('Error listing images:', error);
-    return [];
-  }
-};

@@ -51,8 +51,6 @@ const storageQueue = new StorageQueue();
  */
 export const safeGetData = async <T>(key: string, retries = 2): Promise<T[]> => {
   return storageQueue.add(async () => {
-    let lastError: any;
-
     for (let i = 0; i <= retries; i++) {
       try {
         const jsonValue = await AsyncStorage.getItem(key);
@@ -68,7 +66,6 @@ export const safeGetData = async <T>(key: string, retries = 2): Promise<T[]> => 
         
         return parsed;
       } catch (e: any) {
-        lastError = e;
         console.error(`Error reading ${key} (attempt ${i + 1}/${retries + 1}):`, e);
         
         // If JSON parse error, data is corrupted - clear it
@@ -129,13 +126,10 @@ export const safeSetData = async <T>(key: string, value: T[], retries = 2): Prom
  */
 export const safeGetItem = async (key: string, retries = 2): Promise<string | null> => {
   return storageQueue.add(async () => {
-    let lastError: any;
-
     for (let i = 0; i <= retries; i++) {
       try {
         return await AsyncStorage.getItem(key);
       } catch (e: any) {
-        lastError = e;
         console.error(`Error reading item ${key} (attempt ${i + 1}/${retries + 1}):`, e);
         
         if (i < retries) {
@@ -154,14 +148,11 @@ export const safeGetItem = async (key: string, retries = 2): Promise<string | nu
  */
 export const safeSetItem = async (key: string, value: string, retries = 2): Promise<boolean> => {
   return storageQueue.add(async () => {
-    let lastError: any;
-
     for (let i = 0; i <= retries; i++) {
       try {
         await AsyncStorage.setItem(key, value);
         return true;
       } catch (e: any) {
-        lastError = e;
         console.error(`Error saving item ${key} (attempt ${i + 1}/${retries + 1}):`, e);
         
         if (i < retries) {
@@ -175,32 +166,3 @@ export const safeSetItem = async (key: string, value: string, retries = 2): Prom
   });
 };
 
-/**
- * Safe remove
- */
-export const safeRemoveItem = async (key: string): Promise<boolean> => {
-  return storageQueue.add(async () => {
-    try {
-      await AsyncStorage.removeItem(key);
-      return true;
-    } catch (e) {
-      console.error(`Error removing ${key}:`, e);
-      return false;
-    }
-  });
-};
-
-/**
- * Clear all storage (use with caution)
- */
-export const safeClearAll = async (): Promise<boolean> => {
-  return storageQueue.add(async () => {
-    try {
-      await AsyncStorage.clear();
-      return true;
-    } catch (e) {
-      console.error('Error clearing storage:', e);
-      return false;
-    }
-  });
-};

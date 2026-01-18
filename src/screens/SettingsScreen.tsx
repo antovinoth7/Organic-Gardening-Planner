@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Constants from "expo-constants";
 import { auth } from "../lib/firebase";
 import { signOut } from "firebase/auth";
 import {
@@ -32,14 +31,7 @@ export default function SettingsScreen() {
   const styles = createStyles(theme);
   const scrollViewRef = useRef<ScrollView>(null);
   const [loading, setLoading] = useState(false);
-  const expoExtra = (Constants.expoConfig?.extra ?? {}) as Record<
-    string,
-    unknown
-  >;
-  const allowSentryProdTest =
-    process.env.EXPO_PUBLIC_SENTRY_TEST === "1" ||
-    expoExtra["sentryTest"] === "1" ||
-    expoExtra["sentryTest"] === true;
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [stats, setStats] = useState<{
     plantCount: number;
     taskCount: number;
@@ -314,6 +306,17 @@ export default function SettingsScreen() {
         error?.message || "Unknown error"
       );
     }
+  };
+
+  const confirmProdSentryTest = () => {
+    Alert.alert(
+      "Send Production Test",
+      "This will send a test event to your production Sentry project. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Send", onPress: handleProdSentryTest },
+      ]
+    );
   };
 
   const handleSignOut = async () => {
@@ -591,57 +594,58 @@ export default function SettingsScreen() {
           </Text>
         </View>
 
-        {allowSentryProdTest && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Sentry Production Test</Text>
-            <Text style={styles.sectionDescription}>
-              This section appears only when EXPO_PUBLIC_SENTRY_TEST=1 to verify
-              production logging. Remove the flag after testing.
-            </Text>
-
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Diagnostics</Text>
             <TouchableOpacity
-              style={[styles.backupButton, styles.testButton]}
-              onPress={handleProdSentryTest}
+              style={styles.sectionToggle}
+              onPress={() => setShowDiagnostics((prev) => !prev)}
             >
-              <Ionicons name="bug-outline" size={20} color="#9c27b0" />
-              <Text style={[styles.backupButtonText, { color: "#9c27b0" }]}>
-                Send Production Test Event
-              </Text>
+              <Ionicons
+                name={showDiagnostics ? "chevron-up" : "chevron-down"}
+                size={20}
+                color={theme.textSecondary}
+              />
             </TouchableOpacity>
-
-            <Text style={styles.backupNote}>
-              Check the Sentry dashboard for environment=production and tag
-              test_type:production.
-            </Text>
           </View>
-        )}
+          <Text style={styles.sectionDescription}>
+            Optional tools for validating error reporting. Use only when
+            troubleshooting.
+          </Text>
 
-        {__DEV__ && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Developer Tools</Text>
-            <Text style={styles.sectionDescription}>
-              Test Sentry error logging and monitoring. These tools are only
-              visible in development mode.
-            </Text>
+          {showDiagnostics && (
+            <>
+              <TouchableOpacity
+                style={[styles.backupButton, styles.testButton]}
+                onPress={handleTestSentry}
+              >
+                <Ionicons name="bug-outline" size={20} color="#9c27b0" />
+                <Text style={[styles.backupButtonText, { color: "#9c27b0" }]}>
+                  Test Sentry Logging
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.backupButton, styles.testButton]}
-              onPress={handleTestSentry}
-            >
-              <Ionicons name="bug-outline" size={20} color="#9c27b0" />
-              <Text style={[styles.backupButtonText, { color: "#9c27b0" }]}>
-                Test Sentry Logging
+              <Text style={styles.backupNote}>
+                Tests include info messages, warnings, errors, breadcrumbs, and
+                custom contexts.
               </Text>
-            </TouchableOpacity>
 
-            <Text style={styles.backupNote}>
-              🔧 Tests include: Info messages, warnings, errors, breadcrumbs,
-              and custom contexts. Check your terminal for confirmation logs,
-              then verify events in the Sentry dashboard.
-            </Text>
-          </View>
-        )}
+              <TouchableOpacity
+                style={[styles.backupButton, styles.testButton]}
+                onPress={confirmProdSentryTest}
+              >
+                <Ionicons name="bug-outline" size={20} color="#9c27b0" />
+                <Text style={[styles.backupButtonText, { color: "#9c27b0" }]}>
+                  Send Production Test Event
+                </Text>
+              </TouchableOpacity>
 
+              <Text style={styles.backupNote}>
+                Sends a test event to production with tag test_type:production.
+              </Text>
+            </>
+          )}
+        </View>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Architecture</Text>
 
@@ -763,6 +767,14 @@ const createStyles = (theme: any) =>
     },
     section: {
       marginBottom: 24,
+    },
+    sectionHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    sectionToggle: {
+      padding: 4,
     },
     sectionTitle: {
       fontSize: 16,

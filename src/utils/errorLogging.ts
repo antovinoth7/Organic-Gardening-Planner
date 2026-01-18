@@ -25,12 +25,15 @@ export const logError = (
   error?: Error | any,
   context?: Record<string, any>
 ) => {
+  const userId = currentUserId;
+  const enrichedContext = { ...context, type, userId };
   const errorLog: ErrorLog = {
     timestamp: new Date().toISOString(),
     type,
     message,
     stack: error?.stack || new Error().stack,
-    context,
+    context: enrichedContext,
+    userId,
   };
 
   errorLogs.push(errorLog);
@@ -47,22 +50,8 @@ export const logError = (
 
   // Send to error tracker (can forward to Sentry)
   import('../utils/errorTracker').then(({ errorTracker }) => {
-    errorTracker.trackError(message, error, { ...context, type });
+    errorTracker.trackError(message, error, enrichedContext);
   });
-};
-
-/**
- * Log warning (non-critical errors)
- */
-export const logWarning = (message: string, context?: Record<string, any>) => {
-  logError('warning', message, undefined, context);
-};
-
-/**
- * Log network-related errors
- */
-export const logNetworkError = (message: string, error?: Error, context?: Record<string, any>) => {
-  logError('network', message, error, context);
 };
 
 /**
@@ -80,42 +69,10 @@ export const logStorageError = (message: string, error?: Error, context?: Record
 };
 
 /**
- * Log app crash
- */
-export const logCrash = (message: string, error: Error, context?: Record<string, any>) => {
-  logError('crash', message, error, context);
-};
-
-/**
- * Get all error logs (for debugging or reporting)
- */
-export const getErrorLogs = (): ErrorLog[] => {
-  return [...errorLogs];
-};
-
-/**
- * Clear error logs
- */
-export const clearErrorLogs = () => {
-  errorLogs.length = 0;
-};
-
-/**
- * Export error logs as JSON string
- */
-export const exportErrorLogs = (): string => {
-  return JSON.stringify(errorLogs, null, 2);
-};
-
-/**
  * Set user context for error logs
  */
 let currentUserId: string | undefined;
 
 export const setErrorLogUserId = (userId: string | undefined) => {
   currentUserId = userId;
-};
-
-export const getErrorLogUserId = (): string | undefined => {
-  return currentUserId;
 };

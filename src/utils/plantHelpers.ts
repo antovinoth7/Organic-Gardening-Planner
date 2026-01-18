@@ -1,7 +1,7 @@
 import { PlantType } from "../types/database.types";
 
 // Companion planting data
-export const COMPANION_PLANTS: Record<string, string[]> = {
+const COMPANION_PLANTS: Record<string, string[]> = {
   // Vegetables
   Tomato: ["Basil", "Marigold", "Carrot", "Onion", "Parsley", "Lettuce"],
   Carrot: ["Onion", "Tomato", "Lettuce", "Rosemary", "Sage"],
@@ -57,7 +57,7 @@ export const COMPANION_PLANTS: Record<string, string[]> = {
 };
 
 // Plants to avoid together (incompatible companions)
-export const INCOMPATIBLE_PLANTS: Record<string, string[]> = {
+const INCOMPATIBLE_PLANTS: Record<string, string[]> = {
   Tomato: ["Cabbage", "Potato", "Fennel", "Corn"],
   Carrot: ["Dill", "Parsnip", "Celery"],
   Onion: ["Beans", "Peas", "Sage"],
@@ -72,7 +72,7 @@ export const INCOMPATIBLE_PLANTS: Record<string, string[]> = {
 };
 
 // Days to maturity/harvest for different plants (from planting date)
-export const DAYS_TO_HARVEST: Record<string, number> = {
+const DAYS_TO_HARVEST: Record<string, number> = {
   // Vegetables (days)
   Tomato: 75,
   Carrot: 70,
@@ -109,7 +109,7 @@ export const DAYS_TO_HARVEST: Record<string, number> = {
 };
 
 // Days to maturity for fruit trees (years converted to days)
-export const YEARS_TO_FIRST_HARVEST: Record<string, number> = {
+const YEARS_TO_FIRST_HARVEST: Record<string, number> = {
   Mango: 3,
   Orange: 3,
   Banana: 1,
@@ -200,7 +200,7 @@ export function getIncompatiblePlants(
 /**
  * Common pests and diseases for different plant types
  */
-export const COMMON_PESTS_DISEASES: Record<
+const COMMON_PESTS_DISEASES: Record<
   PlantType,
   { pests: string[]; diseases: string[] }
 > = {

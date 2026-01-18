@@ -9,7 +9,7 @@
 // Check if we're in development mode
 const isDevelopment = process.env.NODE_ENV === 'development' || typeof __DEV__ !== 'undefined' && __DEV__;
 
-export enum LogLevel {
+enum LogLevel {
   DEBUG = 'debug',
   INFO = 'info',
   WARN = 'warn',
@@ -158,8 +158,3 @@ if (!isDevelopment) {
   logger.setMinLevel(LogLevel.INFO);
 }
 
-// Convenience exports
-export const logDebug = (message: string, options?: LogOptions) => logger.debug(message, options);
-export const logInfo = (message: string, options?: LogOptions) => logger.info(message, options);
-export const logWarn = (message: string, error?: Error, options?: LogOptions) => logger.warn(message, error, options);
-export const logError = (message: string, error?: Error, options?: LogOptions) => logger.error(message, error, options);

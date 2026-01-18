@@ -31,7 +31,6 @@ export default function JournalScreen({ navigation }: any) {
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState<string | null>(null);
-  const [selectedPlant, setSelectedPlant] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<
     "all" | "week" | "month" | "year"
   >("all");
@@ -159,10 +158,6 @@ export default function JournalScreen({ navigation }: any) {
     }
 
     // Plant filter
-    if (selectedPlant) {
-      filtered = filtered.filter((e) => e.plant_id === selectedPlant);
-    }
-
     // Date filter
     if (dateFilter !== "all") {
       const now = new Date();
@@ -180,7 +175,7 @@ export default function JournalScreen({ navigation }: any) {
     }
 
     return filtered;
-  }, [entries, searchQuery, selectedType, selectedPlant, dateFilter, plants]);
+  }, [entries, searchQuery, selectedType, dateFilter, plants]);
 
   // Get all photos for gallery view
   const allPhotos = useMemo(() => {
@@ -593,17 +588,13 @@ export default function JournalScreen({ navigation }: any) {
                 <Ionicons name="book-outline" size={64} color={theme.border} />
                 <Text style={styles.emptyText}>
                   {searchQuery ||
-                  selectedType ||
-                  selectedPlant ||
-                  dateFilter !== "all"
+                  selectedType || dateFilter !== "all"
                     ? "No entries match your filters"
                     : "No journal entries yet"}
                 </Text>
                 <Text style={styles.emptySubtext}>
                   {searchQuery ||
-                  selectedType ||
-                  selectedPlant ||
-                  dateFilter !== "all"
+                  selectedType || dateFilter !== "all"
                     ? "Try adjusting your filters"
                     : "Start documenting your garden journey"}
                 </Text>
