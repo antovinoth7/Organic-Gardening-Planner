@@ -17,6 +17,7 @@ import { getPlants } from "../services/plants";
 import { JournalEntry, Plant } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../theme";
+import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 
 const { width } = Dimensions.get("window");
 
@@ -306,7 +307,7 @@ export default function JournalScreen({ navigation }: any) {
               placeholder="Search entries..."
               placeholderTextColor={theme.textSecondary}
               value={searchQuery}
-              onChangeText={setSearchQuery}
+              onChangeText={(text) => setSearchQuery(sanitizeAlphaNumericSpaces(text))}
             />
             {searchQuery !== "" && (
               <TouchableOpacity onPress={() => setSearchQuery("")}>

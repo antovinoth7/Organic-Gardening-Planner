@@ -3,11 +3,11 @@ import { db, auth } from '../lib/firebase';
 import { 
   collection, 
   doc, 
+  documentId,
   getDocs, 
   getDoc, 
   addDoc, 
   updateDoc, 
-  deleteDoc, 
   query, 
   where, 
   orderBy,
@@ -16,11 +16,10 @@ import {
   QueryDocumentSnapshot,
   Timestamp 
 } from 'firebase/firestore';
-import { saveImageLocally, deleteImageLocally } from '../lib/imageStorage';
+import { saveImageLocally } from '../lib/imageStorage';
 import { getData, setData, KEYS } from '../lib/storage';
 import { withTimeoutAndRetry } from '../utils/firestoreTimeout';
 import { logError } from '../utils/errorLogging';
-import { deleteTasksForPlant } from './tasks';
 
 const PLANTS_COLLECTION = 'plants';
 const DEFAULT_PAGE_SIZE = 50;
@@ -63,20 +62,26 @@ export const getPlants = async (
       { timeoutMs: 15000, maxRetries: 2 }
     );
     
-    const plants = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      plant_type: doc.data().plant_type || 'vegetable',
-      created_at: doc.data().created_at?.toDate?.()?.toISOString() || doc.data().created_at
-    })) as Plant[];
+    const plants = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        plant_type: data.plant_type || 'vegetable',
+        created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at,
+        deleted_at: data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
+        is_deleted: data.is_deleted ?? false,
+      };
+    }) as Plant[];
+    const activePlants = plants.filter((plant) => !plant.is_deleted);
     
     // Cache the results locally (only first page to avoid memory issues)
     if (!lastDoc) {
-      await setData(KEYS.PLANTS, plants);
+      await setData(KEYS.PLANTS, activePlants);
     }
     
     return {
-      plants,
+      plants: activePlants,
       lastDoc: snapshot.docs[snapshot.docs.length - 1]
     };
   } catch (error) {
@@ -84,7 +89,7 @@ export const getPlants = async (
     logError('network', 'Failed to fetch plants from Firestore', error as Error, { userId: user.uid });
     // Fall back to cached data if offline
     const cachedPlants = await getData<Plant>(KEYS.PLANTS);
-    return { plants: cachedPlants };
+    return { plants: cachedPlants.filter((plant) => !plant.is_deleted) };
   }
 };
 
@@ -97,12 +102,77 @@ export const getPlant = async (id: string): Promise<Plant | null> => {
   );
   
   if (!docSnap.exists()) return null;
+
+  const data = docSnap.data();
+  if (data.is_deleted) return null;
   
   return {
     id: docSnap.id,
-    ...docSnap.data(),
-    created_at: docSnap.data().created_at?.toDate?.()?.toISOString() || docSnap.data().created_at
+    ...data,
+    created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at,
+    deleted_at: data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
+    is_deleted: data.is_deleted ?? false,
   } as Plant;
+};
+
+export const getArchivedPlants = async (): Promise<Plant[]> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+
+  try {
+    const q = query(
+      collection(db, PLANTS_COLLECTION),
+      where('user_id', '==', user.uid),
+      where('is_deleted', '==', true)
+    );
+
+    const snapshot = await withTimeoutAndRetry(
+      () => getDocs(q),
+      { timeoutMs: 15000, maxRetries: 2 }
+    );
+
+    const plants = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        plant_type: data.plant_type || 'vegetable',
+        created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at,
+        deleted_at: data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
+        is_deleted: data.is_deleted ?? false,
+      };
+    }) as Plant[];
+
+    plants.sort((a, b) => {
+      const aDate = new Date(a.deleted_at || a.created_at).getTime();
+      const bDate = new Date(b.deleted_at || b.created_at).getTime();
+      return bDate - aDate;
+    });
+
+    return plants;
+  } catch (error) {
+    console.warn('Failed to fetch archived plants, using cached data:', error);
+    const cachedPlants = await getData<Plant>(KEYS.PLANTS);
+    return cachedPlants.filter((plant) => plant.is_deleted);
+  }
+};
+
+export const plantExists = async (id: string): Promise<boolean> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+
+  const q = query(
+    collection(db, PLANTS_COLLECTION),
+    where('user_id', '==', user.uid),
+    where(documentId(), '==', id)
+  );
+
+  const snapshot = await withTimeoutAndRetry(
+    () => getDocs(q),
+    { timeoutMs: 10000, maxRetries: 2 }
+  );
+
+  return !snapshot.empty;
 };
 
 export const createPlant = async (plant: Omit<Plant, 'id' | 'user_id' | 'created_at'>): Promise<Plant> => {
@@ -160,28 +230,60 @@ export const updatePlant = async (id: string, updates: Partial<Plant>): Promise<
 };
 
 export const deletePlant = async (id: string): Promise<void> => {
-  // Get the plant to find its image URI
-  const plant = await getPlant(id);
-  
-  // Delete from Firestore
   const docRef = doc(db, PLANTS_COLLECTION, id);
-  await deleteDoc(docRef);
-  
-  // Delete the local image file if it exists
-  if (plant?.photo_url) {
-    await deleteImageLocally(plant.photo_url);
-  }
-
-  try {
-    await deleteTasksForPlant(id);
-  } catch (error) {
-    console.warn(`Failed to delete tasks for plant ${id}:`, error);
-  }
+  await withTimeoutAndRetry(
+    () =>
+      updateDoc(docRef, {
+        is_deleted: true,
+        deleted_at: Timestamp.now(),
+      }),
+    { timeoutMs: 10000, maxRetries: 2 }
+  );
   
   // Update local cache
   const cachedPlants = await getData<Plant>(KEYS.PLANTS);
   const filtered = cachedPlants.filter(p => p.id !== id);
   await setData(KEYS.PLANTS, filtered);
+};
+
+export const restorePlant = async (id: string): Promise<Plant> => {
+  const docRef = doc(db, PLANTS_COLLECTION, id);
+  await withTimeoutAndRetry(
+    () =>
+      updateDoc(docRef, {
+        is_deleted: false,
+        deleted_at: null,
+      }),
+    { timeoutMs: 10000, maxRetries: 2 }
+  );
+
+  const docSnap = await withTimeoutAndRetry(
+    () => getDoc(docRef),
+    { timeoutMs: 10000, maxRetries: 2 }
+  );
+
+  if (!docSnap.exists()) throw new Error('Plant not found');
+
+  const data = docSnap.data();
+  const restored = {
+    id: docSnap.id,
+    ...data,
+    plant_type: data.plant_type || 'vegetable',
+    created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at,
+    deleted_at: data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
+    is_deleted: data.is_deleted ?? false,
+  } as Plant;
+
+  const cachedPlants = await getData<Plant>(KEYS.PLANTS);
+  const index = cachedPlants.findIndex(p => p.id === id);
+  if (index !== -1) {
+    cachedPlants[index] = restored;
+  } else {
+    cachedPlants.push(restored);
+  }
+  await setData(KEYS.PLANTS, cachedPlants);
+
+  return restored;
 };
 
 /**

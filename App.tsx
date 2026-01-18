@@ -17,6 +17,7 @@ import packageJson from "./package.json";
 import AuthScreen from "./src/screens/AuthScreen";
 import TodayScreen from "./src/screens/TodayScreen";
 import PlantsScreen from "./src/screens/PlantsScreen";
+import ArchivedPlantsScreen from "./src/screens/ArchivedPlantsScreen";
 import PlantFormScreen from "./src/screens/PlantFormScreen";
 import PlantDetailScreen from "./src/screens/PlantDetailScreen";
 import CalendarScreen from "./src/screens/CalendarScreen";
@@ -120,6 +121,7 @@ const Stack = createNativeStackNavigator();
 const PlantStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="PlantsList" component={PlantsScreen} />
+    <Stack.Screen name="ArchivedPlants" component={ArchivedPlantsScreen} />
     <Stack.Screen name="PlantDetail" component={PlantDetailScreen} />
     <Stack.Screen name="PlantForm" component={PlantFormScreen} />
   </Stack.Navigator>

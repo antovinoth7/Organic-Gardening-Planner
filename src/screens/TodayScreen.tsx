@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../theme';
+import { sanitizeAlphaNumericSpaces } from '../utils/textSanitizer';
 
 export default function TodayScreen({ navigation }: any) {
   const theme = useTheme();
@@ -44,13 +45,17 @@ export default function TodayScreen({ navigation }: any) {
       // Filter logs for today only
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+      const plantIds = new Set(plantsData.map((plant) => plant.id));
+      const filteredTasks = tasksData.filter(
+        (task) => !task.plant_id || plantIds.has(task.plant_id)
+      );
       const todayLogs = logs.filter(log => {
         const logDate = new Date(log.done_at);
         logDate.setHours(0, 0, 0, 0);
         return logDate.getTime() === today.getTime();
-      });
-      
-      setTasks(tasksData);
+      }).filter((log) => !log.plant_id || plantIds.has(log.plant_id));
+
+      setTasks(filteredTasks);
       setPlants(plantsData);
       setTaskLogs(todayLogs);
     } catch (error: any) {
@@ -481,7 +486,7 @@ export default function TodayScreen({ navigation }: any) {
               style={styles.modalInput}
               placeholder="Reason (optional)"
               value={skipReason}
-              onChangeText={setSkipReason}
+              onChangeText={(text) => setSkipReason(sanitizeAlphaNumericSpaces(text))}
               placeholderTextColor="#999"
               multiline
             />

@@ -1,4 +1,4 @@
-import { TaskTemplate, TaskLog, Plant } from "../types/database.types";
+import { TaskTemplate, TaskLog, Plant, TaskType } from "../types/database.types";
 import { db, auth } from "../lib/firebase";
 import {
   collection,
@@ -391,6 +391,36 @@ export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {
   }
 };
 
+const parseDateValue = (value?: string | null): Date | null => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+};
+
+const computeNextDueAt = (
+  plant: Plant,
+  taskType: TaskType,
+  frequency: number
+): string => {
+  const reference =
+    taskType === "water"
+      ? plant.last_watered_date
+      : taskType === "fertilise"
+      ? plant.last_fertilised_date
+      : taskType === "prune"
+      ? plant.last_pruned_date
+      : null;
+
+  const base = parseDateValue(reference) || new Date();
+
+  const nextDueAt = new Date(base);
+  nextDueAt.setDate(nextDueAt.getDate() + frequency);
+  nextDueAt.setHours(18, 0, 0, 0);
+
+  return nextDueAt.toISOString();
+};
+
 /**
  * Generate recurring tasks from plant care schedules
  * This will create task templates for plants that have care schedules configured
@@ -421,7 +451,11 @@ export const generateRecurringTasksFromPlants = async (
           plant_id: plant.id,
           task_type: "water",
           frequency_days: schedule.water_frequency_days,
-          next_due_at: new Date().toISOString(),
+          next_due_at: computeNextDueAt(
+            plant,
+            "water",
+            schedule.water_frequency_days
+          ),
           enabled: true,
           preferred_time: null,
         });
@@ -442,7 +476,11 @@ export const generateRecurringTasksFromPlants = async (
           plant_id: plant.id,
           task_type: "fertilise",
           frequency_days: schedule.fertilise_frequency_days,
-          next_due_at: new Date().toISOString(),
+          next_due_at: computeNextDueAt(
+            plant,
+            "fertilise",
+            schedule.fertilise_frequency_days
+          ),
           enabled: true,
           preferred_time: null,
         });
@@ -460,12 +498,73 @@ export const generateRecurringTasksFromPlants = async (
           plant_id: plant.id,
           task_type: "prune",
           frequency_days: schedule.prune_frequency_days,
-          next_due_at: new Date().toISOString(),
+          next_due_at: computeNextDueAt(
+            plant,
+            "prune",
+            schedule.prune_frequency_days
+          ),
           enabled: true,
           preferred_time: null,
         });
       }
     }
+  }
+};
+
+export const syncCareTasksForPlant = async (plant: Plant): Promise<void> => {
+  if (!plant?.id) return;
+
+  const desiredFrequencies = [
+    { taskType: "water" as TaskType, frequency: plant.watering_frequency_days },
+    { taskType: "fertilise" as TaskType, frequency: plant.fertilising_frequency_days },
+    { taskType: "prune" as TaskType, frequency: plant.pruning_frequency_days },
+  ].filter(
+    (item) =>
+      typeof item.frequency === "number" &&
+      Number.isFinite(item.frequency) &&
+      item.frequency > 0
+  ) as Array<{ taskType: TaskType; frequency: number }>;
+
+  if (desiredFrequencies.length === 0) return;
+
+  const existingTasks = await getTaskTemplates();
+  const plantTasks = existingTasks.filter(
+    (task) => task.plant_id === plant.id
+  );
+  const plantCreatedAt = parseDateValue(plant.created_at);
+
+  for (const { taskType, frequency } of desiredFrequencies) {
+    const nextDueAt = computeNextDueAt(plant, taskType, frequency);
+    const existing = plantTasks.find((task) => task.task_type === taskType);
+    if (existing) {
+      const updates: Partial<TaskTemplate> = {};
+      if (existing.frequency_days !== frequency) {
+        updates.frequency_days = frequency;
+        updates.next_due_at = nextDueAt;
+      }
+      if (!existing.enabled) {
+        updates.enabled = true;
+      }
+      const existingDueDate = parseDateValue(existing.next_due_at);
+      if (!existingDueDate) {
+        updates.next_due_at = nextDueAt;
+      } else if (plantCreatedAt && existingDueDate < plantCreatedAt) {
+        updates.next_due_at = nextDueAt;
+      }
+      if (Object.keys(updates).length > 0) {
+        await updateTaskTemplate(existing.id, updates);
+      }
+      continue;
+    }
+
+    await createTaskTemplate({
+      plant_id: plant.id,
+      task_type: taskType,
+      frequency_days: frequency,
+      next_due_at: nextDueAt,
+      enabled: true,
+      preferred_time: null,
+    });
   }
 };
 

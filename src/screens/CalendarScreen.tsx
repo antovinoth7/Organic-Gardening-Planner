@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput,
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { getTaskTemplates, createTaskTemplate, markTaskDone, generateRecurringTasksFromPlants, deleteTasksForPlantIds } from '../services/tasks';
-import { getPlant, getPlants } from '../services/plants';
+import { getPlants, plantExists } from '../services/plants';
 import { getJournalEntries } from '../services/journal';
 import { TaskTemplate, Plant, TaskType, JournalEntry } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../theme';
 import { isNetworkAvailable } from '../utils/networkState';
+import { sanitizeAlphaNumericSpaces } from '../utils/textSanitizer';
 
 const TASK_COLORS: Record<TaskType, string> = {
   water: '#2196F3',
@@ -133,10 +134,13 @@ export default function CalendarScreen() {
           await Promise.all(
             orphanPlantIds.map(async (plantId) => {
               try {
-                const plant = await getPlant(plantId);
-                return plant ? null : plantId;
+                const exists = await plantExists(plantId);
+                return exists ? null : plantId;
               } catch (error) {
-                console.warn(`Failed to verify plant ${plantId}:`, error);
+                const errorCode = (error as { code?: string })?.code;
+                if (errorCode !== 'permission-denied' && errorCode !== 'unauthenticated') {
+                  console.warn(`Failed to verify plant ${plantId}:`, error);
+                }
                 return null;
               }
             })
@@ -1041,7 +1045,7 @@ export default function CalendarScreen() {
                   style={[styles.input, styles.notesInput]}
                   placeholder="e.g., Soil was dry, found some pests..."
                   value={taskNotes}
-                  onChangeText={setTaskNotes}
+                  onChangeText={(text) => setTaskNotes(sanitizeAlphaNumericSpaces(text))}
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
@@ -1053,7 +1057,7 @@ export default function CalendarScreen() {
                   style={styles.input}
                   placeholder="e.g., Neem oil, Compost..."
                   value={productUsed}
-                  onChangeText={setProductUsed}
+                  onChangeText={(text) => setProductUsed(sanitizeAlphaNumericSpaces(text))}
                   placeholderTextColor={theme.inputPlaceholder}
                 />
 

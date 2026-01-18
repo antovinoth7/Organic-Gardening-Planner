@@ -4,6 +4,7 @@ import {
   SunlightLevel,
   SoilType,
   FertiliserType,
+  PlantType,
 } from "../types/database.types";
 
 /**
@@ -25,12 +26,183 @@ interface PlantCareProfile {
   initialGrowthStage: GrowthStage;
 }
 
-/**
- * Plant care database organized by variety
- */
-const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {
-  // VEGETABLES
-  Tomato: {
+const DEFAULT_PROFILES_BY_TYPE: Record<PlantType, PlantCareProfile> = {
+  vegetable: {
+    waterRequirement: "medium",
+    wateringFrequencyDays: 3,
+    fertilisingFrequencyDays: 14,
+    pruningFrequencyDays: 30,
+    sunlight: "full_sun",
+    soilType: "garden_soil",
+    preferredFertiliser: "compost",
+    initialGrowthStage: "seedling",
+  },
+  herb: {
+    waterRequirement: "medium",
+    wateringFrequencyDays: 3,
+    fertilisingFrequencyDays: 21,
+    pruningFrequencyDays: 21,
+    sunlight: "partial_sun",
+    soilType: "potting_mix",
+    preferredFertiliser: "compost",
+    initialGrowthStage: "vegetative",
+  },
+  flower: {
+    waterRequirement: "medium",
+    wateringFrequencyDays: 3,
+    fertilisingFrequencyDays: 21,
+    pruningFrequencyDays: 30,
+    sunlight: "full_sun",
+    soilType: "potting_mix",
+    preferredFertiliser: "compost",
+    initialGrowthStage: "vegetative",
+  },
+  fruit_tree: {
+    waterRequirement: "medium",
+    wateringFrequencyDays: 7,
+    fertilisingFrequencyDays: 60,
+    pruningFrequencyDays: 180,
+    sunlight: "full_sun",
+    soilType: "garden_soil",
+    preferredFertiliser: "compost",
+    initialGrowthStage: "vegetative",
+  },
+  timber_tree: {
+    waterRequirement: "low",
+    wateringFrequencyDays: 10,
+    fertilisingFrequencyDays: 90,
+    pruningFrequencyDays: 365,
+    sunlight: "full_sun",
+    soilType: "garden_soil",
+    preferredFertiliser: "compost",
+    initialGrowthStage: "vegetative",
+  },
+  coconut_tree: {
+    waterRequirement: "medium",
+    wateringFrequencyDays: 7,
+    fertilisingFrequencyDays: 90,
+    pruningFrequencyDays: 180,
+    sunlight: "full_sun",
+    soilType: "garden_soil",
+    preferredFertiliser: "vermicompost",
+    initialGrowthStage: "vegetative",
+  },
+  shrub: {
+    waterRequirement: "medium",
+    wateringFrequencyDays: 5,
+    fertilisingFrequencyDays: 45,
+    pruningFrequencyDays: 60,
+    sunlight: "full_sun",
+    soilType: "garden_soil",
+    preferredFertiliser: "compost",
+    initialGrowthStage: "vegetative",
+  },
+};
+
+const PLANT_VARIETIES_BY_TYPE: Record<PlantType, string[]> = {
+  vegetable: [
+    "Tomato",
+    "Carrot",
+    "Lettuce",
+    "Cabbage",
+    "Broccoli",
+    "Cucumber",
+    "Pepper",
+    "Eggplant",
+    "Spinach",
+    "Radish",
+    "Potato",
+    "Onion",
+    "Garlic",
+    "Beans",
+    "Peas",
+  ],
+  herb: [
+    "Basil",
+    "Mint",
+    "Coriander",
+    "Parsley",
+    "Rosemary",
+    "Thyme",
+    "Oregano",
+    "Sage",
+    "Dill",
+    "Lemongrass",
+    "Curry Leaf",
+  ],
+  flower: [
+    "Rose",
+    "Sunflower",
+    "Marigold",
+    "Lily",
+    "Tulip",
+    "Jasmine",
+    "Hibiscus",
+    "Dahlia",
+    "Chrysanthemum",
+    "Orchid",
+  ],
+  fruit_tree: [
+    "Mango",
+    "Orange",
+    "Banana",
+    "Guava",
+    "Papaya",
+    "Lemon",
+    "Pomegranate",
+    "Fig",
+    "Avocado",
+    "Jackfruit",
+    "Chikoo",
+    "Water Apple",
+    "Soursop",
+    "Mangosteen",
+    "Rambutan",
+  ],
+  timber_tree: [
+    "Teak",
+    "Mahogany",
+    "Rosewood",
+    "Sandalwood",
+    "Bamboo",
+    "Wild Jack",
+    "Neem",
+  ],
+  coconut_tree: [
+    "Dwarf Coconut",
+    "Tall Coconut",
+    "Hybrid Coconut",
+    "King Coconut",
+  ],
+  shrub: [
+    "Hibiscus",
+    "Bougainvillea",
+    "Jasmine",
+    "Azalea",
+    "Gardenia",
+    "Lavender",
+    "Boxwood",
+    "Holly",
+  ],
+};
+
+const buildProfileKey = (plantType: PlantType, plantVariety: string): string =>
+  `${plantType}:${plantVariety}`;
+
+const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {};
+
+Object.entries(PLANT_VARIETIES_BY_TYPE).forEach(([type, varieties]) => {
+  const plantType = type as PlantType;
+  const defaults = DEFAULT_PROFILES_BY_TYPE[plantType];
+  varieties.forEach((variety) => {
+    PLANT_CARE_PROFILES[buildProfileKey(plantType, variety)] = {
+      ...defaults,
+    };
+  });
+});
+
+const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
+  [buildProfileKey("vegetable", "Tomato")]: {
     waterRequirement: "high",
     wateringFrequencyDays: 2,
     fertilisingFrequencyDays: 14,
@@ -40,8 +212,7 @@ const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {
     preferredFertiliser: "compost",
     initialGrowthStage: "seedling",
   },
-
-  Lettuce: {
+  [buildProfileKey("vegetable", "Lettuce")]: {
     waterRequirement: "medium",
     wateringFrequencyDays: 2,
     fertilisingFrequencyDays: 14,
@@ -50,8 +221,7 @@ const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {
     preferredFertiliser: "compost",
     initialGrowthStage: "seedling",
   },
-
-  Radish: {
+  [buildProfileKey("vegetable", "Radish")]: {
     waterRequirement: "medium",
     wateringFrequencyDays: 2,
     fertilisingFrequencyDays: 14,
@@ -60,8 +230,7 @@ const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {
     preferredFertiliser: "compost",
     initialGrowthStage: "seedling",
   },
-
-  Spinach: {
+  [buildProfileKey("vegetable", "Spinach")]: {
     waterRequirement: "medium",
     wateringFrequencyDays: 2,
     fertilisingFrequencyDays: 14,
@@ -70,9 +239,7 @@ const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {
     preferredFertiliser: "compost",
     initialGrowthStage: "seedling",
   },
-
-  // HERBS
-  Basil: {
+  [buildProfileKey("herb", "Basil")]: {
     waterRequirement: "medium",
     wateringFrequencyDays: 2,
     fertilisingFrequencyDays: 21,
@@ -82,8 +249,7 @@ const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {
     preferredFertiliser: "compost",
     initialGrowthStage: "seedling",
   },
-
-  Mint: {
+  [buildProfileKey("herb", "Mint")]: {
     waterRequirement: "high",
     wateringFrequencyDays: 1,
     fertilisingFrequencyDays: 30,
@@ -93,8 +259,7 @@ const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {
     preferredFertiliser: "compost",
     initialGrowthStage: "vegetative",
   },
-
-  Coriander: {
+  [buildProfileKey("herb", "Coriander")]: {
     waterRequirement: "medium",
     wateringFrequencyDays: 2,
     fertilisingFrequencyDays: 21,
@@ -103,8 +268,7 @@ const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {
     preferredFertiliser: "compost",
     initialGrowthStage: "seedling",
   },
-
-  "Curry Leaf": {
+  [buildProfileKey("herb", "Curry Leaf")]: {
     waterRequirement: "medium",
     wateringFrequencyDays: 3,
     fertilisingFrequencyDays: 30,
@@ -114,9 +278,7 @@ const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {
     preferredFertiliser: "vermicompost",
     initialGrowthStage: "vegetative",
   },
-
-  // FRUIT TREES
-  Mango: {
+  [buildProfileKey("fruit_tree", "Mango")]: {
     waterRequirement: "medium",
     wateringFrequencyDays: 7,
     fertilisingFrequencyDays: 60,
@@ -126,8 +288,7 @@ const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {
     preferredFertiliser: "compost",
     initialGrowthStage: "vegetative",
   },
-
-  Banana: {
+  [buildProfileKey("fruit_tree", "Banana")]: {
     waterRequirement: "high",
     wateringFrequencyDays: 2,
     fertilisingFrequencyDays: 30,
@@ -137,8 +298,7 @@ const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {
     preferredFertiliser: "vermicompost",
     initialGrowthStage: "vegetative",
   },
-
-  Papaya: {
+  [buildProfileKey("fruit_tree", "Papaya")]: {
     waterRequirement: "medium",
     wateringFrequencyDays: 3,
     fertilisingFrequencyDays: 30,
@@ -148,8 +308,7 @@ const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {
     preferredFertiliser: "compost",
     initialGrowthStage: "vegetative",
   },
-
-  Guava: {
+  [buildProfileKey("fruit_tree", "Guava")]: {
     waterRequirement: "medium",
     wateringFrequencyDays: 5,
     fertilisingFrequencyDays: 45,
@@ -159,9 +318,7 @@ const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {
     preferredFertiliser: "compost",
     initialGrowthStage: "vegetative",
   },
-
-  // COCONUT TREES
-  "Dwarf Coconut": {
+  [buildProfileKey("coconut_tree", "Dwarf Coconut")]: {
     waterRequirement: "high",
     wateringFrequencyDays: 3,
     fertilisingFrequencyDays: 60,
@@ -170,8 +327,7 @@ const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {
     preferredFertiliser: "vermicompost",
     initialGrowthStage: "vegetative",
   },
-
-  "Tall Coconut": {
+  [buildProfileKey("coconut_tree", "Tall Coconut")]: {
     waterRequirement: "medium",
     wateringFrequencyDays: 7,
     fertilisingFrequencyDays: 90,
@@ -182,21 +338,44 @@ const PLANT_CARE_PROFILES: Record<string, PlantCareProfile> = {
   },
 };
 
+Object.assign(PLANT_CARE_PROFILES, PLANT_CARE_OVERRIDES);
+
+const findProfileByVariety = (
+  plantVariety: string
+): PlantCareProfile | null => {
+  const key = Object.keys(PLANT_CARE_PROFILES).find((profileKey) =>
+    profileKey.endsWith(`:${plantVariety}`)
+  );
+  return key ? PLANT_CARE_PROFILES[key] : null;
+};
+
 /**
  * Get care profile for a specific plant variety
  */
 export function getPlantCareProfile(
-  plantVariety: string
+  plantVariety: string,
+  plantType?: PlantType
 ): PlantCareProfile | null {
-  return PLANT_CARE_PROFILES[plantVariety] || null;
+  if (plantType) {
+    const key = buildProfileKey(plantType, plantVariety);
+    return PLANT_CARE_PROFILES[key] || DEFAULT_PROFILES_BY_TYPE[plantType] || null;
+  }
+
+  if (!plantVariety) return null;
+
+  return findProfileByVariety(plantVariety);
 }
 
-/**
- * Get a list of all plants that have care profiles
- */
-/**
- * Check if a plant variety has a care profile
- */
-export function hasPlantCareProfile(plantVariety: string): boolean {
-  return plantVariety in PLANT_CARE_PROFILES;
+export function hasPlantCareProfile(
+  plantVariety: string,
+  plantType?: PlantType
+): boolean {
+  if (plantType) {
+    const key = buildProfileKey(plantType, plantVariety);
+    return Boolean(PLANT_CARE_PROFILES[key]) || Boolean(DEFAULT_PROFILES_BY_TYPE[plantType]);
+  }
+
+  if (!plantVariety) return false;
+
+  return Boolean(findProfileByVariety(plantVariety));
 }

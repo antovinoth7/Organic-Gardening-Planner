@@ -5,6 +5,7 @@ import { Plant, PlantType, SpaceType, HealthStatus, SunlightLevel, WaterRequirem
 import PlantCard from '../components/PlantCard';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
+import { sanitizeAlphaNumericSpaces } from '../utils/textSanitizer';
 
 type FilterCategory = 'type' | 'health' | 'space' | 'sunlight' | 'water' | 'location';
 type FilterType = 'all' | PlantType;
@@ -90,6 +91,7 @@ export default function PlantsScreen({ navigation }: any) {
             try {
               await deletePlant(id);
               loadPlants();
+              Alert.alert('Deleted', 'Plant removed successfully.');
             } catch (error: any) {
               Alert.alert('Error', error.message);
             }
@@ -226,12 +228,20 @@ export default function PlantsScreen({ navigation }: any) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>My Plants</Text>
-        <TouchableOpacity 
-          style={styles.sortButton}
-          onPress={() => setShowSortMenu(!showSortMenu)}
-        >
-          <Ionicons name="swap-vertical" size={22} color="#2e7d32" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.archiveButton}
+            onPress={() => navigation.navigate('ArchivedPlants')}
+          >
+            <Ionicons name="archive" size={20} color="#2e7d32" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.sortButton}
+            onPress={() => setShowSortMenu(!showSortMenu)}
+          >
+            <Ionicons name="swap-vertical" size={22} color="#2e7d32" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Sort Menu */}
@@ -289,7 +299,7 @@ export default function PlantsScreen({ navigation }: any) {
               style={styles.compactSearchInput}
               placeholder="Search..."
               value={searchQuery}
-              onChangeText={setSearchQuery}
+              onChangeText={(text) => setSearchQuery(sanitizeAlphaNumericSpaces(text))}
               placeholderTextColor="#999"
             />
             {searchQuery.trim() !== '' && (
@@ -672,6 +682,19 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: theme.text,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  archiveButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#e8f5e9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sortButton: {
     width: 40,

@@ -21,6 +21,7 @@ import { getPlants } from "../services/plants";
 import { Plant, JournalEntry, JournalEntryType } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../theme";
+import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 
 export default function JournalFormScreen({ navigation, route }: any) {
   const theme = useTheme();
@@ -470,7 +471,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
               style={styles.harvestNotesInput}
               placeholder="Storage method, taste notes, etc. (optional)"
               value={harvestNotes}
-              onChangeText={setHarvestNotes}
+              onChangeText={(text) => setHarvestNotes(sanitizeAlphaNumericSpaces(text))}
               multiline
               numberOfLines={2}
               textAlignVertical="top"
@@ -482,7 +483,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
           style={styles.textArea}
           placeholder="What's happening in your garden today?"
           value={content}
-          onChangeText={setContent}
+          onChangeText={(text) => setContent(sanitizeAlphaNumericSpaces(text))}
           multiline
           textAlignVertical="top"
           placeholderTextColor="#999"

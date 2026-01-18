@@ -22,6 +22,7 @@ import {
   updatePlant,
   savePlantImage,
 } from "../services/plants";
+import { syncCareTasksForPlant } from "../services/tasks";
 import {
   SpaceType,
   PlantType,
@@ -47,6 +48,7 @@ import {
 } from "../utils/plantCareDefaults";
 import { useTheme } from "../theme";
 import CollapsibleSection from "../components/CollapsibleSection";
+import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 
 const PLANT_VARIETIES: Record<PlantType, string[]> = {
   vegetable: [
@@ -203,6 +205,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
   const [showCompanionSuggestions, setShowCompanionSuggestions] =
     useState(false);
   const [showPestDiseaseModal, setShowPestDiseaseModal] = useState(false);
+  const [autoApplyCareDefaults, setAutoApplyCareDefaults] = useState(true);
   const [currentPestDisease, setCurrentPestDisease] =
     useState<PestDiseaseRecord>({
       type: "pest",
@@ -302,11 +305,12 @@ export default function PlantFormScreen({ route, navigation }: any) {
     if (
       !plantId &&
       plantVariety &&
-      hasPlantCareProfile(plantVariety) &&
+      autoApplyCareDefaults &&
+      hasPlantCareProfile(plantVariety, plantType) &&
       !autoSuggestApplied.current
     ) {
       console.log("🌱 Applying auto-suggestions for:", plantVariety);
-      const profile = getPlantCareProfile(plantVariety);
+      const profile = getPlantCareProfile(plantVariety, plantType);
 
       if (profile) {
         autoSuggestApplied.current = true;
@@ -326,16 +330,9 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
         // Phase 1: Growth
         setGrowthStage(profile.initialGrowthStage);
-
-        // Show alert to user
-        Alert.alert(
-          "🌱 Smart Care Settings Applied",
-          `Recommended care settings for ${plantVariety} have been automatically filled. You can adjust them as needed.`,
-          [{ text: "Got it!" }]
-        );
       }
     }
-  }, [plantVariety, plantId]);
+  }, [plantVariety, plantId, plantType, autoApplyCareDefaults]);
 
   // Combine parent and child locations
   useEffect(() => {
@@ -633,10 +630,14 @@ export default function PlantFormScreen({ route, navigation }: any) {
         plantData.harvest_end_date = harvestEndDate.trim() || null;
       }
 
-      if (plantId) {
-        await updatePlant(plantId, plantData);
-      } else {
-        await createPlant(plantData);
+      const savedPlant = plantId
+        ? await updatePlant(plantId, plantData)
+        : await createPlant(plantData);
+
+      try {
+        await syncCareTasksForPlant(savedPlant);
+      } catch (error) {
+        console.warn("Failed to sync care tasks for plant:", error);
       }
 
       navigation.goBack();
@@ -697,7 +698,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
             style={styles.input}
             placeholder="Plant Name *"
             value={name}
-            onChangeText={setName}
+            onChangeText={(text) => setName(sanitizeAlphaNumericSpaces(text))}
             placeholderTextColor={theme.inputPlaceholder}
           />
 
@@ -742,7 +743,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
             style={styles.input}
             placeholder="Variety (e.g., Alphonso, Dwarf)"
             value={variety}
-            onChangeText={setVariety}
+            onChangeText={(text) => setVariety(sanitizeAlphaNumericSpaces(text))}
             placeholderTextColor={theme.inputPlaceholder}
           />
 
@@ -818,9 +819,28 @@ export default function PlantFormScreen({ route, navigation }: any) {
         <CollapsibleSection
           title="Care & Growing Conditions"
           icon="leaf"
-          fieldCount={12}
+          fieldCount={13}
           defaultExpanded={false}
         >
+          {!plantId && (
+            <>
+              <Text style={styles.sectionHeader}>Smart Care Defaults</Text>
+              <TouchableOpacity
+                style={styles.checkboxContainer}
+                onPress={() => setAutoApplyCareDefaults(!autoApplyCareDefaults)}
+              >
+                <Ionicons
+                  name={autoApplyCareDefaults ? "checkbox" : "square-outline"}
+                  size={24}
+                  color={autoApplyCareDefaults ? "#2e7d32" : "#999"}
+                />
+                <Text style={styles.checkboxLabel}>Apply smart care defaults</Text>
+              </TouchableOpacity>
+              <Text style={styles.helperText}>
+                Auto-fills watering, fertilising, pruning, and sunlight settings.
+              </Text>
+            </>
+          )}
           <Text style={styles.sectionHeader}>🪴 Growing Space</Text>
 
           <View style={styles.spaceTypeContainer}>
@@ -894,7 +914,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
               style={styles.input}
               placeholder="Pot Size (e.g., 12 inch)"
               value={potSize}
-              onChangeText={setPotSize}
+              onChangeText={(text) => setPotSize(sanitizeAlphaNumericSpaces(text))}
               placeholderTextColor={theme.inputPlaceholder}
             />
           )}
@@ -903,7 +923,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
               style={styles.input}
               placeholder="Bed Name (e.g., Veggie Bed 1)"
               value={bedName}
-              onChangeText={setBedName}
+              onChangeText={(text) => setBedName(sanitizeAlphaNumericSpaces(text))}
               placeholderTextColor={theme.inputPlaceholder}
             />
           )}
@@ -1064,7 +1084,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
             style={[styles.input, styles.textArea]}
             placeholder="Add notes about pruning techniques, timing, or observations"
             value={pruningNotes}
-            onChangeText={setPruningNotes}
+            onChangeText={(text) => setPruningNotes(sanitizeAlphaNumericSpaces(text))}
             multiline
             numberOfLines={2}
             placeholderTextColor="#999"
@@ -1351,7 +1371,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
           style={[styles.input, styles.textArea]}
           placeholder="Notes"
           value={notes}
-          onChangeText={setNotes}
+          onChangeText={(text) => setNotes(sanitizeAlphaNumericSpaces(text))}
           multiline
           numberOfLines={4}
           maxLength={NOTES_MAX_LENGTH}
@@ -1485,7 +1505,10 @@ export default function PlantFormScreen({ route, navigation }: any) {
                   } Name *`}
                   value={currentPestDisease.name}
                   onChangeText={(text) =>
-                    setCurrentPestDisease({ ...currentPestDisease, name: text })
+                    setCurrentPestDisease({
+                      ...currentPestDisease,
+                      name: sanitizeAlphaNumericSpaces(text),
+                    })
                   }
                   placeholderTextColor="#999"
                 />
@@ -1497,7 +1520,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
                   onChangeText={(text) =>
                     setCurrentPestDisease({
                       ...currentPestDisease,
-                      treatment: text,
+                      treatment: sanitizeAlphaNumericSpaces(text),
                     })
                   }
                   placeholderTextColor="#999"
@@ -1510,7 +1533,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
                   onChangeText={(text) =>
                     setCurrentPestDisease({
                       ...currentPestDisease,
-                      notes: text,
+                      notes: sanitizeAlphaNumericSpaces(text),
                     })
                   }
                   multiline
@@ -1769,6 +1792,13 @@ const createStyles = (theme: any) =>
       color: theme.text,
       marginLeft: 12,
     },
+    helperText: {
+      fontSize: 12,
+      color: theme.textTertiary,
+      marginTop: -4,
+      marginBottom: 12,
+      marginLeft: 44,
+    },
     infoCard: {
       backgroundColor: theme.backgroundSecondary,
       padding: 16,
@@ -2006,3 +2036,4 @@ const createStyles = (theme: any) =>
       color: theme.textInverse,
     },
   });
+

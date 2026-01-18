@@ -15,7 +15,7 @@
 
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, memoryLocalCache } from 'firebase/firestore';
 
 // For React Native, we need to set up auth persistence manually
 // This is done by importing and using the right Firebase modules
@@ -39,7 +39,10 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
 // Initialize Firestore (text data only - no images!)
-const db = getFirestore(app);
+// Use in-memory cache to avoid persistent cache corruption warnings.
+const db = initializeFirestore(app, {
+  localCache: memoryLocalCache(),
+});
 
 // NOTE: Firebase Storage is NOT initialized because we don't use it
 // Images are stored locally on the device to avoid any cloud storage costs

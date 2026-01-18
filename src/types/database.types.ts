@@ -65,6 +65,9 @@ export interface Plant {
   pruning_frequency_days?: number | null;
   last_pruned_date?: string | null;
   pruning_notes?: string | null;
+  // Soft delete
+  is_deleted?: boolean | null;
+  deleted_at?: string | null;
   // Recurring Care Schedule (for auto-generating tasks)
   care_schedule?: {
     water_frequency_days?: number;
