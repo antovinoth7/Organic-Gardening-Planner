@@ -3,7 +3,7 @@
  * 
  * This module handles all image file operations on the device.
  * Images are stored locally in the app's document directory and NEVER uploaded to cloud storage.
- * Only the file URI (string path) is stored in Firestore for synchronization.
+ * Only the image filename is stored in Firestore for synchronization.
  * 
  * Benefits:
  * - Keeps Firestore usage minimal (free tier)
@@ -14,6 +14,11 @@
 
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
+
+export interface SavedImage {
+  uri: string;
+  filename: string | null;
+}
 
 // Directory for storing all garden images
 const IMAGES_DIR = Platform.OS === 'web' ? null : `${FileSystem.documentDirectory}garden_images/`;
@@ -43,7 +48,7 @@ const initImageStorage = async (): Promise<void> => {
  * @param prefix - Optional prefix for the filename (e.g., 'plant', 'journal')
  * @returns The local file URI where the image was saved
  */
-export const saveImageLocally = async (
+const saveImageLocally = async (
   sourceUri: string,
   prefix: string = 'img'
 ): Promise<string> => {
@@ -146,5 +151,103 @@ export const getImageStorageSize = async (): Promise<number> => {
     console.error('Error calculating storage size:', error);
     return 0;
   }
+};
+
+/**
+ * Save an image and return both the local URI and filename.
+ */
+export const saveImageLocallyWithFilename = async (
+  sourceUri: string,
+  prefix: string = 'img'
+): Promise<SavedImage> => {
+  const uri = await saveImageLocally(sourceUri, prefix);
+  const filename = getFilenameFromUri(uri);
+  return { uri, filename };
+};
+
+/**
+ * Extract clean filename from URI
+ * Handles query params, fragments, and URL encoding
+ */
+export const getFilenameFromUri = (uri: string): string | null => {
+  if (!uri) return null;
+  try {
+    const cleanUri = uri.split('?')[0].split('#')[0];
+    const filename = cleanUri.split('/').pop();
+    return filename ? decodeURIComponent(filename) : null;
+  } catch (error) {
+    console.warn('Failed to extract filename from URI:', uri, error);
+    return uri.split('/').pop()?.split('?')[0] || null;
+  }
+};
+
+/**
+ * Build a local file URI from a stored filename.
+ */
+export const getLocalImageUriFromFilename = (
+  filename: string | null
+): string | null => {
+  if (!filename || !IMAGES_DIR || Platform.OS === 'web') return null;
+  const cleanFilename = getFilenameFromUri(filename);
+  return cleanFilename ? `${IMAGES_DIR}${cleanFilename}` : null;
+};
+
+/**
+ * Resolve a potentially cross-device URI to a local file if it exists.
+ */
+export const resolveLocalImageUri = async (
+  uri: string | null
+): Promise<string | null> => {
+  if (!uri) return null;
+  if (Platform.OS === 'web' || !IMAGES_DIR) return uri;
+
+  const hasScheme = uri.includes('://');
+  const hasPathSep = uri.includes('/') || uri.includes('\\');
+  const isFilenameOnly = !hasScheme && !hasPathSep;
+  const isRemoteUri = /^(https?|data|blob):/i.test(uri);
+  const isLocalScheme = /^(file|content|ph|assets-library):/i.test(uri);
+
+  if (isRemoteUri) {
+    return uri;
+  }
+
+  if (isFilenameOnly) {
+    const localUri = getLocalImageUriFromFilename(uri);
+    if (localUri && (await imageExists(localUri))) {
+      return localUri;
+    }
+    return null;
+  }
+
+  if (isLocalScheme || uri.startsWith('/')) {
+    if (await imageExists(uri)) {
+      return uri;
+    }
+  }
+
+  const filename = getFilenameFromUri(uri);
+  if (!filename) return null;
+
+  const localUri = getLocalImageUriFromFilename(filename);
+  if (localUri && (await imageExists(localUri))) {
+    return localUri;
+  }
+
+  return null;
+};
+
+/**
+ * Resolve an array of image URIs to local files when available.
+ */
+export const resolveLocalImageUris = async (
+  uris: string[] | null | undefined
+): Promise<string[]> => {
+  if (!uris || uris.length === 0) return [];
+  if (Platform.OS === 'web' || !IMAGES_DIR) return uris;
+
+  const resolved = await Promise.all(
+    uris.map(async (uri) => resolveLocalImageUri(uri))
+  );
+  return resolved.filter((uri): uri is string => !!uri);
 };
 

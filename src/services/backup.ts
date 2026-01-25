@@ -31,8 +31,12 @@ import {
 import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
 import { createZipWithImages, extractZipWithImages } from "../utils/zipHelper";
 import { Platform } from "react-native";
-import { db, auth } from "../lib/firebase";
-import { doc, updateDoc } from "firebase/firestore";
+import {
+  getFilenameFromUri,
+  getLocalImageUriFromFilename,
+  resolveLocalImageUri,
+  resolveLocalImageUris,
+} from "../lib/imageStorage";
 
 interface BackupData {
   version: string;
@@ -42,7 +46,7 @@ interface BackupData {
   taskLogs: TaskLog[];
   journal: JournalEntry[];
   // Note: Images are stored locally and NOT included in the backup
-  // Only the imageUri strings are included in the plant/journal objects
+  // Only the image filenames are included in the plant/journal objects
 }
 
 /**
@@ -65,14 +69,44 @@ export const exportBackup = async (): Promise<string> => {
       { timeoutMs: 20000 } // 20 second timeout for backup export
     );
 
+    const normalizedPlants = plants.map((plant) => {
+      const photoFilename =
+        plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "");
+      return {
+        ...plant,
+        photo_filename: photoFilename ?? null,
+        photo_url: null,
+      };
+    });
+    const normalizedJournal = journal.map((entry) => {
+      const legacyUrls =
+        entry.photo_urls && entry.photo_urls.length > 0
+          ? entry.photo_urls
+          : entry.photo_url
+          ? [entry.photo_url]
+          : [];
+      const photoFilenames =
+        entry.photo_filenames && entry.photo_filenames.length > 0
+          ? entry.photo_filenames
+          : legacyUrls
+              .map((uri) => getFilenameFromUri(uri))
+              .filter((filename): filename is string => !!filename);
+      return {
+        ...entry,
+        photo_filenames: photoFilenames,
+        photo_urls: [],
+        photo_url: null,
+      };
+    });
+
     // Create backup object
     const backup: BackupData = {
       version: "1.0.0",
       exportDate: new Date().toISOString(),
-      plants,
+      plants: normalizedPlants,
       tasks,
       taskLogs,
-      journal,
+      journal: normalizedJournal,
     };
 
     // Generate filename with timestamp
@@ -202,13 +236,55 @@ export const importBackup = async (
     console.log(`- Task Logs: ${backup.taskLogs.length}`);
     console.log(`- Journal Entries: ${backup.journal.length}`);
 
+    const normalizedPlants = await Promise.all(
+      backup.plants.map(async (plant) => {
+        const photoFilename =
+          plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "");
+        const resolvedPhotoUrl = await resolveLocalImageUri(
+          photoFilename ?? null
+        );
+        return {
+          ...plant,
+          photo_filename: photoFilename ?? null,
+          photo_url: resolvedPhotoUrl ?? null,
+        };
+      })
+    );
+
+    const normalizedJournal = await Promise.all(
+      backup.journal.map(async (entry) => {
+        const legacyUrls =
+          entry.photo_urls && entry.photo_urls.length > 0
+            ? entry.photo_urls
+            : entry.photo_url
+            ? [entry.photo_url]
+            : [];
+        const photoFilenames =
+          entry.photo_filenames && entry.photo_filenames.length > 0
+            ? entry.photo_filenames
+            : legacyUrls
+                .map((uri) => getFilenameFromUri(uri))
+                .filter((filename): filename is string => !!filename);
+        const resolvedPhotoUrls =
+          photoFilenames.length > 0
+            ? await resolveLocalImageUris(photoFilenames)
+            : await resolveLocalImageUris(legacyUrls);
+        return {
+          ...entry,
+          photo_filenames: photoFilenames,
+          photo_urls: resolvedPhotoUrls,
+          photo_url: null,
+        };
+      })
+    );
+
     // Import data based on overwrite mode
     if (overwrite) {
       // Replace all data
-      await setData(KEYS.PLANTS, backup.plants);
+      await setData(KEYS.PLANTS, normalizedPlants);
       await setData(KEYS.TASKS, backup.tasks);
       await setData(KEYS.TASK_LOGS, backup.taskLogs);
-      await setData(KEYS.JOURNAL, backup.journal);
+      await setData(KEYS.JOURNAL, normalizedJournal);
     } else {
       // Merge with existing data (keep existing items, add new ones)
       const existingPlants = await getData<Plant>(KEYS.PLANTS);
@@ -217,12 +293,15 @@ export const importBackup = async (
       const existingJournal = await getData<JournalEntry>(KEYS.JOURNAL);
 
       // Merge by ID, preferring backup data for conflicts
-      const mergedPlants = mergeByIdPreferBackup(existingPlants, backup.plants);
+      const mergedPlants = mergeByIdPreferBackup(
+        existingPlants,
+        normalizedPlants
+      );
       const mergedTasks = mergeByIdPreferBackup(existingTasks, backup.tasks);
       const mergedLogs = mergeByIdPreferBackup(existingLogs, backup.taskLogs);
       const mergedJournal = mergeByIdPreferBackup(
         existingJournal,
-        backup.journal
+        normalizedJournal
       );
 
       await setData(KEYS.PLANTS, mergedPlants);
@@ -305,34 +384,66 @@ export const exportBackupWithImages = async (): Promise<string> => {
       { timeoutMs: 20000 }
     );
 
+    const normalizedPlants = plants.map((plant) => {
+      const photoFilename =
+        plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "");
+      return {
+        ...plant,
+        photo_filename: photoFilename ?? null,
+        photo_url: null,
+      };
+    });
+    const normalizedJournal = journal.map((entry) => {
+      const legacyUrls =
+        entry.photo_urls && entry.photo_urls.length > 0
+          ? entry.photo_urls
+          : entry.photo_url
+          ? [entry.photo_url]
+          : [];
+      const photoFilenames =
+        entry.photo_filenames && entry.photo_filenames.length > 0
+          ? entry.photo_filenames
+          : legacyUrls
+              .map((uri) => getFilenameFromUri(uri))
+              .filter((filename): filename is string => !!filename);
+      return {
+        ...entry,
+        photo_filenames: photoFilenames,
+        photo_urls: [],
+        photo_url: null,
+      };
+    });
+
     // Create backup object
     const backup: BackupData = {
       version: "1.0.0",
       exportDate: new Date().toISOString(),
-      plants,
+      plants: normalizedPlants,
       tasks,
       taskLogs,
-      journal,
+      journal: normalizedJournal,
     };
 
     // Collect all image URIs from plants and journal entries
     const imageUris: string[] = [];
+    const imageFilenames = new Set<string>();
 
-    // Add plant images
-    plants.forEach((plant) => {
-      if (plant.photo_url) {
-        imageUris.push(plant.photo_url);
+    normalizedPlants.forEach((plant) => {
+      if (plant.photo_filename) {
+        imageFilenames.add(plant.photo_filename);
       }
     });
 
-    // Add journal entry images
-    journal.forEach((entry) => {
-      if (entry.photo_urls && entry.photo_urls.length > 0) {
-        imageUris.push(...entry.photo_urls);
+    normalizedJournal.forEach((entry) => {
+      if (entry.photo_filenames && entry.photo_filenames.length > 0) {
+        entry.photo_filenames.forEach((filename) => imageFilenames.add(filename));
       }
-      // Also check legacy photo_url field for backward compatibility
-      if (entry.photo_url) {
-        imageUris.push(entry.photo_url);
+    });
+
+    imageFilenames.forEach((filename) => {
+      const localUri = getLocalImageUriFromFilename(filename);
+      if (localUri) {
+        imageUris.push(localUri);
       }
     });
 
@@ -434,38 +545,42 @@ export const importBackupWithImages = async (
     console.log(`- Journal Entries: ${backup.journal.length}`);
     console.log(`- Images: ${imageUris.size}`);
 
-    // Update image URIs in the backup data to point to newly extracted files
+    // Update image URIs and filenames in the backup data
     const updatedPlants = backup.plants.map((plant) => {
-      if (plant.photo_url) {
-        const filename = plant.photo_url.split("/").pop();
-        const newUri = filename ? imageUris.get(filename) : null;
-        if (newUri) {
-          return { ...plant, photo_url: newUri };
-        }
-      }
-      return plant;
+      const photoFilename =
+        plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "");
+      const newUri = photoFilename ? imageUris.get(photoFilename) : null;
+      return {
+        ...plant,
+        photo_filename: photoFilename ?? null,
+        photo_url: newUri ?? null,
+      };
     });
 
     const updatedJournal = backup.journal.map((entry) => {
-      if (entry.photo_urls && entry.photo_urls.length > 0) {
-        const updatedPhotos = entry.photo_urls.map((photoUri) => {
-          const filename = photoUri.split("/").pop();
-          return filename && imageUris.has(filename)
-            ? imageUris.get(filename)!
-            : photoUri;
-        });
-        return { ...entry, photo_urls: updatedPhotos };
-      }
-      // Handle legacy photo_url field
-      if (entry.photo_url) {
-        const filename = entry.photo_url.split("/").pop();
-        const newUri =
-          filename && imageUris.has(filename)
-            ? imageUris.get(filename)!
-            : entry.photo_url;
-        return { ...entry, photo_url: newUri };
-      }
-      return entry;
+      const legacyUrls =
+        entry.photo_urls && entry.photo_urls.length > 0
+          ? entry.photo_urls
+          : entry.photo_url
+          ? [entry.photo_url]
+          : [];
+      const photoFilenames =
+        entry.photo_filenames && entry.photo_filenames.length > 0
+          ? entry.photo_filenames
+          : legacyUrls
+              .map((uri) => getFilenameFromUri(uri))
+              .filter((filename): filename is string => !!filename);
+      const updatedPhotos = photoFilenames
+        .map((filename) =>
+          filename && imageUris.has(filename) ? imageUris.get(filename)! : null
+        )
+        .filter((uri): uri is string => !!uri);
+      return {
+        ...entry,
+        photo_filenames: photoFilenames,
+        photo_urls: updatedPhotos,
+        photo_url: null,
+      };
     });
 
     // Import data based on overwrite mode
@@ -530,21 +645,38 @@ export const exportImagesOnly = async (): Promise<string> => {
 
     // Collect all image URIs
     const imageUris: string[] = [];
+    const imageFilenames = new Set<string>();
 
     // Add plant images
     plants.forEach((plant) => {
-      if (plant.photo_url) {
-        imageUris.push(plant.photo_url);
+      const photoFilename =
+        plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "");
+      if (photoFilename) {
+        imageFilenames.add(photoFilename);
       }
     });
 
     // Add journal entry images
     journal.forEach((entry) => {
-      if (entry.photo_urls && entry.photo_urls.length > 0) {
-        imageUris.push(...entry.photo_urls);
-      }
-      if (entry.photo_url) {
-        imageUris.push(entry.photo_url);
+      const legacyUrls =
+        entry.photo_urls && entry.photo_urls.length > 0
+          ? entry.photo_urls
+          : entry.photo_url
+          ? [entry.photo_url]
+          : [];
+      const photoFilenames =
+        entry.photo_filenames && entry.photo_filenames.length > 0
+          ? entry.photo_filenames
+          : legacyUrls
+              .map((uri) => getFilenameFromUri(uri))
+              .filter((filename): filename is string => !!filename);
+      photoFilenames.forEach((filename) => imageFilenames.add(filename));
+    });
+
+    imageFilenames.forEach((filename) => {
+      const localUri = getLocalImageUriFromFilename(filename);
+      if (localUri) {
+        imageUris.push(localUri);
       }
     });
 
@@ -582,25 +714,6 @@ export const exportImagesOnly = async (): Promise<string> => {
   }
 };
 
-/**
- * Helper function to extract clean filename from URI
- * Handles query params, fragments, and URL encoding
- */
-const getFilenameFromUri = (uri: string): string | null => {
-  if (!uri) return null;
-  try {
-    // Remove query params and fragments
-    const cleanUri = uri.split("?")[0].split("#")[0];
-    // Get filename from path
-    const filename = cleanUri.split("/").pop();
-    // Decode URL encoding (e.g., %20 for spaces)
-    return filename ? decodeURIComponent(filename) : null;
-  } catch (error) {
-    console.warn("Failed to extract filename from URI:", uri, error);
-    // Fallback to simple extraction
-    return uri.split("/").pop()?.split("?")[0] || null;
-  }
-};
 
 /**
  * Import ONLY images from a ZIP file
@@ -639,9 +752,6 @@ export const importImagesOnly = async (): Promise<number> => {
     console.log(`Extracted ${imageUris.size} images to local storage`);
     console.log("Available image filenames:", Array.from(imageUris.keys()));
 
-    const user = auth.currentUser;
-    if (!user) throw new Error("Not authenticated");
-
     // Update existing plants and journal entries to point to newly extracted images
     // This fixes the URIs to match the new local paths
     const plants = await getData<Plant>(KEYS.PLANTS);
@@ -652,120 +762,71 @@ export const importImagesOnly = async (): Promise<number> => {
 
     // Update plant photo URIs in local cache
     const updatedPlants = plants.map((plant) => {
-      if (plant.photo_url) {
-        const filename = getFilenameFromUri(plant.photo_url);
-        console.log(
-          `Plant ${plant.name} - Looking for filename: "${filename}"`
-        );
-        const newUri = filename ? imageUris.get(filename) : null;
-        if (newUri && newUri !== plant.photo_url) {
-          console.log(`✓ Updating plant ${plant.name} photo: ${filename}`);
-          plantsUpdated++;
-          return { ...plant, photo_url: newUri };
-        } else if (filename && !imageUris.has(filename)) {
-          console.log(`✗ No match found for plant ${plant.name}: ${filename}`);
-        }
+      const photoFilename =
+        plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "");
+      if (!photoFilename) return plant;
+
+      const newUri = imageUris.get(photoFilename) ?? null;
+      const nextPlant = {
+        ...plant,
+        photo_filename: photoFilename,
+        photo_url: newUri ?? plant.photo_url ?? null,
+      };
+      const changed =
+        (newUri && newUri !== plant.photo_url) ||
+        (plant.photo_filename ?? null) !== (photoFilename ?? null);
+      if (changed) {
+        plantsUpdated++;
       }
-      return plant;
+      return nextPlant;
     });
 
     // Update journal photo URIs in local cache
     const updatedJournal = journal.map((entry) => {
-      let updated = false;
+      const legacyUrls =
+        entry.photo_urls && entry.photo_urls.length > 0
+          ? entry.photo_urls
+          : entry.photo_url
+          ? [entry.photo_url]
+          : [];
+      const photoFilenames =
+        entry.photo_filenames && entry.photo_filenames.length > 0
+          ? entry.photo_filenames
+          : legacyUrls
+              .map((uri) => getFilenameFromUri(uri))
+              .filter((filename): filename is string => !!filename);
+      if (photoFilenames.length === 0) return entry;
 
-      // Handle photo_urls array
-      if (entry.photo_urls && entry.photo_urls.length > 0) {
-        const updatedPhotos = entry.photo_urls.map((photoUri) => {
-          const filename = getFilenameFromUri(photoUri);
-          console.log(`Journal entry - Looking for filename: "${filename}"`);
-          const newUri =
-            filename && imageUris.has(filename)
-              ? imageUris.get(filename)!
-              : photoUri;
-          if (newUri !== photoUri) {
-            console.log(`✓ Updating journal photo: ${filename}`);
-            updated = true;
-          } else if (filename && !imageUris.has(filename)) {
-            console.log(`✗ No match found for journal photo: ${filename}`);
-          }
-          return newUri;
-        });
-        if (updated) {
-          journalUpdated++;
-          return { ...entry, photo_urls: updatedPhotos };
-        }
+      const currentUrls = entry.photo_urls ?? [];
+      const updatedPhotos = photoFilenames
+        .map((filename, index) => {
+          const matched = imageUris.get(filename);
+          return matched ?? currentUrls[index] ?? null;
+        })
+        .filter((uri): uri is string => !!uri);
+
+      const nextEntry = {
+        ...entry,
+        photo_filenames: photoFilenames,
+        photo_urls: updatedPhotos,
+        photo_url: null,
+      };
+
+      const changed =
+        JSON.stringify(entry.photo_filenames ?? []) !==
+          JSON.stringify(photoFilenames) ||
+        JSON.stringify(entry.photo_urls ?? []) !== JSON.stringify(updatedPhotos) ||
+        !!entry.photo_url;
+
+      if (changed) {
+        journalUpdated++;
       }
-
-      // Handle legacy photo_url field
-      if (entry.photo_url) {
-        const filename = getFilenameFromUri(entry.photo_url);
-        console.log(
-          `Journal entry (legacy) - Looking for filename: "${filename}"`
-        );
-        const newUri =
-          filename && imageUris.has(filename)
-            ? imageUris.get(filename)!
-            : entry.photo_url;
-        if (newUri !== entry.photo_url) {
-          console.log(`✓ Updating journal legacy photo: ${filename}`);
-          journalUpdated++;
-          return { ...entry, photo_url: newUri };
-        } else if (filename && !imageUris.has(filename)) {
-          console.log(`✗ No match found for journal legacy photo: ${filename}`);
-        }
-      }
-
-      return entry;
+      return nextEntry;
     });
 
     // Save updated data to local storage
     await setData(KEYS.PLANTS, updatedPlants);
     await setData(KEYS.JOURNAL, updatedJournal);
-
-    console.log(`Updating Firestore with new image URIs...`);
-
-    // Update Firestore for plants that changed
-    const plantsToUpdate = updatedPlants.filter(
-      (plant, idx) => plant !== plants[idx]
-    );
-    for (const plant of plantsToUpdate) {
-      try {
-        await withTimeoutAndRetry(
-          () =>
-            updateDoc(doc(db, "plants", plant.id), {
-              photo_url: plant.photo_url,
-            }),
-          { timeoutMs: 10000, maxRetries: 2 }
-        );
-      } catch (error) {
-        console.warn(`Failed to update plant ${plant.id} in Firestore:`, error);
-      }
-    }
-
-    // Update Firestore for journal entries that changed
-    const journalToUpdate = updatedJournal.filter(
-      (entry, idx) => entry !== journal[idx]
-    );
-    for (const entry of journalToUpdate) {
-      try {
-        const updates: any = {};
-        if (entry.photo_urls) {
-          updates.photo_urls = entry.photo_urls;
-        }
-        if (entry.photo_url) {
-          updates.photo_url = entry.photo_url;
-        }
-        await withTimeoutAndRetry(
-          () => updateDoc(doc(db, "journal_entries", entry.id), updates),
-          { timeoutMs: 10000, maxRetries: 2 }
-        );
-      } catch (error) {
-        console.warn(
-          `Failed to update journal entry ${entry.id} in Firestore:`,
-          error
-        );
-      }
-    }
 
     console.log(`Images import completed:`);
     console.log(`- ${imageUris.size} images extracted`);

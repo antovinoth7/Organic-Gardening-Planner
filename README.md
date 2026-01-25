@@ -3,7 +3,7 @@
 A personal, free-forever gardening planner built with React Native (Expo) and Firebase. Track plants, manage recurring care tasks, keep a garden journal, and back up your data without paying for cloud storage.
 
 ## Design philosophy (free forever)
-- Firestore stores text data only (free tier friendly).
+- Firestore stores text data and image filenames only (free tier friendly).
 - Photos stay on the device (no cloud image storage costs).
 - Offline-friendly reads via AsyncStorage cache.
 - Manual backups to your own storage (JSON or ZIP).
@@ -20,8 +20,9 @@ See `ARCHITECTURE.md` for the full breakdown.
 - Plant tracking with local photos and rich metadata.
 - Recurring care tasks with completion logs and notes.
 - Calendar view (week/month) and "Today" tasks.
+- Search and filter across plants, journal, and care plan.
 - Garden journal with photos and plant links.
-- Images-only backup in Settings; data-only and complete backups are implemented in code.
+- Data-only JSON, complete ZIP (data + images), and images-only ZIP backups in Settings.
 - Theme toggle (system/light/dark).
 - Offline-friendly read path with cached data.
 
@@ -78,8 +79,8 @@ See `ARCHITECTURE.md` for the full breakdown.
    ```
 
 ## Backups
-- Images-only backup is available in Settings.
-- Data-only JSON and complete ZIP backups are implemented in `src/services/backup.ts` and can be wired to UI if needed.
+- Settings includes data-only JSON, complete ZIP (data + images), and images-only ZIP backups.
+- Import flows support merge or replace, depending on the option selected.
 
 See `BACKUP_GUIDE.md` for detailed workflows.
 

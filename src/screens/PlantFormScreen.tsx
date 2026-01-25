@@ -22,6 +22,7 @@ import {
   updatePlant,
   savePlantImage,
 } from "../services/plants";
+import { getFilenameFromUri } from "../lib/imageStorage";
 import { syncCareTasksForPlant } from "../services/tasks";
 import {
   SpaceType,
@@ -48,7 +49,10 @@ import {
 } from "../utils/plantCareDefaults";
 import { useTheme } from "../theme";
 import CollapsibleSection from "../components/CollapsibleSection";
-import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
+import {
+  sanitizeAlphaNumericSpaces,
+  sanitizeLandmarkText,
+} from "../utils/textSanitizer";
 
 const PLANT_VARIETIES: Record<PlantType, string[]> = {
   vegetable: [
@@ -171,6 +175,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
   const [location, setLocation] = useState("");
   const [parentLocation, setParentLocation] = useState("");
   const [childLocation, setChildLocation] = useState("");
+  const [landmarks, setLandmarks] = useState("");
   const [bedName, setBedName] = useState("");
   const [potSize, setPotSize] = useState("");
   const [variety, setVariety] = useState("");
@@ -180,6 +185,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
   const [harvestEndDate, setHarvestEndDate] = useState("");
   const [notes, setNotes] = useState("");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoFilename, setPhotoFilename] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPlantingDatePicker, setShowPlantingDatePicker] = useState(false);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
@@ -249,6 +255,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
     location,
     parentLocation,
     childLocation,
+    landmarks,
     bedName,
     potSize,
     variety,
@@ -432,12 +439,16 @@ export default function PlantFormScreen({ route, navigation }: any) {
         setBedName(plant.bed_name || "");
         setPotSize(plant.pot_size || "");
         setVariety(plant.variety || "");
+        setLandmarks(plant.landmarks || "");
         setPlantingDate(plant.planting_date || "");
         setHarvestSeason(plant.harvest_season || "");
         setHarvestStartDate(plant.harvest_start_date || "");
         setHarvestEndDate(plant.harvest_end_date || "");
         setNotes(plant.notes || "");
         setPhotoUri(plant.photo_url);
+        setPhotoFilename(
+          plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "")
+        );
         // Load new fields
         setSunlight(plant.sunlight || "full_sun");
         setSoilType(plant.soil_type || "potting_mix");
@@ -486,6 +497,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
     if (!result.canceled) {
       setPhotoUri(result.assets[0].uri);
+      setPhotoFilename(null);
     }
   };
 
@@ -504,6 +516,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
     if (!result.canceled) {
       setPhotoUri(result.assets[0].uri);
+      setPhotoFilename(null);
     }
   };
 
@@ -577,16 +590,18 @@ export default function PlantFormScreen({ route, navigation }: any) {
     isSaving.current = true;
     setHasUnsavedChanges(false); // Clear flag immediately to prevent navigation alert
     try {
-      let photoUrl = photoUri;
+      let resolvedPhotoFilename = photoFilename;
       const combinedLocation = `${parentLocation.trim()} - ${childLocation.trim()}`;
 
-      // Upload new photo if changed
-      if (
-        photoUri &&
-        !photoUri.startsWith("http") &&
-        !photoUri.startsWith("data:")
-      ) {
-        photoUrl = await savePlantImage(photoUri);
+      // Save new photo if needed
+      if (photoUri) {
+        if (!resolvedPhotoFilename) {
+          const saved = await savePlantImage(photoUri);
+          resolvedPhotoFilename =
+            saved.filename ?? getFilenameFromUri(saved.uri);
+        }
+      } else {
+        resolvedPhotoFilename = null;
       }
 
       const plantData: any = {
@@ -598,10 +613,11 @@ export default function PlantFormScreen({ route, navigation }: any) {
         bed_name: spaceType === "bed" ? bedName.trim() || null : null,
         pot_size: spaceType === "pot" ? potSize.trim() || null : null,
         variety: variety.trim() || null,
+        landmarks: landmarks.trim() || null,
         planting_date: plantingDate.trim() || null,
         harvest_season: harvestSeason.trim() || null,
         notes: notes.trim() || null,
-        photo_url: photoUrl,
+        photo_filename: resolvedPhotoFilename ?? null,
         // New care fields
         sunlight: sunlight,
         soil_type: soilType,
@@ -679,7 +695,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
         <CollapsibleSection
           title="Basic Information"
           icon="information-circle"
-          fieldCount={7}
+          fieldCount={8}
           defaultExpanded={true}
           hasError={!name || !plantType || !plantVariety}
         >
@@ -814,6 +830,15 @@ export default function PlantFormScreen({ route, navigation }: any) {
               <Text style={styles.locationPreviewText}>{location}</Text>
             </View>
           )}
+
+          <Text style={styles.label}>Landmarks</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Nearby landmark or reference point"
+            value={landmarks}
+            onChangeText={(text) => setLandmarks(sanitizeLandmarkText(text))}
+            placeholderTextColor={theme.inputPlaceholder}
+          />
         </CollapsibleSection>
 
         <CollapsibleSection

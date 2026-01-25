@@ -140,6 +140,14 @@ export default function PlantDetailScreen({ route, navigation }: any) {
             <Ionicons name="location" size={20} color={theme.textSecondary} />
             <Text style={styles.infoText}>{plant.location}</Text>
           </View>
+          {plant.landmarks && (
+            <View style={styles.infoRow}>
+              <Ionicons name="flag" size={20} color={theme.textSecondary} />
+              <Text style={styles.infoText}>
+                Landmark: {plant.landmarks}
+              </Text>
+            </View>
+          )}
           <View style={styles.infoRow}>
             <Ionicons
               name={

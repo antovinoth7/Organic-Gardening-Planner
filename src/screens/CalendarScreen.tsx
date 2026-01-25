@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Animated, Platform } from 'react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { getTaskTemplates, createTaskTemplate, markTaskDone, generateRecurringTasksFromPlants, deleteTasksForPlantIds } from '../services/tasks';
+import { getTaskTemplates, createTaskTemplate, markTaskDone, deleteTasksForPlantIds } from '../services/tasks';
 import { getPlants, plantExists } from '../services/plants';
 import { getJournalEntries } from '../services/journal';
 import { TaskTemplate, Plant, TaskType, JournalEntry } from '../types/database.types';
@@ -21,6 +21,16 @@ const TASK_COLORS: Record<TaskType, string> = {
   spray: '#F44336',
   mulch: '#795548',
 };
+
+const GROUP_OPTIONS: Array<{
+  value: 'none' | 'location' | 'type';
+  label: string;
+  icon: string;
+}> = [
+  { value: 'none', label: 'All Tasks', icon: 'list' },
+  { value: 'location', label: 'Location', icon: 'location' },
+  { value: 'type', label: 'Type', icon: 'apps' },
+];
 
 export default function CalendarScreen() {
   const theme = useTheme();
@@ -49,7 +59,12 @@ export default function CalendarScreen() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
   const [groupBy, setGroupBy] = useState<'none' | 'location' | 'type'>('none');
+  const [showGroupMenu, setShowGroupMenu] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const isMountedRef = React.useRef(true);
+  const normalizeSearchText = (value: string) =>
+    sanitizeAlphaNumericSpaces(value).trim().toLowerCase();
+  const normalizedSearchQuery = normalizeSearchText(searchQuery);
 
   const setTodayView = () => {
     const today = new Date();
@@ -192,43 +207,18 @@ export default function CalendarScreen() {
     }
   };
 
-  const handleGenerateRecurringTasks = async () => {
-    Alert.alert(
-      'Generate Recurring Tasks',
-      'This will create automatic tasks for plants with care schedules. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Generate',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              await generateRecurringTasksFromPlants(plants);
-              Alert.alert('Success', 'Recurring tasks generated successfully!');
-              loadData();
-            } catch (error: any) {
-              Alert.alert('Error', error.message);
-            } finally {
-              setLoading(false);
-            }
-          }
-        }
-      ]
-    );
-  };
-
   const getMonthTasks = () => {
     const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
     const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
     
-    return tasks.filter(task => {
+    return filteredTasks.filter(task => {
       const dueDate = new Date(task.next_due_at);
       return dueDate >= monthStart && dueDate <= monthEnd;
     });
   };
 
   const getTasksForDate = (date: Date) => {
-    return tasks.filter(task => {
+    return filteredTasks.filter(task => {
       const dueDate = new Date(task.next_due_at);
       return dueDate.toDateString() === date.toDateString();
     });
@@ -303,9 +293,9 @@ export default function CalendarScreen() {
 
   // Get tasks for today and upcoming week
   const getTodayTasks = () => {
-    if (!tasks || tasks.length === 0) return [];
+    if (!filteredTasks || filteredTasks.length === 0) return [];
     const today = new Date();
-    return tasks.filter(task => {
+    return filteredTasks.filter(task => {
       if (!task || !task.next_due_at) return false;
       const dueDate = new Date(task.next_due_at);
       return dueDate.toDateString() === today.toDateString();
@@ -313,11 +303,11 @@ export default function CalendarScreen() {
   };
 
   const getWeekTasks = () => {
-    if (!tasks || tasks.length === 0) return [];
+    if (!filteredTasks || filteredTasks.length === 0) return [];
     const weekEnd = new Date(currentWeekStart);
     weekEnd.setDate(weekEnd.getDate() + 7);
     
-    return tasks.filter(task => {
+    return filteredTasks.filter(task => {
       if (!task || !task.next_due_at) return false;
       const dueDate = new Date(task.next_due_at);
       return dueDate >= currentWeekStart && dueDate < weekEnd;
@@ -366,6 +356,25 @@ export default function CalendarScreen() {
       location: plant?.location || '',
       type: plant?.plant_type || '',
     };
+  };
+
+  const filterTasksBySearch = (taskList: TaskTemplate[]) => {
+    if (!normalizedSearchQuery) return taskList;
+    return taskList.filter(task => {
+      if (!task) return false;
+      const plantDetails = getPlantDetails(task.plant_id);
+      const plantType = plantDetails.type || '';
+      const searchableValues = [
+        plantDetails.name,
+        plantDetails.location,
+        plantType,
+        plantType.replace(/_/g, ' '),
+        task.task_type,
+      ];
+      return searchableValues.some(value =>
+        typeof value === 'string' && normalizeSearchText(value).includes(normalizedSearchQuery)
+      );
+    });
   };
 
   const groupTasks = (taskList: TaskTemplate[]) => {
@@ -479,7 +488,7 @@ export default function CalendarScreen() {
             newDate.setDate(newDate.getDate() - 7);
             setCurrentWeekStart(newDate);
           }}>
-            <Ionicons name="chevron-back" size={24} color="#333" />
+            <Ionicons name="chevron-back" size={24} color={theme.text} />
           </TouchableOpacity>
           <Text style={styles.weekTitle}>
             {currentWeekStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} - {weekDays[6].toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
@@ -489,16 +498,13 @@ export default function CalendarScreen() {
             newDate.setDate(newDate.getDate() + 7);
             setCurrentWeekStart(newDate);
           }}>
-            <Ionicons name="chevron-forward" size={24} color="#333" />
+            <Ionicons name="chevron-forward" size={24} color={theme.text} />
           </TouchableOpacity>
         </View>
 
         <ScrollView ref={weekScrollRef} horizontal showsHorizontalScrollIndicator={false} style={styles.weekDaysScroll}>
           {weekDays.map((date, index) => {
-            const dayTasks = tasks.filter(task => {
-              const dueDate = new Date(task.next_due_at);
-              return dueDate.toDateString() === date.toDateString();
-            });
+            const dayTasks = getTasksForDate(date);
             const isToday = date.toDateString() === new Date().toDateString();
             const isSelected = selectedDate?.toDateString() === date.toDateString();
 
@@ -569,7 +575,7 @@ export default function CalendarScreen() {
             newDate.setMonth(newDate.getMonth() - 1);
             setCurrentMonth(newDate);
           }}>
-            <Ionicons name="chevron-back" size={24} color="#333" />
+            <Ionicons name="chevron-back" size={24} color={theme.text} />
           </TouchableOpacity>
           <Text style={styles.monthTitle}>
             {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
@@ -579,7 +585,7 @@ export default function CalendarScreen() {
             newDate.setMonth(newDate.getMonth() + 1);
             setCurrentMonth(newDate);
           }}>
-            <Ionicons name="chevron-forward" size={24} color="#333" />
+            <Ionicons name="chevron-forward" size={24} color={theme.text} />
           </TouchableOpacity>
         </View>
 
@@ -638,57 +644,119 @@ export default function CalendarScreen() {
     );
   };
 
+  const isSearching = normalizedSearchQuery.length > 0;
+  const filteredTasks = filterTasksBySearch(tasks);
   const harvestsReady = getHarvestsReady();
-  const todayTasks = getTodayTasks();
+  const filteredHarvestsReady = normalizedSearchQuery
+    ? harvestsReady.filter((item: any) => {
+        const plantName = item?.plant?.name || '';
+        const plantLocation = item?.plant?.location || '';
+        const plantType = item?.plant?.plant_type || '';
+        return [plantName, plantLocation, plantType, plantType.replace(/_/g, ' ')]
+          .some(value => normalizeSearchText(value).includes(normalizedSearchQuery));
+      })
+    : harvestsReady;
+  const todayTasks = isSearching ? [] : getTodayTasks();
   const weekTasks = selectedView === 'week' ? getWeekTasks() : getMonthTasks();
-  const groupedTasks = groupTasks(weekTasks);
+  const tasksForDisplay = isSearching ? filteredTasks : weekTasks;
+  const groupedTasks = groupTasks(tasksForDisplay);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Care Plan</Text>
-          <View style={styles.headerActions}>
-            <TouchableOpacity 
-              style={styles.viewToggle}
-              onPress={() => setSelectedView(selectedView === 'week' ? 'month' : 'week')}
-            >
-              <Ionicons 
-                name={selectedView === 'week' ? 'calendar' : 'list'} 
-                size={20} 
-                color="#2e7d32" 
+          <View style={styles.headerTop}>
+            <View style={styles.searchWrapper}>
+              <Ionicons name="search" size={16} color={theme.textSecondary} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search..."
+                value={searchQuery}
+                onChangeText={(text) => setSearchQuery(sanitizeAlphaNumericSpaces(text))}
+                placeholderTextColor={theme.inputPlaceholder}
               />
-              <Text style={styles.viewToggleText}>
-                {selectedView === 'week' ? 'Month' : 'Week'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.groupButton}
-              onPress={() => {
-                const nextGroup = groupBy === 'none' ? 'location' : groupBy === 'location' ? 'type' : 'none';
-                setGroupBy(nextGroup);
-              }}
-            >
-              <Ionicons name="funnel" size={20} color="#2e7d32" />
-              <Text style={styles.groupButtonText}>
-                {groupBy === 'none' ? 'Group' : groupBy === 'location' ? 'Location' : 'Type'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.recurringButton}
-              onPress={handleGenerateRecurringTasks}
-            >
-              <Ionicons name="repeat" size={20} color="#2e7d32" />
-            </TouchableOpacity>
+              {searchQuery.trim() !== '' && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Ionicons name="close-circle" size={16} color={theme.textTertiary} />
+                </TouchableOpacity>
+              )}
+            </View>
+            <View style={styles.headerActions}>
+              <TouchableOpacity 
+                style={styles.viewToggle}
+                onPress={() => setSelectedView(selectedView === 'week' ? 'month' : 'week')}
+              >
+                <Ionicons 
+                  name={selectedView === 'week' ? 'calendar' : 'list'} 
+                  size={20} 
+                  color={theme.primary} 
+                />
+                <Text style={styles.viewToggleText}>
+                  {selectedView === 'week' ? 'Month' : 'Week'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.groupMenuButton,
+                  groupBy !== 'none' && styles.groupMenuButtonActive,
+                ]}
+                onPress={() => setShowGroupMenu(!showGroupMenu)}
+              >
+                <Ionicons
+                  name="options"
+                  size={20}
+                  color={groupBy !== 'none' ? theme.primary : theme.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
+
+        {showGroupMenu && (
+          <View style={styles.groupMenu}>
+            {GROUP_OPTIONS.map((option, index) => {
+              const isActive = groupBy === option.value;
+              return (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[
+                    styles.groupOption,
+                    isActive && styles.groupOptionActive,
+                    index === GROUP_OPTIONS.length - 1 && styles.groupOptionLast,
+                  ]}
+                  onPress={() => {
+                    setGroupBy(option.value);
+                    setShowGroupMenu(false);
+                  }}
+                >
+                  <Ionicons
+                    name={option.icon as any}
+                    size={18}
+                    color={isActive ? theme.primary : theme.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.groupText,
+                      isActive && styles.groupTextActive,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                  {isActive && (
+                    <Ionicons name="checkmark" size={18} color={theme.primary} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
 
         {/* Week or Month View */}
         {selectedView === 'week' ? renderWeekView() : renderMonthView()}
 
         <ScrollView ref={scrollViewRef} style={styles.content}>
           {/* Selected Date Tasks */}
-          {selectedDate && (
+          {!isSearching && selectedDate && (
             <View style={styles.section}>
               <View style={styles.selectedDateHeader}>
                 <Text style={styles.sectionTitle}>
@@ -721,11 +789,17 @@ export default function CalendarScreen() {
             </View>
           )}
 
+          {isSearching && filteredTasks.length === 0 && (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No tasks match your search</Text>
+            </View>
+          )}
+
           {/* Harvest Ready Section */}
-          {harvestsReady.length > 0 && (
+          {filteredHarvestsReady.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>🧺 Harvest Ready</Text>
-              {harvestsReady.map((item: any) => item && (
+              {filteredHarvestsReady.map((item: any) => item && (
                 <View key={item.plant.id} style={[styles.harvestCard, item.isReady && styles.harvestCardReady]}>
                   <View style={styles.harvestIcon}>
                     <Text style={styles.harvestEmoji}>
@@ -760,7 +834,13 @@ export default function CalendarScreen() {
                   {groupBy === 'location' ? `📍 ${groupName}` : groupBy === 'type' ? `${groupName.charAt(0).toUpperCase() + groupName.slice(1)}` : 'This Week'}
                 </Text>
               )}
-              {!groupName && <Text style={styles.sectionTitle}>This Week ({weekTasks.length})</Text>}
+              {!groupName && (
+                <Text style={styles.sectionTitle}>
+                  {isSearching
+                    ? `Search Results (${tasksForDisplay.length})`
+                    : `This Week (${weekTasks.length})`}
+                </Text>
+              )}
               {groupedTasks[groupName].map(renderSwipeableTask)}
             </View>
           ))}
@@ -1100,9 +1180,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     backgroundColor: theme.background,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 48,
     paddingBottom: 16,
@@ -1110,13 +1187,35 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  searchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: theme.border,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 12,
+    flex: 1,
+    minWidth: 0,
+    gap: 6,
+  },
+  searchInput: {
+    fontSize: 14,
     color: theme.text,
+    padding: 0,
+    flex: 1,
+    minWidth: 0,
   },
   headerActions: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
   viewToggle: {
@@ -1127,33 +1226,64 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     paddingHorizontal: 12,
     backgroundColor: theme.primaryLight,
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.primary,
   },
   viewToggleText: {
     fontSize: 12,
     fontWeight: '600',
     color: theme.primary,
   },
-  groupButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: theme.primaryLight,
-    borderRadius: 16,
-  },
-  groupButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.primary,
-  },
-  recurringButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  groupMenuButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: theme.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.primary,
+  },
+  groupMenuButtonActive: {
+    backgroundColor: theme.background,
+  },
+  groupMenu: {
+    backgroundColor: theme.backgroundSecondary,
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  groupOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+    gap: 12,
+  },
+  groupOptionActive: {
+    backgroundColor: theme.background,
+  },
+  groupOptionLast: {
+    borderBottomWidth: 0,
+  },
+  groupText: {
+    flex: 1,
+    fontSize: 15,
+    color: theme.text,
+  },
+  groupTextActive: {
+    fontWeight: '600',
+    color: theme.primary,
   },
   weekView: {
     backgroundColor: theme.backgroundSecondary,

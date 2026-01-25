@@ -265,10 +265,6 @@ export const deleteTasksForPlantIds = async (
   }
 };
 
-export const deleteTasksForPlant = async (plantId: string): Promise<void> => {
-  await deleteTasksForPlantIds([plantId]);
-};
-
 export const markTaskDone = async (
   template: TaskTemplate,
   notes?: string,

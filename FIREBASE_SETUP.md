@@ -83,7 +83,7 @@ service cloud.firestore {
              request.auth.uid == request.resource.data.user_id;
     }
     
-    // Plants collection - stores text metadata + local image URI (not actual image)
+    // Plants collection - stores text metadata + image filename (not actual image)
     match /plants/{plantId} {
       allow read, write: if isOwner();
       allow create: if isCreatingOwned();
@@ -101,7 +101,7 @@ service cloud.firestore {
       allow create: if isCreatingOwned();
     }
     
-    // Journal entries collection - stores text + local image URI (not actual image)
+      // Journal entries collection - stores text + image filenames (not actual images)
     match /journal_entries/{entryId} {
       allow read, write: if request.auth != null && 
                           request.auth.uid == resource.data.user_id;
@@ -183,7 +183,7 @@ Your app will create these collections automatically:
   user_id: string,
   name: string,
   plant_type: string,
-  photo_url: string | null,  // LOCAL file URI - NOT a cloud URL
+    photo_filename: string | null,  // Stored filename - NOT a cloud URL
   space_type: string,
   location: string,
   // ... other plant fields
@@ -224,8 +224,8 @@ Your app will create these collections automatically:
   id: string,
   user_id: string,
   plant_id: string | null,
-  content: string,
-  photo_url: string | null,  // LOCAL file URI - NOT a cloud URL
+    content: string,
+    photo_filenames: string[],  // Stored filenames - NOT a cloud URL
   created_at: timestamp
 }
 ```
@@ -237,7 +237,7 @@ Images are stored on device at:
 - `{app_directory}/garden_images/plant_{timestamp}_{random}.jpg`
 - `{app_directory}/garden_images/journal_{timestamp}_{random}.jpg`
 
-These are **never uploaded to Firebase** - only the local path strings are stored in Firestore.
+  These are **never uploaded to Firebase** - only the filenames are stored in Firestore.
 
 ## Troubleshooting
 

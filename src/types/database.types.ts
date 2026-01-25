@@ -26,10 +26,13 @@ export interface Plant {
   name: string;
   plant_type: PlantType;
   plant_variety?: string | null;
-  // Local file URI - images stored on device, not in cloud
+  // Stable filename stored in Firestore/backups
+  photo_filename?: string | null;
+  // Local file URI derived from filename (not stored in Firestore)
   photo_url: string | null;
   space_type: SpaceType;
   location: string;
+  landmarks?: string | null;
   bed_name?: string | null;
   pot_size?: string | null;
   notes?: string | null;
@@ -112,7 +115,9 @@ export interface JournalEntry {
   plant_id: string | null;
   entry_type: JournalEntryType;
   content: string;
-  // Local file URIs - images stored on device, not in cloud
+  // Stable filenames stored in Firestore/backups
+  photo_filenames?: string[];
+  // Local file URIs derived from filenames
   photo_urls: string[];
   // Legacy field for backward compatibility
   photo_url?: string | null;

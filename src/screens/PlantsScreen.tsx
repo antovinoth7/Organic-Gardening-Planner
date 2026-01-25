@@ -227,19 +227,33 @@ export default function PlantsScreen({ navigation }: any) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>My Plants</Text>
+        <View style={styles.searchWrapper}>
+          <Ionicons name="search" size={16} color={theme.textSecondary} />
+          <TextInput
+            style={styles.compactSearchInput}
+            placeholder="Search..."
+            value={searchQuery}
+            onChangeText={(text) => setSearchQuery(sanitizeAlphaNumericSpaces(text))}
+            placeholderTextColor={theme.inputPlaceholder}
+          />
+          {searchQuery.trim() !== '' && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={16} color={theme.textTertiary} />
+            </TouchableOpacity>
+          )}
+        </View>
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.archiveButton}
             onPress={() => navigation.navigate('ArchivedPlants')}
           >
-            <Ionicons name="archive" size={20} color="#2e7d32" />
+            <Ionicons name="archive" size={20} color={theme.primary} />
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.sortButton}
             onPress={() => setShowSortMenu(!showSortMenu)}
           >
-            <Ionicons name="swap-vertical" size={22} color="#2e7d32" />
+            <Ionicons name="swap-vertical" size={22} color={theme.primary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -251,76 +265,59 @@ export default function PlantsScreen({ navigation }: any) {
             style={[styles.sortOption, sortBy === 'name' && styles.sortOptionActive]}
             onPress={() => { setSortBy('name'); setShowSortMenu(false); }}
           >
-            <Ionicons name="text" size={18} color={sortBy === 'name' ? '#2e7d32' : '#666'} />
+            <Ionicons name="text" size={18} color={sortBy === 'name' ? theme.primary : theme.textSecondary} />
             <Text style={[styles.sortText, sortBy === 'name' && styles.sortTextActive]}>Name (A-Z)</Text>
-            {sortBy === 'name' && <Ionicons name="checkmark" size={18} color="#2e7d32" />}
+            {sortBy === 'name' && <Ionicons name="checkmark" size={18} color={theme.primary} />}
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.sortOption, sortBy === 'newest' && styles.sortOptionActive]}
             onPress={() => { setSortBy('newest'); setShowSortMenu(false); }}
           >
-            <Ionicons name="time" size={18} color={sortBy === 'newest' ? '#2e7d32' : '#666'} />
+            <Ionicons name="time" size={18} color={sortBy === 'newest' ? theme.primary : theme.textSecondary} />
             <Text style={[styles.sortText, sortBy === 'newest' && styles.sortTextActive]}>Newest First</Text>
-            {sortBy === 'newest' && <Ionicons name="checkmark" size={18} color="#2e7d32" />}
+            {sortBy === 'newest' && <Ionicons name="checkmark" size={18} color={theme.primary} />}
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.sortOption, sortBy === 'oldest' && styles.sortOptionActive]}
             onPress={() => { setSortBy('oldest'); setShowSortMenu(false); }}
           >
-            <Ionicons name="hourglass" size={18} color={sortBy === 'oldest' ? '#2e7d32' : '#666'} />
+            <Ionicons name="hourglass" size={18} color={sortBy === 'oldest' ? theme.primary : theme.textSecondary} />
             <Text style={[styles.sortText, sortBy === 'oldest' && styles.sortTextActive]}>Oldest First</Text>
-            {sortBy === 'oldest' && <Ionicons name="checkmark" size={18} color="#2e7d32" />}
+            {sortBy === 'oldest' && <Ionicons name="checkmark" size={18} color={theme.primary} />}
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.sortOption, sortBy === 'health' && styles.sortOptionActive]}
             onPress={() => { setSortBy('health'); setShowSortMenu(false); }}
           >
-            <Ionicons name="fitness" size={18} color={sortBy === 'health' ? '#2e7d32' : '#666'} />
+            <Ionicons name="fitness" size={18} color={sortBy === 'health' ? theme.primary : theme.textSecondary} />
             <Text style={[styles.sortText, sortBy === 'health' && styles.sortTextActive]}>Health Status</Text>
-            {sortBy === 'health' && <Ionicons name="checkmark" size={18} color="#2e7d32" />}
+            {sortBy === 'health' && <Ionicons name="checkmark" size={18} color={theme.primary} />}
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.sortOption, sortBy === 'age' && styles.sortOptionActive]}
             onPress={() => { setSortBy('age'); setShowSortMenu(false); }}
           >
-            <Ionicons name="trending-up" size={18} color={sortBy === 'age' ? '#2e7d32' : '#666'} />
+            <Ionicons name="trending-up" size={18} color={sortBy === 'age' ? theme.primary : theme.textSecondary} />
             <Text style={[styles.sortText, sortBy === 'age' && styles.sortTextActive]}>Age (Oldest)</Text>
-            {sortBy === 'age' && <Ionicons name="checkmark" size={18} color="#2e7d32" />}
+            {sortBy === 'age' && <Ionicons name="checkmark" size={18} color={theme.primary} />}
           </TouchableOpacity>
         </View>
       )}
 
       <View style={styles.filterContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
-          {/* Search Button/Input */}
-          <View style={styles.searchWrapper}>
-            <Ionicons name="search" size={16} color="#666" />
-            <TextInput
-              style={styles.compactSearchInput}
-              placeholder="Search..."
-              value={searchQuery}
-              onChangeText={(text) => setSearchQuery(sanitizeAlphaNumericSpaces(text))}
-              placeholderTextColor="#999"
-            />
-            {searchQuery.trim() !== '' && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Ionicons name="close-circle" size={16} color="#999" />
-              </TouchableOpacity>
-            )}
-          </View>
-
           <TouchableOpacity 
             style={[styles.categoryChip, activeCategory === 'type' && styles.categoryChipActive]}
             onPress={() => setActiveCategory('type')}
           >
-            <Ionicons name="apps" size={16} color={activeCategory === 'type' ? '#2e7d32' : '#666'} />
+            <Ionicons name="apps" size={16} color={activeCategory === 'type' ? theme.primary : theme.textSecondary} />
             <Text style={[styles.categoryText, activeCategory === 'type' && styles.categoryTextActive]}>Plant Type</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.categoryChip, activeCategory === 'health' && styles.categoryChipActive]}
             onPress={() => setActiveCategory('health')}
           >
-            <Ionicons name="fitness" size={16} color={activeCategory === 'health' ? '#2e7d32' : '#666'} />
+            <Ionicons name="fitness" size={16} color={activeCategory === 'health' ? theme.primary : theme.textSecondary} />
             <Text style={[styles.categoryText, activeCategory === 'health' && styles.categoryTextActive]}>Health</Text>
             {filters.health !== 'all' && <View style={styles.activeDot} />}
           </TouchableOpacity>
@@ -328,7 +325,7 @@ export default function PlantsScreen({ navigation }: any) {
             style={[styles.categoryChip, activeCategory === 'space' && styles.categoryChipActive]}
             onPress={() => setActiveCategory('space')}
           >
-            <Ionicons name="cube" size={16} color={activeCategory === 'space' ? '#2e7d32' : '#666'} />
+            <Ionicons name="cube" size={16} color={activeCategory === 'space' ? theme.primary : theme.textSecondary} />
             <Text style={[styles.categoryText, activeCategory === 'space' && styles.categoryTextActive]}>Space</Text>
             {filters.space !== 'all' && <View style={styles.activeDot} />}
           </TouchableOpacity>
@@ -336,7 +333,7 @@ export default function PlantsScreen({ navigation }: any) {
             style={[styles.categoryChip, activeCategory === 'sunlight' && styles.categoryChipActive]}
             onPress={() => setActiveCategory('sunlight')}
           >
-            <Ionicons name="sunny" size={16} color={activeCategory === 'sunlight' ? '#2e7d32' : '#666'} />
+            <Ionicons name="sunny" size={16} color={activeCategory === 'sunlight' ? theme.primary : theme.textSecondary} />
             <Text style={[styles.categoryText, activeCategory === 'sunlight' && styles.categoryTextActive]}>Sunlight</Text>
             {filters.sunlight !== 'all' && <View style={styles.activeDot} />}
           </TouchableOpacity>
@@ -344,7 +341,7 @@ export default function PlantsScreen({ navigation }: any) {
             style={[styles.categoryChip, activeCategory === 'water' && styles.categoryChipActive]}
             onPress={() => setActiveCategory('water')}
           >
-            <Ionicons name="water" size={16} color={activeCategory === 'water' ? '#2e7d32' : '#666'} />
+            <Ionicons name="water" size={16} color={activeCategory === 'water' ? theme.primary : theme.textSecondary} />
             <Text style={[styles.categoryText, activeCategory === 'water' && styles.categoryTextActive]}>Water</Text>
             {filters.water !== 'all' && <View style={styles.activeDot} />}
           </TouchableOpacity>
@@ -352,7 +349,7 @@ export default function PlantsScreen({ navigation }: any) {
             style={[styles.categoryChip, activeCategory === 'location' && styles.categoryChipActive]}
             onPress={() => setActiveCategory('location')}
           >
-            <Ionicons name="location" size={16} color={activeCategory === 'location' ? '#2e7d32' : '#666'} />
+            <Ionicons name="location" size={16} color={activeCategory === 'location' ? theme.primary : theme.textSecondary} />
             <Text style={[styles.categoryText, activeCategory === 'location' && styles.categoryTextActive]}>Location</Text>
             {(filters.parentLocation !== '' || filters.childLocation !== '') && <View style={styles.activeDot} />}
           </TouchableOpacity>
@@ -461,21 +458,21 @@ export default function PlantsScreen({ navigation }: any) {
                 style={[styles.filterChip, filters.space === 'pot' && styles.filterChipActive]}
                 onPress={() => updateFilter('space', 'pot')}
               >
-                <Ionicons name="cube-outline" size={14} color={filters.space === 'pot' ? '#2e7d32' : '#666'} />
+                <Ionicons name="cube-outline" size={14} color={filters.space === 'pot' ? theme.primary : theme.textSecondary} />
                 <Text style={[styles.filterText, filters.space === 'pot' && styles.filterTextActive]}> Pot</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.filterChip, filters.space === 'bed' && styles.filterChipActive]}
                 onPress={() => updateFilter('space', 'bed')}
               >
-                <Ionicons name="apps" size={14} color={filters.space === 'bed' ? '#2e7d32' : '#666'} />
+                <Ionicons name="apps" size={14} color={filters.space === 'bed' ? theme.primary : theme.textSecondary} />
                 <Text style={[styles.filterText, filters.space === 'bed' && styles.filterTextActive]}> Bed</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.filterChip, filters.space === 'ground' && styles.filterChipActive]}
                 onPress={() => updateFilter('space', 'ground')}
               >
-                <Ionicons name="earth" size={14} color={filters.space === 'ground' ? '#2e7d32' : '#666'} />
+                <Ionicons name="earth" size={14} color={filters.space === 'ground' ? theme.primary : theme.textSecondary} />
                 <Text style={[styles.filterText, filters.space === 'ground' && styles.filterTextActive]}> Ground</Text>
               </TouchableOpacity>
             </>
@@ -692,7 +689,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -700,7 +697,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: theme.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -729,16 +726,17 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     borderColor: theme.border,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    marginRight: 8,
-    minWidth: 160,
+    marginRight: 12,
+    flex: 1,
+    minWidth: 0,
     gap: 6,
   },
   compactSearchInput: {
     fontSize: 14,
     color: theme.text,
     padding: 0,
-    minWidth: 80,
-    maxWidth: 120,
+    flex: 1,
+    minWidth: 0,
   },
   sortMenu: {
     backgroundColor: theme.backgroundSecondary,
@@ -773,7 +771,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   },
   sortTextActive: {
     fontWeight: '600',
-    color: '#2e7d32',
+    color: theme.primary,
   },
   filterContainer: {
     paddingHorizontal: 16,
@@ -798,23 +796,23 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     gap: 6,
   },
   categoryChipActive: {
-    backgroundColor: '#e8f5e9',
-    borderColor: '#2e7d32',
+    backgroundColor: theme.primaryLight,
+    borderColor: theme.primary,
   },
   categoryText: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     fontWeight: '500',
   },
   categoryTextActive: {
-    color: '#2e7d32',
+    color: theme.primary,
     fontWeight: '600',
   },
   activeDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#2e7d32',
+    backgroundColor: theme.primary,
     marginLeft: 4,
   },
   clearFiltersButton: {
@@ -852,16 +850,16 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     marginRight: 8,
   },
   filterChipActive: {
-    backgroundColor: '#e8f5e9',
-    borderColor: '#2e7d32',
+    backgroundColor: theme.primaryLight,
+    borderColor: theme.primary,
   },
   filterText: {
     fontSize: 14,
-    color: '#666',
+    color: theme.textSecondary,
     fontWeight: '500',
   },
   filterTextActive: {
-    color: '#2e7d32',
+    color: theme.primary,
     fontWeight: '600',
   },
   filterSectionLabel: {

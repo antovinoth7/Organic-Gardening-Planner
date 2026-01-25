@@ -13,7 +13,14 @@ import {
   orderBy,
   Timestamp 
 } from 'firebase/firestore';
-import { saveImageLocally, deleteImageLocally } from '../lib/imageStorage';
+import {
+  saveImageLocallyWithFilename,
+  deleteImageLocally,
+  resolveLocalImageUri,
+  resolveLocalImageUris,
+  getFilenameFromUri,
+  SavedImage,
+} from '../lib/imageStorage';
 import { getData, setData, KEYS } from '../lib/storage';
 import { withTimeoutAndRetry } from '../utils/firestoreTimeout';
 import { logError } from '../utils/errorLogging';
@@ -39,18 +46,32 @@ export const getJournalEntries = async (): Promise<JournalEntry[]> => {
       { timeoutMs: 15000, maxRetries: 2 }
     );
     
-    const entries = snapshot.docs.map(doc => {
-      const data = doc.data();
-      // Migrate legacy photo_url to photo_urls array
-      const photo_urls = data.photo_urls || (data.photo_url ? [data.photo_url] : []);
-      
-      return {
-        id: doc.id,
-        ...data,
-        photo_urls,
-        created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at
-      };
-    }) as JournalEntry[];
+    const entries = (await Promise.all(
+      snapshot.docs.map(async doc => {
+        const data = doc.data();
+        const legacyUrls = data.photo_urls || (data.photo_url ? [data.photo_url] : []);
+        const photoFilenames: string[] = Array.isArray(data.photo_filenames)
+          ? data.photo_filenames
+          : legacyUrls
+              .map((uri: string) => getFilenameFromUri(uri))
+              .filter((filename: string | null): filename is string => !!filename);
+        const resolvedPhotoUrls = photoFilenames.length > 0
+          ? await resolveLocalImageUris(photoFilenames)
+          : await resolveLocalImageUris(legacyUrls);
+        const resolvedLegacy = data.photo_url
+          ? await resolveLocalImageUri(data.photo_url)
+          : null;
+        
+        return {
+          id: doc.id,
+          ...data,
+          photo_filenames: photoFilenames,
+          photo_urls: resolvedPhotoUrls,
+          photo_url: resolvedLegacy,
+          created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at
+        };
+      })
+    )) as JournalEntry[];
     
     // Cache locally
     await setData(KEYS.JOURNAL, entries);
@@ -60,11 +81,25 @@ export const getJournalEntries = async (): Promise<JournalEntry[]> => {
     console.warn('Failed to fetch from Firestore, using cached data:', error);
     logError('network', 'Failed to fetch journal entries', error as Error);
     const cachedEntries = await getData<JournalEntry>(KEYS.JOURNAL);
-    // Ensure cached entries also have photo_urls migrated
-    return cachedEntries.map(entry => ({
-      ...entry,
-      photo_urls: entry.photo_urls || (entry.photo_url ? [entry.photo_url] : [])
-    }));
+    const resolvedCached = await Promise.all(
+      cachedEntries.map(async entry => {
+        const legacyUrls = entry.photo_urls || (entry.photo_url ? [entry.photo_url] : []);
+        const photoFilenames = entry.photo_filenames && entry.photo_filenames.length > 0
+          ? entry.photo_filenames
+          : legacyUrls
+              .map((uri: string) => getFilenameFromUri(uri))
+              .filter((filename: string | null): filename is string => !!filename);
+        const resolvedPhotoUrls = photoFilenames.length > 0
+          ? await resolveLocalImageUris(photoFilenames)
+          : await resolveLocalImageUris(legacyUrls);
+        return {
+          ...entry,
+          photo_filenames: photoFilenames,
+          photo_urls: resolvedPhotoUrls,
+        };
+      })
+    );
+    return resolvedCached;
   }
 };
 
@@ -74,27 +109,37 @@ export const createJournalEntry = async (
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
 
-  // CRITICAL: photo_urls should already be local file URIs
-  // Only the URI strings go to Firestore, not the actual image data
-  const newEntry = {
+  // CRITICAL: photo_filenames should already be set for local images
+  // Only the filenames go to Firestore, not the actual image data
+  const photoFilenames = entry.photo_filenames && entry.photo_filenames.length > 0
+    ? entry.photo_filenames
+    : (entry.photo_urls || [])
+        .map((uri) => getFilenameFromUri(uri))
+        .filter((filename): filename is string => !!filename);
+  const photoUrlsForCache = entry.photo_urls && entry.photo_urls.length > 0
+    ? entry.photo_urls
+    : await resolveLocalImageUris(photoFilenames);
+  const baseEntry = {
     ...entry,
-    // Ensure photo_urls exists as array for consistency
-    photo_urls: entry.photo_urls || [],
+    // Ensure photo_filenames exists as array for consistency
+    photo_filenames: photoFilenames,
     user_id: user.uid,
     created_at: Timestamp.now(),
   };
+  const { photo_urls: _photoUrls, photo_url: _photoUrl, ...firestoreEntry } = baseEntry;
   
   const docRef = await withTimeoutAndRetry(
-    () => addDoc(collection(db, JOURNAL_COLLECTION), newEntry),
+    () => addDoc(collection(db, JOURNAL_COLLECTION), firestoreEntry),
     { timeoutMs: 15000, maxRetries: 2 }
   );
   
   const result = {
     id: docRef.id,
     ...entry,
-    photo_urls: entry.photo_urls || [],
+    photo_filenames: photoFilenames,
+    photo_urls: photoUrlsForCache,
     user_id: user.uid,
-    created_at: newEntry.created_at.toDate().toISOString()
+    created_at: firestoreEntry.created_at.toDate().toISOString()
   } as JournalEntry;
   
   // Update local cache
@@ -111,9 +156,26 @@ export const updateJournalEntry = async (
 ): Promise<JournalEntry> => {
   const docRef = doc(db, JOURNAL_COLLECTION, id);
   
-  // CRITICAL: photo_url should already be a local file URI
+  // CRITICAL: photo_filenames should already be set for local images
+  const firestoreUpdates: Partial<JournalEntry> = { ...updates };
+  if ('photo_urls' in firestoreUpdates) {
+    delete (firestoreUpdates as Partial<JournalEntry>).photo_urls;
+  }
+  if ('photo_url' in firestoreUpdates) {
+    delete (firestoreUpdates as Partial<JournalEntry>).photo_url;
+  }
+  if (
+    (!firestoreUpdates.photo_filenames ||
+      firestoreUpdates.photo_filenames.length === 0) &&
+    updates.photo_urls &&
+    updates.photo_urls.length > 0
+  ) {
+    firestoreUpdates.photo_filenames = updates.photo_urls
+      .map((uri) => getFilenameFromUri(uri))
+      .filter((filename): filename is string => !!filename);
+  }
   await withTimeoutAndRetry(
-    () => updateDoc(docRef, updates as any),
+    () => updateDoc(docRef, firestoreUpdates as any),
     { timeoutMs: 15000, maxRetries: 2 }
   );
   
@@ -126,9 +188,20 @@ export const updateJournalEntry = async (
   if (!docSnap.exists()) throw new Error('Journal entry not found');
   
   const doc_data = docSnap.data();
+  const legacyUrls = doc_data.photo_urls || (doc_data.photo_url ? [doc_data.photo_url] : []);
+  const photoFilenames: string[] = Array.isArray(doc_data.photo_filenames)
+    ? doc_data.photo_filenames
+    : legacyUrls
+        .map((uri: string) => getFilenameFromUri(uri))
+        .filter((filename: string | null): filename is string => !!filename);
+  const resolvedPhotoUrls = photoFilenames.length > 0
+    ? await resolveLocalImageUris(photoFilenames)
+    : await resolveLocalImageUris(legacyUrls);
   const result = {
     id,
     ...doc_data,
+    photo_filenames: photoFilenames,
+    photo_urls: resolvedPhotoUrls,
     created_at: doc_data.created_at?.toDate?.()?.toISOString() || doc_data.created_at
   } as JournalEntry;
   
@@ -157,6 +230,13 @@ export const deleteJournalEntry = async (id: string): Promise<void> => {
     for (const photoUrl of entry.photo_urls) {
       await deleteImageLocally(photoUrl);
     }
+  } else if (entry?.photo_filenames && entry.photo_filenames.length > 0) {
+    for (const filename of entry.photo_filenames) {
+      const localUri = await resolveLocalImageUri(filename);
+      if (localUri) {
+        await deleteImageLocally(localUri);
+      }
+    }
   }
   // Also handle legacy photo_url field
   else if (entry?.photo_url) {
@@ -169,13 +249,13 @@ export const deleteJournalEntry = async (id: string): Promise<void> => {
 };
 
 /**
- * Save an image to local storage and return the local URI
+ * Save an image to local storage and return local URI + filename
  * This should be called BEFORE creating/updating a journal entry
  * @param sourceUri - Source image URI (from picker or camera)
- * @returns Local file URI to be stored in Firestore
+ * @returns Local file URI and filename for persistence
  */
-export const saveJournalImage = async (sourceUri: string): Promise<string> => {
-  return saveImageLocally(sourceUri, 'journal');
+export const saveJournalImage = async (sourceUri: string): Promise<SavedImage> => {
+  return saveImageLocallyWithFilename(sourceUri, 'journal');
 };
 
 

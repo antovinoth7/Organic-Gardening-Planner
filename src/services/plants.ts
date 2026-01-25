@@ -16,7 +16,12 @@ import {
   QueryDocumentSnapshot,
   Timestamp 
 } from 'firebase/firestore';
-import { saveImageLocally } from '../lib/imageStorage';
+import {
+  saveImageLocallyWithFilename,
+  resolveLocalImageUri,
+  getFilenameFromUri,
+  SavedImage,
+} from '../lib/imageStorage';
 import { getData, setData, KEYS } from '../lib/storage';
 import { withTimeoutAndRetry } from '../utils/firestoreTimeout';
 import { logError } from '../utils/errorLogging';
@@ -62,17 +67,25 @@ export const getPlants = async (
       { timeoutMs: 15000, maxRetries: 2 }
     );
     
-    const plants = snapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data,
-        plant_type: data.plant_type || 'vegetable',
-        created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at,
-        deleted_at: data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
-        is_deleted: data.is_deleted ?? false,
-      };
-    }) as Plant[];
+    const plants = (await Promise.all(
+      snapshot.docs.map(async doc => {
+        const data = doc.data();
+        const photoIdentifier = data.photo_filename ?? data.photo_url ?? null;
+        const resolvedPhotoUrl = await resolveLocalImageUri(photoIdentifier);
+        const photoFilename =
+          data.photo_filename ?? getFilenameFromUri(data.photo_url ?? '');
+        return {
+          id: doc.id,
+          ...data,
+          photo_filename: photoFilename ?? null,
+          photo_url: resolvedPhotoUrl ?? null,
+          plant_type: data.plant_type || 'vegetable',
+          created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at,
+          deleted_at: data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
+          is_deleted: data.is_deleted ?? false,
+        };
+      })
+    )) as Plant[];
     const activePlants = plants.filter((plant) => !plant.is_deleted);
     
     // Cache the results locally (only first page to avoid memory issues)
@@ -89,7 +102,20 @@ export const getPlants = async (
     logError('network', 'Failed to fetch plants from Firestore', error as Error, { userId: user.uid });
     // Fall back to cached data if offline
     const cachedPlants = await getData<Plant>(KEYS.PLANTS);
-    return { plants: cachedPlants.filter((plant) => !plant.is_deleted) };
+    const resolvedCached = await Promise.all(
+      cachedPlants.map(async (plant) => {
+        const photoIdentifier = plant.photo_filename ?? plant.photo_url ?? null;
+        const resolvedPhotoUrl = await resolveLocalImageUri(photoIdentifier);
+        const photoFilename =
+          plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? '');
+        return {
+          ...plant,
+          photo_filename: photoFilename ?? null,
+          photo_url: resolvedPhotoUrl ?? null,
+        };
+      })
+    );
+    return { plants: resolvedCached.filter((plant) => !plant.is_deleted) };
   }
 };
 
@@ -105,10 +131,17 @@ export const getPlant = async (id: string): Promise<Plant | null> => {
 
   const data = docSnap.data();
   if (data.is_deleted) return null;
+
+  const photoIdentifier = data.photo_filename ?? data.photo_url ?? null;
+  const resolvedPhotoUrl = await resolveLocalImageUri(photoIdentifier);
+  const photoFilename =
+    data.photo_filename ?? getFilenameFromUri(data.photo_url ?? '');
   
   return {
     id: docSnap.id,
     ...data,
+    photo_filename: photoFilename ?? null,
+    photo_url: resolvedPhotoUrl ?? null,
     created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at,
     deleted_at: data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
     is_deleted: data.is_deleted ?? false,
@@ -179,10 +212,14 @@ export const createPlant = async (plant: Omit<Plant, 'id' | 'user_id' | 'created
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
 
-  // CRITICAL: photo_url should already be a local file URI
-  // It must NOT be uploaded to Firebase Storage - only the URI string goes to Firestore
+  // CRITICAL: photo_filename should already be set for local images
+  // Only the filename (not the image data) is stored in Firestore
+  const { photo_url: _photoUrl, ...rest } = plant;
+  const photoFilename =
+    plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? '');
   const newPlant = {
-    ...plant,
+    ...rest,
+    photo_filename: photoFilename ?? null,
     user_id: user.uid,
     created_at: Timestamp.now(),
   };
@@ -192,9 +229,11 @@ export const createPlant = async (plant: Omit<Plant, 'id' | 'user_id' | 'created
     { timeoutMs: 15000, maxRetries: 2 }
   );
   
+  const resolvedPhotoUrl = await resolveLocalImageUri(photoFilename ?? null);
   const result = {
     id: docRef.id,
     ...newPlant,
+    photo_url: resolvedPhotoUrl ?? null,
     created_at: newPlant.created_at.toDate().toISOString()
   } as Plant;
   
@@ -208,10 +247,14 @@ export const createPlant = async (plant: Omit<Plant, 'id' | 'user_id' | 'created
 export const updatePlant = async (id: string, updates: Partial<Plant>): Promise<Plant> => {
   const docRef = doc(db, PLANTS_COLLECTION, id);
   
-  // CRITICAL: photo_url should already be a local file URI
-  // Only the URI string (not the image data) is stored in Firestore
+  // CRITICAL: photo_filename should already be set for local images
+  // Only the filename (not the image data) is stored in Firestore
+  const firestoreUpdates: Partial<Plant> = { ...updates };
+  if ('photo_url' in firestoreUpdates) {
+    delete (firestoreUpdates as Partial<Plant>).photo_url;
+  }
   await withTimeoutAndRetry(
-    () => updateDoc(docRef, updates as any),
+    () => updateDoc(docRef, firestoreUpdates as any),
     { timeoutMs: 15000, maxRetries: 2 }
   );
   
@@ -265,9 +308,15 @@ export const restorePlant = async (id: string): Promise<Plant> => {
   if (!docSnap.exists()) throw new Error('Plant not found');
 
   const data = docSnap.data();
+  const photoIdentifier = data.photo_filename ?? data.photo_url ?? null;
+  const resolvedPhotoUrl = await resolveLocalImageUri(photoIdentifier);
+  const photoFilename =
+    data.photo_filename ?? getFilenameFromUri(data.photo_url ?? '');
   const restored = {
     id: docSnap.id,
     ...data,
+    photo_filename: photoFilename ?? null,
+    photo_url: resolvedPhotoUrl ?? null,
     plant_type: data.plant_type || 'vegetable',
     created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at,
     deleted_at: data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
@@ -287,13 +336,13 @@ export const restorePlant = async (id: string): Promise<Plant> => {
 };
 
 /**
- * Save an image to local storage and return the local URI
+ * Save an image to local storage and return local URI + filename
  * This should be called BEFORE creating/updating a plant
  * @param sourceUri - Source image URI (from picker or camera)
- * @returns Local file URI to be stored in Firestore
+ * @returns Local file URI and filename for persistence
  */
-export const savePlantImage = async (sourceUri: string): Promise<string> => {
-  return saveImageLocally(sourceUri, 'plant');
+export const savePlantImage = async (sourceUri: string): Promise<SavedImage> => {
+  return saveImageLocallyWithFilename(sourceUri, 'plant');
 };
 
 

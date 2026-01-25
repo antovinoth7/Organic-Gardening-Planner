@@ -9,7 +9,7 @@
  * - Image storage (images are stored locally on device)
  * - Any paid features
  * 
- * Firebase Firestore stores only text data and local image URI strings.
+ * Firebase Firestore stores only text data and image filenames.
  * This keeps the app within free tier limits for 10-15+ years.
  */
 

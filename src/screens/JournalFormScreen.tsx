@@ -22,6 +22,15 @@ import { Plant, JournalEntry, JournalEntryType } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../theme";
 import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
+import {
+  getFilenameFromUri,
+  getLocalImageUriFromFilename,
+} from "../lib/imageStorage";
+
+type PhotoItem = {
+  uri: string | null;
+  filename: string | null;
+};
 
 export default function JournalFormScreen({ navigation, route }: any) {
   const theme = useTheme();
@@ -32,8 +41,23 @@ export default function JournalFormScreen({ navigation, route }: any) {
     editEntry?.entry_type || "observation"
   );
   const [content, setContent] = useState(editEntry?.content || "");
-  const [photoUris, setPhotoUris] = useState<string[]>(
-    editEntry?.photo_urls || []
+  const buildInitialPhotoItems = (): PhotoItem[] => {
+    if (!editEntry) return [];
+    if (editEntry.photo_filenames && editEntry.photo_filenames.length > 0) {
+      return editEntry.photo_filenames.map((filename) => ({
+        filename,
+        uri: getLocalImageUriFromFilename(filename),
+      }));
+    }
+    const legacyUris =
+      editEntry.photo_urls || (editEntry.photo_url ? [editEntry.photo_url] : []);
+    return legacyUris.map((uri) => ({
+      uri,
+      filename: getFilenameFromUri(uri),
+    }));
+  };
+  const [photoItems, setPhotoItems] = useState<PhotoItem[]>(
+    buildInitialPhotoItems
   );
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(
     editEntry?.plant_id || null
@@ -84,8 +108,11 @@ export default function JournalFormScreen({ navigation, route }: any) {
     });
 
     if (!result.canceled) {
-      const newUris = result.assets.map((asset) => asset.uri);
-      setPhotoUris((prev) => [...prev, ...newUris]);
+      const newItems = result.assets.map((asset) => ({
+        uri: asset.uri,
+        filename: null,
+      }));
+      setPhotoItems((prev) => [...prev, ...newItems]);
     }
   };
 
@@ -105,7 +132,10 @@ export default function JournalFormScreen({ navigation, route }: any) {
     if (!result.canceled) {
       const cameraUri = result.assets[0]?.uri;
       if (cameraUri) {
-        setPhotoUris((prev) => [...prev, cameraUri]);
+        setPhotoItems((prev) => [
+          ...prev,
+          { uri: cameraUri, filename: null },
+        ]);
       }
     }
   };
@@ -119,7 +149,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
   };
 
   const removeImage = (index: number) => {
-    setPhotoUris((prev) => prev.filter((_, i) => i !== index));
+    setPhotoItems((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSave = async () => {
@@ -176,22 +206,35 @@ export default function JournalFormScreen({ navigation, route }: any) {
     setLoading(true);
     try {
       const photoUrls: string[] = [];
+      const photoFilenames: string[] = [];
 
-      // Save new images (those not already saved with file:// protocol)
-      for (const uri of photoUris) {
-        if (uri.startsWith("file://")) {
-          // Already saved, keep as is
-          photoUrls.push(uri);
-        } else {
-          // New image, save it
-          const savedUri = await saveJournalImage(uri);
-          photoUrls.push(savedUri);
+      for (const item of photoItems) {
+        if (item.filename) {
+          photoFilenames.push(item.filename);
+          if (item.uri) {
+            photoUrls.push(item.uri);
+          } else {
+            const localUri = getLocalImageUriFromFilename(item.filename);
+            if (localUri) {
+              photoUrls.push(localUri);
+            }
+          }
+          continue;
+        }
+        if (item.uri) {
+          const saved = await saveJournalImage(item.uri);
+          const filename = saved.filename || getFilenameFromUri(saved.uri);
+          if (filename) {
+            photoFilenames.push(filename);
+          }
+          photoUrls.push(saved.uri);
         }
       }
 
       const entryData = {
         entry_type: entryType,
         content: content.trim(),
+        photo_filenames: photoFilenames,
         photo_urls: photoUrls,
         plant_id: selectedPlantId,
         harvest_quantity:
@@ -332,27 +375,29 @@ export default function JournalFormScreen({ navigation, route }: any) {
           </TouchableOpacity>
         </View>
 
-        {photoUris.length > 0 && (
+        {photoItems.length > 0 && (
           <View style={styles.photosGrid}>
-            {photoUris.map((uri, index) => (
-              <View key={index} style={styles.photoContainer}>
-                <Image source={{ uri }} style={styles.photoThumbnail} />
-                <TouchableOpacity
-                  style={styles.removePhotoButton}
-                  onPress={() => removeImage(index)}
-                >
-                  <Ionicons name="close-circle" size={24} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            ))}
+            {photoItems.map((item, index) =>
+              item.uri ? (
+                <View key={index} style={styles.photoContainer}>
+                  <Image source={{ uri: item.uri }} style={styles.photoThumbnail} />
+                  <TouchableOpacity
+                    style={styles.removePhotoButton}
+                    onPress={() => removeImage(index)}
+                  >
+                    <Ionicons name="close-circle" size={24} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              ) : null
+            )}
           </View>
         )}
 
         <TouchableOpacity style={styles.addPhotoButton} onPress={pickImage}>
           <Ionicons name="camera" size={20} color="#2e7d32" />
           <Text style={styles.addPhotoText}>
-            {photoUris.length > 0
-              ? `Add More Photos (${photoUris.length})`
+            {photoItems.length > 0
+              ? `Add More Photos (${photoItems.length})`
               : "Add Photos"}
           </Text>
         </TouchableOpacity>

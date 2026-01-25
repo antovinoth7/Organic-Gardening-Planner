@@ -219,7 +219,32 @@ export default function JournalScreen({ navigation }: any) {
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Text style={styles.title}>Garden Journal</Text>
+          <View style={styles.searchContainer}>
+            <Ionicons
+              name="search"
+              size={16}
+              color={theme.textSecondary}
+              style={styles.searchIcon}
+            />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search..."
+              placeholderTextColor={theme.textSecondary}
+              value={searchQuery}
+              onChangeText={(text) =>
+                setSearchQuery(sanitizeAlphaNumericSpaces(text))
+              }
+            />
+            {searchQuery !== "" && (
+              <TouchableOpacity onPress={() => setSearchQuery("")}>
+                <Ionicons
+                  name="close-circle"
+                  size={16}
+                  color={theme.textSecondary}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
           <View style={styles.headerActions}>
             <TouchableOpacity
               style={[
@@ -231,7 +256,7 @@ export default function JournalScreen({ navigation }: any) {
               <Ionicons
                 name="list"
                 size={20}
-                color={viewMode === "list" ? "#fff" : theme.textSecondary}
+                color={viewMode === "list" ? theme.primary : theme.textSecondary}
               />
             </TouchableOpacity>
             <TouchableOpacity
@@ -244,7 +269,7 @@ export default function JournalScreen({ navigation }: any) {
               <Ionicons
                 name="grid"
                 size={20}
-                color={viewMode === "gallery" ? "#fff" : theme.textSecondary}
+                color={viewMode === "gallery" ? theme.primary : theme.textSecondary}
               />
             </TouchableOpacity>
           </View>
@@ -295,31 +320,6 @@ export default function JournalScreen({ navigation }: any) {
 
         {/* Search Bar and Filters in One Row */}
         <View style={styles.searchFilterRow}>
-          <View style={styles.searchContainer}>
-            <Ionicons
-              name="search"
-              size={20}
-              color={theme.textSecondary}
-              style={styles.searchIcon}
-            />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search entries..."
-              placeholderTextColor={theme.textSecondary}
-              value={searchQuery}
-              onChangeText={(text) => setSearchQuery(sanitizeAlphaNumericSpaces(text))}
-            />
-            {searchQuery !== "" && (
-              <TouchableOpacity onPress={() => setSearchQuery("")}>
-                <Ionicons
-                  name="close-circle"
-                  size={20}
-                  color={theme.textSecondary}
-                />
-              </TouchableOpacity>
-            )}
-          </View>
-
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -375,7 +375,7 @@ export default function JournalScreen({ navigation }: any) {
                 name="basket"
                 size={14}
                 color={
-                  selectedType === "harvest" ? "#fff" : theme.textSecondary
+                  selectedType === "harvest" ? theme.primary : theme.textSecondary
                 }
               />
               <Text
@@ -402,7 +402,7 @@ export default function JournalScreen({ navigation }: any) {
                 name="eye"
                 size={14}
                 color={
-                  selectedType === "observation" ? "#fff" : theme.textSecondary
+                  selectedType === "observation" ? theme.primary : theme.textSecondary
                 }
               />
               <Text
@@ -426,7 +426,7 @@ export default function JournalScreen({ navigation }: any) {
               <Ionicons
                 name="alert-circle"
                 size={14}
-                color={selectedType === "issue" ? "#fff" : theme.textSecondary}
+                color={selectedType === "issue" ? theme.primary : theme.textSecondary}
               />
               <Text
                 style={[
@@ -452,7 +452,7 @@ export default function JournalScreen({ navigation }: any) {
                 name="flag"
                 size={14}
                 color={
-                  selectedType === "milestone" ? "#fff" : theme.textSecondary
+                  selectedType === "milestone" ? theme.primary : theme.textSecondary
                 }
               />
               <Text
@@ -687,11 +687,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       justifyContent: "space-between",
       alignItems: "center",
     },
-    title: {
-      fontSize: 28,
-      fontWeight: "bold",
-      color: theme.text,
-    },
     headerActions: {
       flexDirection: "row",
       alignItems: "center",
@@ -704,9 +699,12 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: theme.backgroundSecondary,
+      borderWidth: 1,
+      borderColor: theme.border,
     },
     viewToggleActive: {
-      backgroundColor: theme.primary,
+      backgroundColor: theme.primaryLight,
+      borderColor: theme.primary,
     },
     fab: {
       position: "absolute",
@@ -749,9 +747,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       textAlign: "center",
     },
     searchFilterRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
       marginTop: 10,
       marginBottom: 12,
     },
@@ -759,10 +754,14 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: theme.backgroundSecondary,
-      borderRadius: 10,
-      paddingHorizontal: 10,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: theme.border,
+      paddingHorizontal: 12,
       paddingVertical: 6,
-      width: 120,
+      marginRight: 12,
+      flex: 1,
+      minWidth: 0,
     },
     searchIcon: {
       marginRight: 6,
@@ -771,6 +770,8 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       flex: 1,
       fontSize: 14,
       color: theme.text,
+      padding: 0,
+      minWidth: 0,
     },
     filtersScroll: {
       flex: 1,
@@ -784,16 +785,19 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderRadius: 16,
       marginRight: 6,
       gap: 4,
+      borderWidth: 1,
+      borderColor: theme.border,
     },
     filterChipActive: {
-      backgroundColor: theme.primary,
+      backgroundColor: theme.primaryLight,
+      borderColor: theme.primary,
     },
     filterChipText: {
       fontSize: 14,
       color: theme.textSecondary,
     },
     filterChipTextActive: {
-      color: "#fff",
+      color: theme.primary,
     },
     content: {
       flex: 1,

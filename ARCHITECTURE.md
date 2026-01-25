@@ -32,10 +32,10 @@ Expo React Native app
 
 ## Data model and storage
 ### Firestore collections (text data only)
-- `plants`: plant metadata, including `photo_url` (local file URI).
+- `plants`: plant metadata, including `photo_filename` (stored filename).
 - `task_templates`: recurring task schedules and `next_due_at`.
 - `task_logs`: completion history.
-- `journal_entries`: journal text and `photo_urls` (local file URIs).
+- `journal_entries`: journal text and `photo_filenames` (stored filenames).
 
 Each document is scoped by `user_id` (auth is required before reading/writing).
 
@@ -46,17 +46,17 @@ Each document is scoped by `user_id` (auth is required before reading/writing).
 - Images:
   - Stored in `FileSystem.documentDirectory/garden_images/`.
   - Filenames use prefixes like `plant_` and `journal_`.
-  - Stored URIs are saved as strings in Firestore and AsyncStorage.
+  - Firestore stores filenames; AsyncStorage caches filenames and resolved local URIs.
   - On web, image URIs are blob URLs and no local deletion is attempted.
 
 ## Core data flows
 ### 1) Create a plant with a photo
 ```text
 User picks/takes photo
-  -> src/lib/imageStorage.ts (saveImageLocally)
+  -> src/lib/imageStorage.ts (saveImageLocallyWithFilename)
   -> Local URI saved under garden_images/
   -> src/services/plants.ts (createPlant)
-  -> Firestore stores text fields + photo_url string
+  -> Firestore stores text fields + photo_filename string
   -> AsyncStorage cache updated
   -> UI renders local image if file exists
 ```
@@ -69,11 +69,12 @@ User taps "Done"
   -> task_templates.next_due_at updated (or disabled for one-time tasks)
 ```
 
-### 3) Generate recurring tasks from plant care schedules
+### 3) Sync care tasks from plant settings
 ```text
-Calendar screen
-  -> generateRecurringTasksFromPlants(plants)
-  -> creates task_templates when care_schedule.auto_generate_tasks is true
+Plant form save
+  -> src/screens/PlantFormScreen.tsx
+  -> src/services/tasks.ts (syncCareTasksForPlant)
+  -> creates/updates task_templates for watering/fertilising/pruning frequencies
 ```
 
 ### 4) Backup and restore
@@ -90,8 +91,8 @@ Images-only ZIP:
 - `exportImagesOnly()` and `importImagesOnly()`.
 - Used in Settings UI; restores photos and updates URIs by filename match.
 
-Note: Only images-only backup is currently exposed in Settings UI; other backup
-flows are implemented in `src/services/backup.ts` and can be wired to UI.
+Note: Settings UI exposes data-only, complete (data + images), and images-only
+backup flows.
 
 ## Offline behavior
 - Read path: services fetch from Firestore and cache locally; on failure they

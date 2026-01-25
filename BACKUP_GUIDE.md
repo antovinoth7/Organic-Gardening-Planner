@@ -10,18 +10,19 @@ This app uses manual backups instead of automatic cloud backup for several reaso
 4. Longevity: Plain JSON and ZIP files are readable for decades
 5. Portability: Easy to move between services and devices
 
-## Backup Types (Current Code)
+## Backup Types (Settings)
 
 ### 1) Data-only backup (JSON)
 - Includes plants, tasks, task logs, and journal entries
-- Includes image URI strings only (no actual photos)
+- Includes image filenames only (no actual photos)
 - File name: `garden-backup-YYYY-MM-DD.json`
+- Available in Settings > Data Backup (Text Only)
 
 ### 2) Complete backup with images (ZIP)
 - Includes all data plus images
 - ZIP contains `backup.json` and an `images/` folder
 - File name: `garden-backup-YYYY-MM-DD.zip`
-- Available in the backup service; UI may not expose this in every build
+- Available in Settings > Complete Backup (Data + Images)
 
 ### 3) Images-only backup (ZIP)
 - Includes photos only plus a small manifest in `backup.json`
@@ -33,10 +34,10 @@ This app uses manual backups instead of automatic cloud backup for several reaso
 ## What Gets Backed Up?
 
 ### Included in data-only JSON
-- Plants (all fields, including `photo_url` string)
+- Plants (all fields, including `photo_filename` string)
 - Tasks (templates and schedules)
 - Task logs (completion history)
-- Journal entries (including `photo_urls` strings)
+- Journal entries (including `photo_filenames` strings)
 
 ### Not included in data-only JSON
 - Image files
@@ -52,19 +53,19 @@ This app uses manual backups instead of automatic cloud backup for several reaso
 
 ## How to Export
 
-### Images-only ZIP (current Settings UI)
+### Images-only ZIP (Settings > Images-Only Backup)
 1. Open the app and go to Settings.
 2. Open the "Images-Only Backup" section.
 3. Tap "Export Images Only (ZIP)".
 4. Save the file using the share sheet.
 
-### Data-only JSON (if your build exposes Data Backup)
+### Data-only JSON (Settings > Data Backup)
 1. Open Settings and go to Data Backup.
-2. Tap "Export Backup".
+2. Tap "Export Data Only (JSON)".
 3. Save `garden-backup-YYYY-MM-DD.json`.
 
-### Complete ZIP with images (if exposed)
-1. Open Settings and go to Data Backup.
+### Complete ZIP with images (Settings > Complete Backup)
+1. Open Settings and go to Complete Backup.
 2. Tap "Export Complete Backup (ZIP)".
 3. Save `garden-backup-YYYY-MM-DD.zip`.
 
@@ -103,7 +104,7 @@ This app uses manual backups instead of automatic cloud backup for several reaso
       "id": "plant_123",
       "name": "Tomato - Cherry",
       "plant_type": "vegetable",
-      "photo_url": "file:///path/to/image.jpg",
+      "photo_filename": "plant_1700000000000_ab12cd.jpg",
       "location": "Balcony",
       "created_at": "2024-03-01T10:00:00Z"
     }
@@ -115,7 +116,7 @@ This app uses manual backups instead of automatic cloud backup for several reaso
       "id": "journal_123",
       "entry_type": "observation",
       "content": "First flowers today",
-      "photo_urls": ["file:///path/to/image.jpg"],
+      "photo_filenames": ["journal_1700000000000_ef34gh.jpg"],
       "created_at": "2024-03-10T08:00:00Z"
     }
   ]
@@ -139,7 +140,7 @@ Images-only ZIPs also contain `backup.json`, but it is only a small manifest.
 2. Text data syncs from Firestore.
 3. Restore photos using one of these options:
    - Images-only ZIP import (Settings > Images-Only Backup)
-   - Complete ZIP import (if available in your build)
+   - Complete ZIP import (Settings > Complete Backup)
 4. Import a JSON backup if you need to restore or merge data.
 
 ## Backup Strategies
