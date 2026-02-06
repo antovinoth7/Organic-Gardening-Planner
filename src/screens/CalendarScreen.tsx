@@ -100,11 +100,11 @@ export default function CalendarScreen() {
     };
   }, []);
 
+  // Only reset view when screen comes into focus, don't reload data
   useFocusEffect(
     React.useCallback(() => {
       // Reset scroll to top
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-      loadData();
       setTodayView();
     }, [])
   );
@@ -377,11 +377,27 @@ export default function CalendarScreen() {
     });
   };
 
+  const sortTasks = (taskList: TaskTemplate[]) => {
+    return [...taskList].sort((a, b) => {
+      // First, sort by due date/time (earliest first)
+      const dateA = new Date(a.next_due_at).getTime();
+      const dateB = new Date(b.next_due_at).getTime();
+      if (dateA !== dateB) {
+        return dateA - dateB;
+      }
+      
+      // If same date/time, sort by task type alphabetically
+      return a.task_type.localeCompare(b.task_type);
+    });
+  };
+
   const groupTasks = (taskList: TaskTemplate[]) => {
-    if (groupBy === 'none') return { '': taskList };
+    const sorted = sortTasks(taskList);
+    
+    if (groupBy === 'none') return { '': sorted };
     
     if (groupBy === 'location') {
-      return taskList.reduce((acc, task) => {
+      return sorted.reduce((acc, task) => {
         const location = getPlantDetails(task.plant_id).location || 'General';
         if (!acc[location]) acc[location] = [];
         acc[location].push(task);
@@ -390,7 +406,7 @@ export default function CalendarScreen() {
     }
     
     if (groupBy === 'type') {
-      return taskList.reduce((acc, task) => {
+      return sorted.reduce((acc, task) => {
         const type = task.task_type;
         if (!acc[type]) acc[type] = [];
         acc[type].push(task);
@@ -398,7 +414,7 @@ export default function CalendarScreen() {
       }, {} as Record<string, TaskTemplate[]>);
     }
     
-    return { '': taskList };
+    return { '': sorted };
   };
 
   const renderSwipeableTask = (task: TaskTemplate) => {
@@ -773,7 +789,13 @@ export default function CalendarScreen() {
                 </>
               ) : (
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateText}>No tasks scheduled for this day</Text>
+                  <Ionicons name="calendar-outline" size={48} color={theme.border} />
+                  <Text style={styles.emptyStateText}>No tasks scheduled</Text>
+                  <Text style={styles.emptyStateSubtext}>
+                    {selectedDate.toDateString() === new Date().toDateString()
+                      ? "You're all caught up for today!"
+                      : "No tasks planned for this date"}
+                  </Text>
                   <TouchableOpacity 
                     style={styles.addTaskButton}
                     onPress={() => {
@@ -781,7 +803,7 @@ export default function CalendarScreen() {
                       setShowModal(true);
                     }}
                   >
-                    <Ionicons name="add-circle-outline" size={20} color="#2e7d32" />
+                    <Ionicons name="add-circle-outline" size={20} color={theme.primary} />
                     <Text style={styles.addTaskButtonText}>Add Task</Text>
                   </TouchableOpacity>
                 </View>
@@ -791,7 +813,21 @@ export default function CalendarScreen() {
 
           {isSearching && filteredTasks.length === 0 && (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>No tasks match your search</Text>
+              <Ionicons name="search-outline" size={48} color={theme.border} />
+              <Text style={styles.emptyStateText}>No tasks found</Text>
+              <Text style={styles.emptyStateSubtext}>
+                {tasks.length === 0 
+                  ? "Create your first task to get started"
+                  : `No results for "${searchQuery}"`}
+              </Text>
+              {tasks.length > 0 && (
+                <TouchableOpacity
+                  style={styles.clearSearchButton}
+                  onPress={() => setSearchQuery('')}
+                >
+                  <Text style={styles.clearSearchText}>Clear Search</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -827,23 +863,43 @@ export default function CalendarScreen() {
           )}
 
           {/* Grouped Tasks */}
-          {Object.keys(groupedTasks).map(groupName => (
-            <View key={groupName} style={styles.section}>
-              {groupName && (
-                <Text style={styles.sectionTitle}>
-                  {groupBy === 'location' ? `📍 ${groupName}` : groupBy === 'type' ? `${groupName.charAt(0).toUpperCase() + groupName.slice(1)}` : 'This Week'}
-                </Text>
-              )}
-              {!groupName && (
-                <Text style={styles.sectionTitle}>
-                  {isSearching
-                    ? `Search Results (${tasksForDisplay.length})`
-                    : `This Week (${weekTasks.length})`}
-                </Text>
-              )}
-              {groupedTasks[groupName].map(renderSwipeableTask)}
+          {Object.keys(groupedTasks).length > 0 && Object.values(groupedTasks).some(arr => arr.length > 0) ? (
+            Object.keys(groupedTasks).map(groupName => (
+              <View key={groupName} style={styles.section}>
+                {groupName && (
+                  <Text style={styles.sectionTitle}>
+                    {groupBy === 'location' ? `📍 ${groupName}` : groupBy === 'type' ? `${groupName.charAt(0).toUpperCase() + groupName.slice(1)}` : 'This Week'}
+                  </Text>
+                )}
+                {!groupName && (
+                  <Text style={styles.sectionTitle}>
+                    {isSearching
+                      ? `Search Results (${tasksForDisplay.length})`
+                      : `This Week (${weekTasks.length})`}
+                  </Text>
+                )}
+                {groupedTasks[groupName].map(renderSwipeableTask)}
+                {groupedTasks[groupName].length > 0 && !groupName && (
+                  <Text style={styles.swipeHint}>← Swipe left to complete</Text>
+                )}
+              </View>
+            ))
+          ) : !isSearching && todayTasks.length === 0 && !selectedDate && (
+            <View style={styles.emptyState}>
+              <Ionicons name="checkbox-outline" size={48} color={theme.border} />
+              <Text style={styles.emptyStateText}>No upcoming tasks</Text>
+              <Text style={styles.emptyStateSubtext}>
+                Create a care plan to stay on top of your garden
+              </Text>
+              <TouchableOpacity
+                style={styles.addTaskButton}
+                onPress={() => setShowModal(true)}
+              >
+                <Ionicons name="add-circle-outline" size={20} color={theme.primary} />
+                <Text style={styles.addTaskButtonText}>Create Task</Text>
+              </TouchableOpacity>
             </View>
-          ))}
+          )}
         </ScrollView>
 
         {/* Floating Action Button */}
@@ -1286,38 +1342,70 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     color: theme.primary,
   },
   weekView: {
-    backgroundColor: theme.backgroundSecondary,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
+    backgroundColor: theme.card,
+    margin: 16,
+    marginBottom: 8,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
   },
   weekHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: 12,
+    paddingBottom: 8,
   },
   weekTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: theme.text,
   },
   weekDaysScroll: {
     paddingHorizontal: 12,
-    paddingBottom: 16,
+    paddingBottom: 12,
   },
   weekDay: {
-    width: 70,
+    width: 64,
+    minWidth: 64,
+    maxWidth: 64,
     alignItems: 'center',
-    marginHorizontal: 4,
+    marginHorizontal: 3,
     paddingVertical: 12,
+    paddingHorizontal: 4,
     borderRadius: 12,
     backgroundColor: theme.background,
+    borderWidth: 0,
+    borderColor: 'transparent',
   },
   weekDayToday: {
+    width: 64,
+    minWidth: 64,
+    maxWidth: 64,
     backgroundColor: theme.primary,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    shadowColor: theme.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 4,
   },
   weekDaySelected: {
+    width: 64,
+    minWidth: 64,
+    maxWidth: 64,
     backgroundColor: theme.accent,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    shadowColor: theme.accent,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 4,
   },
   weekDayName: {
     fontSize: 12,
@@ -1359,77 +1447,115 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     color: theme.textTertiary,
   },
   monthView: {
-    backgroundColor: theme.backgroundSecondary,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
+    backgroundColor: theme.card,
+    borderBottomWidth: 0,
+    margin: 16,
+    marginBottom: 8,
+    borderRadius: 20,
     padding: 16,
+    paddingBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
   },
   monthHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border + '30',
   },
   monthTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: theme.text,
+    letterSpacing: 0.5,
   },
   monthWeekdays: {
     flexDirection: 'row',
-    marginBottom: 8,
+    marginBottom: 4,
+    paddingVertical: 4,
   },
   monthWeekday: {
-    flex: 1,
+    flexBasis: '13.5%',
+    flexGrow: 0,
+    flexShrink: 0,
+    marginHorizontal: '0.35%',
     textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     color: theme.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   monthGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
   monthCell: {
-    width: '14.28%',
+    flexBasis: '13.5%',
+    flexGrow: 0,
+    flexShrink: 0,
     aspectRatio: 1,
-    padding: 4,
+    minHeight: 42,
+    maxHeight: 48,
+    padding: 3,
+    marginHorizontal: '0.35%',
+    marginVertical: 1,
     alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: theme.border,
+    justifyContent: 'center',
+    borderWidth: 0,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
   },
   monthCellToday: {
-    backgroundColor: theme.primaryLight,
+    backgroundColor: theme.primary + '20',
+    borderWidth: 2,
+    borderColor: theme.primary,
   },
   monthCellSelected: {
-    backgroundColor: theme.accentLight,
-    borderWidth: 2,
-    borderColor: theme.accent,
+    backgroundColor: theme.primary,
+    borderWidth: 0,
+    shadowColor: theme.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   monthCellNumber: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
     color: theme.text,
     marginBottom: 2,
   },
   monthCellNumberToday: {
     color: theme.primary,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   monthCellNumberSelected: {
-    color: theme.accent,
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   monthCellDots: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 2,
+    minHeight: 5,
   },
   monthCellDot: {
     width: 4,
     height: 4,
     borderRadius: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 1,
   },
   monthCellMore: {
     fontSize: 8,
@@ -1447,13 +1573,19 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: theme.primaryLight,
+    borderRadius: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: theme.primary,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '700',
     color: theme.text,
-    marginBottom: 12,
+    marginBottom: 16,
+    letterSpacing: 0.3,
   },
   emptyState: {
     alignItems: 'center',
@@ -1465,9 +1597,30 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     borderStyle: 'dashed',
   },
   emptyStateText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.text,
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptyStateSubtext: {
     fontSize: 14,
-    color: theme.textTertiary,
+    color: theme.textSecondary,
+    marginTop: 8,
     marginBottom: 16,
+    textAlign: 'center',
+  },
+  clearSearchButton: {
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: theme.primary,
+    borderRadius: 8,
+  },
+  clearSearchText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   addTaskButton: {
     flexDirection: 'row',
@@ -1485,22 +1638,23 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   },
   taskCard: {
     flexDirection: 'row',
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: 12,
+    backgroundColor: theme.card,
+    borderRadius: 16,
     marginBottom: 12,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 3,
   },
   taskCardOverdue: {
-    borderWidth: 2,
-    borderColor: theme.error,
+    borderWidth: 1,
+    borderColor: theme.error + '40',
+    backgroundColor: theme.error + '08',
   },
   taskColorBar: {
-    width: 6,
+    width: 5,
   },
   taskContent: {
     flex: 1,
@@ -1511,10 +1665,10 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     alignItems: 'center',
   },
   taskIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: theme.background,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -1553,8 +1707,13 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'flex-end',
     width: 100,
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 12,
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   swipeActionContent: {
     alignItems: 'center',
@@ -1567,31 +1726,41 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     marginTop: 4,
   },
   swipeHint: {
-    fontSize: 12,
+    fontSize: 13,
     color: theme.textTertiary,
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 12,
+    marginBottom: 8,
     fontStyle: 'italic',
+    opacity: 0.7,
   },
   harvestCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: 12,
+    backgroundColor: theme.card,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    borderWidth: 2,
-    borderColor: theme.border,
+    borderWidth: 1,
+    borderColor: theme.border + '40',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
   harvestCardReady: {
     borderColor: '#4CAF50',
-    backgroundColor: theme.primaryLight,
+    backgroundColor: '#4CAF50' + '10',
+    borderWidth: 2,
+    shadowColor: '#4CAF50',
+    shadowOpacity: 0.15,
   },
   harvestIcon: {
-    marginRight: 12,
+    marginRight: 16,
   },
   harvestEmoji: {
-    fontSize: 32,
+    fontSize: 36,
   },
   harvestInfo: {
     flex: 1,
@@ -1609,18 +1778,18 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 20,
-    bottom: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    bottom: 90,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: theme.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowColor: theme.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
   },
   modalOverlay: {
     flex: 1,

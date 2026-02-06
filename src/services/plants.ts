@@ -1,5 +1,5 @@
 import { Plant } from '../types/database.types';
-import { db, auth } from '../lib/firebase';
+import { db, auth, refreshAuthToken } from '../lib/firebase';
 import { 
   collection, 
   doc, 
@@ -42,6 +42,9 @@ export const getPlants = async (
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
 
+  // Refresh token to prevent expiration issues (tokens expire after 1 hour)
+  await refreshAuthToken();
+
   try {
     // Build query with pagination
     let q = query(
@@ -67,25 +70,41 @@ export const getPlants = async (
       { timeoutMs: 15000, maxRetries: 2 }
     );
     
-    const plants = (await Promise.all(
-      snapshot.docs.map(async doc => {
-        const data = doc.data();
-        const photoIdentifier = data.photo_filename ?? data.photo_url ?? null;
-        const resolvedPhotoUrl = await resolveLocalImageUri(photoIdentifier);
-        const photoFilename =
-          data.photo_filename ?? getFilenameFromUri(data.photo_url ?? '');
-        return {
-          id: doc.id,
-          ...data,
-          photo_filename: photoFilename ?? null,
-          photo_url: resolvedPhotoUrl ?? null,
-          plant_type: data.plant_type || 'vegetable',
-          created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at,
-          deleted_at: data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
-          is_deleted: data.is_deleted ?? false,
-        };
+    // Batch image resolution for better performance
+    const plantsData = snapshot.docs.map(doc => {
+      const data = doc.data();
+      const photoFilename = data.photo_filename ?? getFilenameFromUri(data.photo_url ?? '');
+      return {
+        id: doc.id,
+        ...data,
+        photo_filename: photoFilename ?? null,
+        photoIdentifier: data.photo_filename ?? data.photo_url ?? null,
+        plant_type: data.plant_type || 'vegetable',
+        created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at,
+        deleted_at: data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
+        is_deleted: data.is_deleted ?? false,
+      };
+    });
+    
+    // Resolve all images in parallel
+    const resolvedUrls = await Promise.all(
+      plantsData.map(async p => {
+        try {
+          return await resolveLocalImageUri(p.photoIdentifier);
+        } catch (error) {
+          console.warn('Failed to resolve plant image:', error);
+          return null;
+        }
       })
-    )) as Plant[];
+    );
+    
+    const plants = plantsData.map((plant, index) => {
+      const { photoIdentifier, ...plantData } = plant;
+      return {
+        ...plantData,
+        photo_url: resolvedUrls[index] ?? null,
+      } as Plant;
+    });
     const activePlants = plants.filter((plant) => !plant.is_deleted);
     
     // Cache the results locally (only first page to avoid memory issues)
@@ -102,24 +121,32 @@ export const getPlants = async (
     logError('network', 'Failed to fetch plants from Firestore', error as Error, { userId: user.uid });
     // Fall back to cached data if offline
     const cachedPlants = await getData<Plant>(KEYS.PLANTS);
-    const resolvedCached = await Promise.all(
-      cachedPlants.map(async (plant) => {
-        const photoIdentifier = plant.photo_filename ?? plant.photo_url ?? null;
-        const resolvedPhotoUrl = await resolveLocalImageUri(photoIdentifier);
-        const photoFilename =
-          plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? '');
-        return {
-          ...plant,
-          photo_filename: photoFilename ?? null,
-          photo_url: resolvedPhotoUrl ?? null,
-        };
+    // Batch resolve cached images for performance
+    const photoIdentifiers = cachedPlants.map(p => p.photo_filename ?? p.photo_url ?? null);
+    const resolvedUrls = await Promise.all(
+      photoIdentifiers.map(async id => {
+        try {
+          return await resolveLocalImageUri(id);
+        } catch (error) {
+          console.warn('Failed to resolve cached plant image:', error);
+          return null;
+        }
       })
     );
+    
+    const resolvedCached = cachedPlants.map((plant, index) => ({
+      ...plant,
+      photo_filename: plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? '') ?? null,
+      photo_url: resolvedUrls[index] ?? null,
+    }));
     return { plants: resolvedCached.filter((plant) => !plant.is_deleted) };
   }
 };
 
 export const getPlant = async (id: string): Promise<Plant | null> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+  
   const docRef = doc(db, PLANTS_COLLECTION, id);
   
   const docSnap = await withTimeoutAndRetry(
@@ -130,6 +157,13 @@ export const getPlant = async (id: string): Promise<Plant | null> => {
   if (!docSnap.exists()) return null;
 
   const data = docSnap.data();
+  
+  // Security: Verify the plant belongs to the current user
+  if (data.user_id !== user.uid) {
+    console.warn('Attempted to access plant belonging to another user');
+    return null;
+  }
+  
   if (data.is_deleted) return null;
 
   const photoIdentifier = data.photo_filename ?? data.photo_url ?? null;
@@ -270,6 +304,42 @@ export const updatePlant = async (id: string, updates: Partial<Plant>): Promise<
   }
   
   return updated;
+};
+
+export const updatePlantLocation = async (
+  id: string,
+  location: string
+): Promise<void> => {
+  const docRef = doc(db, PLANTS_COLLECTION, id);
+  await withTimeoutAndRetry(
+    () => updateDoc(docRef, { location }),
+    { timeoutMs: 10000, maxRetries: 2 }
+  );
+
+  const cachedPlants = await getData<Plant>(KEYS.PLANTS);
+  const index = cachedPlants.findIndex((plant) => plant.id === id);
+  if (index !== -1) {
+    cachedPlants[index] = { ...cachedPlants[index], location };
+    await setData(KEYS.PLANTS, cachedPlants);
+  }
+};
+
+export const updatePlantVariety = async (
+  id: string,
+  plantVariety: string
+): Promise<void> => {
+  const docRef = doc(db, PLANTS_COLLECTION, id);
+  await withTimeoutAndRetry(
+    () => updateDoc(docRef, { plant_variety: plantVariety }),
+    { timeoutMs: 10000, maxRetries: 2 }
+  );
+
+  const cachedPlants = await getData<Plant>(KEYS.PLANTS);
+  const index = cachedPlants.findIndex((plant) => plant.id === id);
+  if (index !== -1) {
+    cachedPlants[index] = { ...cachedPlants[index], plant_variety: plantVariety };
+    await setData(KEYS.PLANTS, cachedPlants);
+  }
 };
 
 export const deletePlant = async (id: string): Promise<void> => {

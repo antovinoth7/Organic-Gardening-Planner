@@ -9,6 +9,38 @@ export type HealthStatus = 'healthy' | 'stressed' | 'recovering' | 'sick';
 export type FertiliserType = 'compost' | 'vermicompost' | 'fish_emulsion' | 'seaweed' | 'neem_cake' | 'other';
 export type GrowthStage = 'seedling' | 'vegetative' | 'flowering' | 'fruiting' | 'dormant' | 'mature';
 
+export interface LocationConfig {
+  parentLocations: string[];
+  childLocations: string[];
+}
+
+export interface PlantCatalogCategory {
+  plants: string[];
+  varieties: Record<string, string[]>;
+}
+
+export interface PlantCatalog {
+  categories: Record<PlantType, PlantCatalogCategory>;
+}
+
+export interface PlantCareProfile {
+  waterRequirement: WaterRequirement;
+  wateringFrequencyDays: number;
+  fertilisingFrequencyDays: number;
+  pruningFrequencyDays?: number;
+  sunlight: SunlightLevel;
+  soilType: SoilType;
+  preferredFertiliser: FertiliserType;
+  initialGrowthStage: GrowthStage;
+}
+
+export type PlantCareProfileOverride = Partial<PlantCareProfile>;
+
+export type PlantCareProfiles = Record<
+  PlantType,
+  Record<string, PlantCareProfileOverride>
+>;
+
 export interface PestDiseaseRecord {
   id?: string;
   type: 'pest' | 'disease';

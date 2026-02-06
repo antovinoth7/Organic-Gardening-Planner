@@ -91,12 +91,25 @@ async function withRetry<T>(
 
       // Don't retry on auth errors
       if (error.code === 'permission-denied' || error.code === 'unauthenticated') {
+        console.error('Authentication error, not retrying:', error.code);
+        throw error;
+      }
+
+      // Don't retry on invalid argument errors
+      if (error.code === 'invalid-argument') {
+        console.error('Invalid argument error, not retrying:', error.message);
         throw error;
       }
 
       // Don't retry if no network
       if (!isNetworkAvailable()) {
+        console.warn('No network connection, stopping retries');
         throw new Error('No network connection available');
+      }
+
+      // Log network errors with more details
+      if (error.code === 'unavailable' || error.message?.includes('Failed to fetch')) {
+        console.warn(`Network unavailable (attempt ${attempt + 1}/${maxRetries + 1}):`, error.message);
       }
 
       // Last attempt failed

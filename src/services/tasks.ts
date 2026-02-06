@@ -15,8 +15,7 @@ import {
 } from "firebase/firestore";
 import { getData, setData, KEYS } from "../lib/storage";
 import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
-import { logError } from "../utils/errorLogging";
-import { getCurrentSeason } from "../utils/seasonHelpers";
+import { logError } from "../utils/errorLogging";import { refreshAuthToken } from '../lib/firebase';import { getCurrentSeason } from "../utils/seasonHelpers";
 
 const TASKS_COLLECTION = "task_templates";
 const TASK_LOGS_COLLECTION = "task_logs";
@@ -27,7 +26,8 @@ const TASK_LOGS_COLLECTION = "task_logs";
 export const getTaskTemplates = async (): Promise<TaskTemplate[]> => {
   const user = auth.currentUser;
   if (!user) throw new Error("Not authenticated");
-
+  // Refresh token to prevent expiration issues
+  await refreshAuthToken();
   try {
     const q = query(
       collection(db, TASKS_COLLECTION),
@@ -65,6 +65,9 @@ export const getTaskTemplates = async (): Promise<TaskTemplate[]> => {
 export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
   const user = auth.currentUser;
   if (!user) throw new Error("Not authenticated");
+
+  // Refresh token to prevent expiration issues
+  await refreshAuthToken();
 
   // Get today's date range (start and end of day)
   const now = new Date();

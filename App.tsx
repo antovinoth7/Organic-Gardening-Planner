@@ -4,14 +4,16 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { auth } from "./src/lib/firebase";
-import { onAuthStateChanged, User } from "firebase/auth";
+import { onAuthStateChanged, User } from "@firebase/auth";
 import { ThemeProvider, useTheme, useThemeMode } from "./src/theme";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import { logAuthError, setErrorLogUserId } from "./src/utils/errorLogging";
-import { Alert } from "react-native";
+import { initAppLifecycle } from "./src/utils/appLifecycle";
+import { Alert, Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Sentry from "@sentry/react-native";
-import packageJson from "./package.json";
+import { migrateImagesToMediaLibrary } from "./src/lib/imageStorage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Screens
 import AuthScreen from "./src/screens/AuthScreen";
@@ -24,6 +26,9 @@ import CalendarScreen from "./src/screens/CalendarScreen";
 import JournalScreen from "./src/screens/JournalScreen";
 import JournalFormScreen from "./src/screens/JournalFormScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
+import MoreScreen from "./src/screens/MoreScreen";
+import ManageLocationsScreen from "./src/screens/ManageLocationsScreen";
+import ManagePlantCatalogScreen from "./src/screens/ManagePlantCatalogScreen";
 
 const expoExtra = (Constants.expoConfig?.extra ?? {}) as Record<
   string,
@@ -69,8 +74,6 @@ Sentry.init({
 
   // Environment
   environment: isDev ? "development" : "production",
-  release: `${packageJson.name}@${packageJson.version}`,
-  dist: packageJson.version,
 
   // Native crash handling
   enableNative: true,
@@ -126,6 +129,51 @@ if (isDev) {
   console.log("✅ Sentry initialized");
 }
 
+// Global error handlers to prevent silent crashes
+if (typeof ErrorUtils !== 'undefined') {
+  const originalHandler = ErrorUtils.getGlobalHandler();
+  ErrorUtils.setGlobalHandler((error, isFatal) => {
+    console.error('🔴 Global error caught:', {
+      error: error?.message || error,
+      stack: error?.stack,
+      isFatal,
+    });
+    
+    // Send to Sentry
+    Sentry.captureException(error, {
+      tags: { fatal: isFatal ? 'true' : 'false' },
+    });
+    
+    // Call original handler
+    if (originalHandler) {
+      originalHandler(error, isFatal);
+    }
+  });
+}
+
+// Handle unhandled promise rejections
+const rejectionTracking = require('promise/setimmediate/rejection-tracking');
+rejectionTracking.enable({
+  allRejections: true,
+  onUnhandled: (id: string, error: Error) => {
+    console.error('🔴 Unhandled promise rejection:', {
+      id,
+      error: error?.message || error,
+      stack: error?.stack,
+    });
+    
+    // Send to Sentry
+    Sentry.captureException(error, {
+      tags: { type: 'unhandled_promise_rejection' },
+    });
+  },
+  onHandled: (id: string) => {
+    if (isDev) {
+      console.log('✅ Promise rejection handled:', id);
+    }
+  },
+});
+
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
@@ -145,6 +193,18 @@ const JournalStack = () => (
   </Stack.Navigator>
 );
 
+const MoreStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="MoreHome" component={MoreScreen} />
+    <Stack.Screen name="ManageLocations" component={ManageLocationsScreen} />
+    <Stack.Screen
+      name="ManagePlantCatalog"
+      component={ManagePlantCatalogScreen}
+    />
+    <Stack.Screen name="Settings" component={SettingsScreen} />
+  </Stack.Navigator>
+);
+
 const AppTabs = () => {
   const theme = useTheme();
 
@@ -157,7 +217,7 @@ const AppTabs = () => {
           else if (route.name === "Plants") iconName = "leaf";
           else if (route.name === "Care Plan") iconName = "calendar";
           else if (route.name === "Journal") iconName = "book";
-          else if (route.name === "Settings") iconName = "settings";
+          else if (route.name === "More") iconName = "ellipsis-vertical";
           return <Ionicons name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: theme.tabBarActive,
@@ -199,7 +259,19 @@ const AppTabs = () => {
           },
         })}
       />
-      <Tab.Screen name="Settings" component={SettingsScreen} />
+      <Tab.Screen
+        name="More"
+        component={MoreStack}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate("More", {
+              screen: "MoreHome",
+              params: {},
+            });
+          },
+        })}
+      />
     </Tab.Navigator>
   );
 };
@@ -243,6 +315,45 @@ const AppRoot = () => {
 
   useEffect(() => {
     let isMounted = true;
+    let lastAlertTime = 0;
+    const ALERT_DEBOUNCE_MS = 30000; // 30 seconds between alerts
+
+    // Initialize app lifecycle management for memory cleanup
+    const cleanupLifecycle = initAppLifecycle();
+
+    // Run image migration once on Android
+    const runImageMigration = async () => {
+      if (Platform.OS !== 'android') return;
+      
+      try {
+        // Check if migration has already run
+        const migrationComplete = await AsyncStorage.getItem('@image_migration_complete');
+        if (migrationComplete === 'true') {
+          console.log('Image migration already completed');
+          return;
+        }
+
+        console.log('Starting image migration to MediaLibrary...');
+        const result = await migrateImagesToMediaLibrary();
+        
+        if (result.success || result.migratedCount > 0) {
+          console.log('✅ Migration completed:', result.message);
+          await AsyncStorage.setItem('@image_migration_complete', 'true');
+          
+          if (result.migratedCount > 0) {
+            Alert.alert(
+              'Images Updated',
+              `${result.migratedCount} image(s) moved to persistent storage. Your photos will now survive app reinstalls.`,
+              [{ text: 'OK' }]
+            );
+          }
+        } else if (!result.success) {
+          console.warn('⚠️ Migration had issues:', result.message);
+        }
+      } catch (error) {
+        console.error('Migration error:', error);
+      }
+    };
 
     // Listen for auth state changes with error handling
     const unsubscribe = onAuthStateChanged(
@@ -269,6 +380,9 @@ const AppRoot = () => {
             email: user.email || undefined,
           });
           Sentry.setTag("user_authenticated", "true");
+          
+          // Run migration after successful authentication
+          runImageMigration();
         } else {
           Sentry.setUser(null);
           Sentry.setTag("user_authenticated", "false");
@@ -281,18 +395,33 @@ const AppRoot = () => {
         logAuthError("Auth state listener error", error);
         setLoading(false);
 
-        // Show user-friendly error
-        Alert.alert(
-          "Authentication Error",
-          "There was a problem with your session. Please restart the app.",
-          [{ text: "OK" }]
-        );
+        // Handle network errors silently - just show login screen
+        const errorCode = (error as any)?.code;
+        if (errorCode === 'auth/network-request-failed') {
+          setUser(null);
+          return;
+        }
+
+        // Debounce alerts to prevent spam
+        const now = Date.now();
+        if (now - lastAlertTime > ALERT_DEBOUNCE_MS) {
+          lastAlertTime = now;
+          Alert.alert(
+            "Authentication Error",
+            "There was a problem with your session. Please sign in again.",
+            [{ text: "OK" }]
+          );
+        }
+        
+        // Sign out user on persistent auth errors
+        setUser(null);
       }
     );
 
     return () => {
       isMounted = false;
       unsubscribe();
+      cleanupLifecycle();
     };
   }, []);
 

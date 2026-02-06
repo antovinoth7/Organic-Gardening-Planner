@@ -10,6 +10,18 @@ This app uses manual backups instead of automatic cloud backup for several reaso
 4. Longevity: Plain JSON and ZIP files are readable for decades
 5. Portability: Easy to move between services and devices
 
+## Image Storage
+
+Images are stored **locally on your device only** in persistent storage. They are NEVER uploaded to any cloud service.
+
+- **Location**:
+  - Android: MediaLibrary (Pictures/GardenPlanner folder) - persists across app reinstalls
+  - iOS: App directory (`FileSystem.documentDirectory/garden_images/`) - backed up to iCloud
+  - Web: Blob URLs (session-based)
+- **What's in Firestore**: Only the image filename (e.g., `plant_1234567890_abc123.jpg`)
+- **Automatic migration**: On Android, existing images are automatically moved to persistent storage on first launch
+- **Manual backup**: Export images as part of a ZIP backup (see below)
+
 ## Backup Types (Settings)
 
 ### 1) Data-only backup (JSON)

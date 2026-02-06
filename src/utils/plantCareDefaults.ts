@@ -1,30 +1,13 @@
 import {
-  GrowthStage,
-  WaterRequirement,
-  SunlightLevel,
-  SoilType,
-  FertiliserType,
   PlantType,
+  PlantCareProfile,
+  PlantCareProfiles,
 } from "../types/database.types";
 
 /**
  * Comprehensive plant care defaults database
  * Provides intelligent recommendations based on plant variety
  */
-
-interface PlantCareProfile {
-  // Basic Care
-  waterRequirement: WaterRequirement;
-  wateringFrequencyDays: number;
-  fertilisingFrequencyDays: number;
-  pruningFrequencyDays?: number;
-  sunlight: SunlightLevel;
-  soilType: SoilType;
-  preferredFertiliser: FertiliserType;
-
-  // Phase 1: Growth
-  initialGrowthStage: GrowthStage;
-}
 
 const DEFAULT_PROFILES_BY_TYPE: Record<PlantType, PlantCareProfile> = {
   vegetable: {
@@ -349,30 +332,60 @@ const findProfileByVariety = (
   return key ? PLANT_CARE_PROFILES[key] : null;
 };
 
+const applyOverrides = (
+  base: PlantCareProfile,
+  overrides?: PlantCareProfiles,
+  plantType?: PlantType,
+  plantVariety?: string
+): PlantCareProfile => {
+  if (!plantType || !plantVariety || !overrides) {
+    return base;
+  }
+
+  const override = overrides[plantType]?.[plantVariety];
+  if (!override) return base;
+
+  return {
+    ...base,
+    ...override,
+  };
+};
+
 /**
  * Get care profile for a specific plant variety
  */
 export function getPlantCareProfile(
   plantVariety: string,
-  plantType?: PlantType
+  plantType?: PlantType,
+  overrides?: PlantCareProfiles
 ): PlantCareProfile | null {
   if (plantType) {
     const key = buildProfileKey(plantType, plantVariety);
-    return PLANT_CARE_PROFILES[key] || DEFAULT_PROFILES_BY_TYPE[plantType] || null;
+    const base =
+      PLANT_CARE_PROFILES[key] || DEFAULT_PROFILES_BY_TYPE[plantType] || null;
+    return base ? applyOverrides(base, overrides, plantType, plantVariety) : null;
   }
 
   if (!plantVariety) return null;
 
-  return findProfileByVariety(plantVariety);
+  const base = findProfileByVariety(plantVariety);
+  return base ? applyOverrides(base, overrides) : null;
 }
 
 export function hasPlantCareProfile(
   plantVariety: string,
-  plantType?: PlantType
+  plantType?: PlantType,
+  overrides?: PlantCareProfiles
 ): boolean {
   if (plantType) {
     const key = buildProfileKey(plantType, plantVariety);
-    return Boolean(PLANT_CARE_PROFILES[key]) || Boolean(DEFAULT_PROFILES_BY_TYPE[plantType]);
+    if (overrides?.[plantType]?.[plantVariety]) {
+      return true;
+    }
+    return (
+      Boolean(PLANT_CARE_PROFILES[key]) ||
+      Boolean(DEFAULT_PROFILES_BY_TYPE[plantType])
+    );
   }
 
   if (!plantVariety) return false;

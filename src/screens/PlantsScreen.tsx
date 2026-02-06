@@ -1,6 +1,11 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl, Alert, ActivityIndicator, ScrollView, TextInput } from 'react-native';
 import { getPlants, deletePlant } from '../services/plants';
+import {
+  DEFAULT_CHILD_LOCATIONS,
+  DEFAULT_PARENT_LOCATIONS,
+  getLocationConfig,
+} from '../services/locations';
 import { Plant, PlantType, SpaceType, HealthStatus, SunlightLevel, WaterRequirement } from '../types/database.types';
 import PlantCard from '../components/PlantCard';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,10 +28,7 @@ interface ActiveFilters {
 
 const ITEMS_PER_PAGE = 20;
 
-const PARENT_LOCATIONS = ['Mangarai', 'Velliavilai Home', 'Velliavilai Near Pond', 'Palappallam'];
-const CHILD_LOCATIONS = ['North', 'South', 'East', 'West', 'North-East', 'North-West', 'South-East', 'South-West', 'Center', 'Front', 'Back'];
-
-export default function PlantsScreen({ navigation }: any) {
+export default function PlantsScreen({ navigation, route }: any) {
   const theme = useTheme();
   const styles = createStyles(theme);
   const flatListRef = useRef<FlatList>(null);
@@ -47,6 +49,12 @@ export default function PlantsScreen({ navigation }: any) {
     parentLocation: '',
     childLocation: '',
   });
+  const [parentLocations, setParentLocations] = useState<string[]>(
+    DEFAULT_PARENT_LOCATIONS
+  );
+  const [childLocations, setChildLocations] = useState<string[]>(
+    DEFAULT_CHILD_LOCATIONS
+  );
 
   const loadPlants = async () => {
     setLoading(true);
@@ -61,14 +69,27 @@ export default function PlantsScreen({ navigation }: any) {
     }
   };
 
+  const loadLocations = async () => {
+    try {
+      const config = await getLocationConfig();
+      setParentLocations(config.parentLocations);
+      setChildLocations(config.childLocations);
+    } catch (error) {
+      console.error('Error loading locations:', error);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
+
+    // Load data on mount
+    loadLocations();
+    loadPlants();
     
     const unsubscribe = navigation.addListener('focus', () => {
       if (isMounted) {
-        // Reset scroll to top
+        // Only reset scroll position, don't reload data
         flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
-        loadPlants();
       }
     });
     
@@ -77,6 +98,16 @@ export default function PlantsScreen({ navigation }: any) {
       unsubscribe();
     };
   }, [navigation]);
+
+  // Listen for refresh param from child screens (after add/edit/delete)
+  useEffect(() => {
+    const refreshParam = route?.params?.refresh;
+    if (refreshParam) {
+      loadPlants();
+      // Clear the param to prevent repeated refreshes
+      navigation.setParams({ refresh: undefined });
+    }
+  }, [route?.params?.refresh]);
 
   const handleDelete = async (id: string) => {
     Alert.alert(
@@ -548,7 +579,7 @@ export default function PlantsScreen({ navigation }: any) {
               >
                 <Text style={[styles.filterText, filters.parentLocation === '' && styles.filterTextActive]}>All</Text>
               </TouchableOpacity>
-              {PARENT_LOCATIONS.map(loc => (
+              {parentLocations.map(loc => (
                 <TouchableOpacity 
                   key={loc}
                   style={[styles.filterChip, filters.parentLocation === loc && styles.filterChipActive]}
@@ -571,7 +602,7 @@ export default function PlantsScreen({ navigation }: any) {
                   >
                     <Text style={[styles.filterText, filters.childLocation === '' && styles.filterTextActive]}>All</Text>
                   </TouchableOpacity>
-                  {CHILD_LOCATIONS.map(loc => (
+                  {childLocations.map(loc => (
                     <TouchableOpacity 
                       key={loc}
                       style={[styles.filterChip, filters.childLocation === loc && styles.filterChipActive]}

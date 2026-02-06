@@ -23,8 +23,7 @@ import {
 } from '../lib/imageStorage';
 import { getData, setData, KEYS } from '../lib/storage';
 import { withTimeoutAndRetry } from '../utils/firestoreTimeout';
-import { logError } from '../utils/errorLogging';
-
+import { logError } from '../utils/errorLogging';import { refreshAuthToken } from '../lib/firebase';
 const JOURNAL_COLLECTION = 'journal_entries';
 
 /**
@@ -33,6 +32,9 @@ const JOURNAL_COLLECTION = 'journal_entries';
 export const getJournalEntries = async (): Promise<JournalEntry[]> => {
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
+
+  // Refresh token to prevent expiration issues
+  await refreshAuthToken();
 
   try {
     const q = query(
@@ -48,28 +50,42 @@ export const getJournalEntries = async (): Promise<JournalEntry[]> => {
     
     const entries = (await Promise.all(
       snapshot.docs.map(async doc => {
-        const data = doc.data();
-        const legacyUrls = data.photo_urls || (data.photo_url ? [data.photo_url] : []);
-        const photoFilenames: string[] = Array.isArray(data.photo_filenames)
-          ? data.photo_filenames
-          : legacyUrls
-              .map((uri: string) => getFilenameFromUri(uri))
-              .filter((filename: string | null): filename is string => !!filename);
-        const resolvedPhotoUrls = photoFilenames.length > 0
-          ? await resolveLocalImageUris(photoFilenames)
-          : await resolveLocalImageUris(legacyUrls);
-        const resolvedLegacy = data.photo_url
-          ? await resolveLocalImageUri(data.photo_url)
-          : null;
-        
-        return {
-          id: doc.id,
-          ...data,
-          photo_filenames: photoFilenames,
-          photo_urls: resolvedPhotoUrls,
-          photo_url: resolvedLegacy,
-          created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at
-        };
+        try {
+          const data = doc.data();
+          const legacyUrls = data.photo_urls || (data.photo_url ? [data.photo_url] : []);
+          const photoFilenames: string[] = Array.isArray(data.photo_filenames)
+            ? data.photo_filenames
+            : legacyUrls
+                .map((uri: string) => getFilenameFromUri(uri))
+                .filter((filename: string | null): filename is string => !!filename);
+          const resolvedPhotoUrls = photoFilenames.length > 0
+            ? await resolveLocalImageUris(photoFilenames)
+            : await resolveLocalImageUris(legacyUrls);
+          const resolvedLegacy = data.photo_url
+            ? await resolveLocalImageUri(data.photo_url)
+            : null;
+          
+          return {
+            id: doc.id,
+            ...data,
+            photo_filenames: photoFilenames,
+            photo_urls: resolvedPhotoUrls,
+            photo_url: resolvedLegacy,
+            created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at
+          };
+        } catch (error) {
+          console.warn(`Failed to resolve images for journal ${doc.id}:`, error);
+          const data = doc.data();
+          // Return entry without photos on error
+          return {
+            id: doc.id,
+            ...data,
+            photo_filenames: [],
+            photo_urls: [],
+            photo_url: null,
+            created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at
+          };
+        }
       })
     )) as JournalEntry[];
     
@@ -83,20 +99,29 @@ export const getJournalEntries = async (): Promise<JournalEntry[]> => {
     const cachedEntries = await getData<JournalEntry>(KEYS.JOURNAL);
     const resolvedCached = await Promise.all(
       cachedEntries.map(async entry => {
-        const legacyUrls = entry.photo_urls || (entry.photo_url ? [entry.photo_url] : []);
-        const photoFilenames = entry.photo_filenames && entry.photo_filenames.length > 0
-          ? entry.photo_filenames
-          : legacyUrls
-              .map((uri: string) => getFilenameFromUri(uri))
-              .filter((filename: string | null): filename is string => !!filename);
-        const resolvedPhotoUrls = photoFilenames.length > 0
-          ? await resolveLocalImageUris(photoFilenames)
-          : await resolveLocalImageUris(legacyUrls);
-        return {
-          ...entry,
-          photo_filenames: photoFilenames,
-          photo_urls: resolvedPhotoUrls,
-        };
+        try {
+          const legacyUrls = entry.photo_urls || (entry.photo_url ? [entry.photo_url] : []);
+          const photoFilenames = entry.photo_filenames && entry.photo_filenames.length > 0
+            ? entry.photo_filenames
+            : legacyUrls
+                .map((uri: string) => getFilenameFromUri(uri))
+                .filter((filename: string | null): filename is string => !!filename);
+          const resolvedPhotoUrls = photoFilenames.length > 0
+            ? await resolveLocalImageUris(photoFilenames)
+            : await resolveLocalImageUris(legacyUrls);
+          return {
+            ...entry,
+            photo_filenames: photoFilenames,
+            photo_urls: resolvedPhotoUrls,
+          };
+        } catch (error) {
+          console.warn(`Failed to resolve cached images for journal ${entry.id}:`, error);
+          return {
+            ...entry,
+            photo_filenames: [],
+            photo_urls: [],
+          };
+        }
       })
     );
     return resolvedCached;
@@ -217,12 +242,31 @@ export const updateJournalEntry = async (
 };
 
 export const deleteJournalEntry = async (id: string): Promise<void> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+  
+  // Verify ownership before deleting
+  const docRef = doc(db, JOURNAL_COLLECTION, id);
+  const docSnap = await withTimeoutAndRetry(
+    () => getDoc(docRef),
+    { timeoutMs: 10000, maxRetries: 2 }
+  );
+  
+  if (!docSnap.exists()) {
+    console.warn('Journal entry not found:', id);
+    return;
+  }
+  
+  const data = docSnap.data();
+  if (data.user_id !== user.uid) {
+    throw new Error('Not authorized to delete this entry');
+  }
+  
   // Get the entry to find its image URIs
   const cachedEntries = await getData<JournalEntry>(KEYS.JOURNAL);
   const entry = cachedEntries.find(e => e.id === id);
   
   // Delete from Firestore
-  const docRef = doc(db, JOURNAL_COLLECTION, id);
   await deleteDoc(docRef);
   
   // Delete all local image files

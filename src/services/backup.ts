@@ -27,13 +27,27 @@ import {
   TaskTemplate,
   TaskLog,
   JournalEntry,
+  LocationConfig,
+  PlantCatalog,
+  PlantCareProfiles,
+  PlantType,
 } from "../types/database.types";
+import { getLocationConfig, saveLocationConfig } from "./locations";
+import {
+  DEFAULT_PLANT_CATALOG,
+  PLANT_CATEGORIES,
+  getPlantCatalog,
+  savePlantCatalog,
+} from "./plantCatalog";
+import {
+  getPlantCareProfiles,
+  savePlantCareProfiles,
+} from "./plantCareProfiles";
 import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
 import { createZipWithImages, extractZipWithImages } from "../utils/zipHelper";
 import { Platform } from "react-native";
 import {
   getFilenameFromUri,
-  getLocalImageUriFromFilename,
   resolveLocalImageUri,
   resolveLocalImageUris,
 } from "../lib/imageStorage";
@@ -45,6 +59,9 @@ interface BackupData {
   tasks: TaskTemplate[];
   taskLogs: TaskLog[];
   journal: JournalEntry[];
+  locations?: LocationConfig | null;
+  plantCatalog?: PlantCatalog | null;
+  plantCareProfiles?: PlantCareProfiles | null;
   // Note: Images are stored locally and NOT included in the backup
   // Only the image filenames are included in the plant/journal objects
 }
@@ -99,6 +116,10 @@ export const exportBackup = async (): Promise<string> => {
       };
     });
 
+    const locations = await getLocationConfig();
+    const plantCatalog = await getPlantCatalog();
+    const plantCareProfiles = await getPlantCareProfiles();
+
     // Create backup object
     const backup: BackupData = {
       version: "1.0.0",
@@ -107,6 +128,9 @@ export const exportBackup = async (): Promise<string> => {
       tasks,
       taskLogs,
       journal: normalizedJournal,
+      locations,
+      plantCatalog,
+      plantCareProfiles,
     };
 
     // Generate filename with timestamp
@@ -310,6 +334,55 @@ export const importBackup = async (
       await setData(KEYS.JOURNAL, mergedJournal);
     }
 
+    if (
+      backup.locations &&
+      Array.isArray(backup.locations.parentLocations) &&
+      Array.isArray(backup.locations.childLocations)
+    ) {
+      if (overwrite) {
+        await saveLocationConfig(backup.locations);
+      } else {
+        const existingLocations = await getLocationConfig();
+        const mergedLocations = {
+          parentLocations: mergeLocationLists(
+            existingLocations.parentLocations,
+            backup.locations.parentLocations
+          ),
+          childLocations: mergeLocationLists(
+            existingLocations.childLocations,
+            backup.locations.childLocations
+          ),
+        };
+        await saveLocationConfig(mergedLocations);
+      }
+    }
+
+    if (backup.plantCatalog && backup.plantCatalog.categories) {
+      if (overwrite) {
+        await savePlantCatalog(backup.plantCatalog);
+      } else {
+        const existingCatalog = await getPlantCatalog();
+        const mergedCatalog = mergePlantCatalog(
+          existingCatalog,
+          backup.plantCatalog
+        );
+        await savePlantCatalog(mergedCatalog);
+      }
+    }
+
+    if (backup.plantCareProfiles) {
+      if (overwrite) {
+        await savePlantCareProfiles(backup.plantCareProfiles);
+      } else {
+        const existingProfiles = await getPlantCareProfiles();
+        const mergedProfiles = mergePlantCareProfiles(
+          existingProfiles,
+          backup.plantCareProfiles
+        );
+        await savePlantCareProfiles(mergedProfiles);
+      }
+    }
+
     console.log("Import completed successfully");
 
     return {
@@ -340,6 +413,86 @@ function mergeByIdPreferBackup<T extends { id: string }>(
   backup.forEach((item) => merged.set(item.id, item));
 
   return Array.from(merged.values());
+}
+
+function mergeLocationLists(base: string[], incoming: string[]): string[] {
+  const merged: string[] = [];
+  const seen = new Set<string>();
+
+  base.forEach((item) => {
+    const trimmed = item?.toString().trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(trimmed);
+  });
+
+  incoming.forEach((item) => {
+    const trimmed = item?.toString().trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(trimmed);
+  });
+
+  return merged;
+}
+
+function mergePlantCatalog(
+  existingCatalog: PlantCatalog,
+  incomingCatalog: PlantCatalog
+): PlantCatalog {
+  const categories = {} as Record<
+    PlantType,
+    { plants: string[]; varieties: Record<string, string[]> }
+  >;
+
+  PLANT_CATEGORIES.forEach((category) => {
+    const existingCategory =
+      existingCatalog.categories?.[category] ??
+      DEFAULT_PLANT_CATALOG.categories[category];
+    const incomingCategory = incomingCatalog.categories?.[category];
+
+    const plants = mergeLocationLists(
+      existingCategory.plants || [],
+      incomingCategory?.plants || []
+    );
+
+    const varieties: Record<string, string[]> = {
+      ...(existingCategory.varieties || {}),
+    };
+
+    Object.entries(incomingCategory?.varieties || {}).forEach(
+      ([plantName, list]) => {
+        varieties[plantName] = mergeLocationLists(
+          varieties[plantName] || [],
+          list || []
+        );
+      }
+    );
+
+    categories[category] = { plants, varieties };
+  });
+
+  return { categories };
+}
+
+function mergePlantCareProfiles(
+  existingProfiles: PlantCareProfiles,
+  incomingProfiles: PlantCareProfiles
+): PlantCareProfiles {
+  const merged = {} as PlantCareProfiles;
+
+  PLANT_CATEGORIES.forEach((type) => {
+    merged[type] = {
+      ...(existingProfiles?.[type] ?? {}),
+      ...(incomingProfiles?.[type] ?? {}),
+    };
+  });
+
+  return merged;
 }
 
 /**
@@ -414,6 +567,10 @@ export const exportBackupWithImages = async (): Promise<string> => {
       };
     });
 
+    const locations = await getLocationConfig();
+    const plantCatalog = await getPlantCatalog();
+    const plantCareProfiles = await getPlantCareProfiles();
+
     // Create backup object
     const backup: BackupData = {
       version: "1.0.0",
@@ -422,6 +579,9 @@ export const exportBackupWithImages = async (): Promise<string> => {
       tasks,
       taskLogs,
       journal: normalizedJournal,
+      locations,
+      plantCatalog,
+      plantCareProfiles,
     };
 
     // Collect all image URIs from plants and journal entries
@@ -440,10 +600,12 @@ export const exportBackupWithImages = async (): Promise<string> => {
       }
     });
 
-    imageFilenames.forEach((filename) => {
-      const localUri = getLocalImageUriFromFilename(filename);
-      if (localUri) {
-        imageUris.push(localUri);
+    const resolvedImageUris = await Promise.all(
+      Array.from(imageFilenames).map((filename) => resolveLocalImageUri(filename))
+    );
+    resolvedImageUris.forEach((uri) => {
+      if (uri) {
+        imageUris.push(uri);
       }
     });
 
@@ -611,6 +773,55 @@ export const importBackupWithImages = async (
       await setData(KEYS.JOURNAL, mergedJournal);
     }
 
+    if (
+      backup.locations &&
+      Array.isArray(backup.locations.parentLocations) &&
+      Array.isArray(backup.locations.childLocations)
+    ) {
+      if (overwrite) {
+        await saveLocationConfig(backup.locations);
+      } else {
+        const existingLocations = await getLocationConfig();
+        const mergedLocations = {
+          parentLocations: mergeLocationLists(
+            existingLocations.parentLocations,
+            backup.locations.parentLocations
+          ),
+          childLocations: mergeLocationLists(
+            existingLocations.childLocations,
+            backup.locations.childLocations
+          ),
+        };
+        await saveLocationConfig(mergedLocations);
+      }
+    }
+
+    if (backup.plantCareProfiles) {
+      if (overwrite) {
+        await savePlantCareProfiles(backup.plantCareProfiles);
+      } else {
+        const existingProfiles = await getPlantCareProfiles();
+        const mergedProfiles = mergePlantCareProfiles(
+          existingProfiles,
+          backup.plantCareProfiles
+        );
+        await savePlantCareProfiles(mergedProfiles);
+      }
+    }
+
+    if (backup.plantCatalog && backup.plantCatalog.categories) {
+      if (overwrite) {
+        await savePlantCatalog(backup.plantCatalog);
+      } else {
+        const existingCatalog = await getPlantCatalog();
+        const mergedCatalog = mergePlantCatalog(
+          existingCatalog,
+          backup.plantCatalog
+        );
+        await savePlantCatalog(mergedCatalog);
+      }
+    }
+
     console.log("Import with images completed successfully");
 
     return {
@@ -673,10 +884,12 @@ export const exportImagesOnly = async (): Promise<string> => {
       photoFilenames.forEach((filename) => imageFilenames.add(filename));
     });
 
-    imageFilenames.forEach((filename) => {
-      const localUri = getLocalImageUriFromFilename(filename);
-      if (localUri) {
-        imageUris.push(localUri);
+    const resolvedImageUris = await Promise.all(
+      Array.from(imageFilenames).map((filename) => resolveLocalImageUri(filename))
+    );
+    resolvedImageUris.forEach((uri) => {
+      if (uri) {
+        imageUris.push(uri);
       }
     });
 

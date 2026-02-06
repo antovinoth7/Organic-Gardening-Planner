@@ -12,6 +12,7 @@ import {
   Platform,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import PhotoSourceModal from "../components/PhotoSourceModal";
 import {
   createJournalEntry,
   updateJournalEntry,
@@ -25,6 +26,7 @@ import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 import {
   getFilenameFromUri,
   getLocalImageUriFromFilename,
+  resolveLocalImageUri,
 } from "../lib/imageStorage";
 
 type PhotoItem = {
@@ -44,9 +46,9 @@ export default function JournalFormScreen({ navigation, route }: any) {
   const buildInitialPhotoItems = (): PhotoItem[] => {
     if (!editEntry) return [];
     if (editEntry.photo_filenames && editEntry.photo_filenames.length > 0) {
-      return editEntry.photo_filenames.map((filename) => ({
+      return editEntry.photo_filenames.map((filename, index) => ({
         filename,
-        uri: getLocalImageUriFromFilename(filename),
+        uri: editEntry.photo_urls?.[index] ?? getLocalImageUriFromFilename(filename),
       }));
     }
     const legacyUris =
@@ -65,6 +67,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(false);
   const [showPlantPicker, setShowPlantPicker] = useState(false);
+  const [showPhotoSourceModal, setShowPhotoSourceModal] = useState(false);
 
   // Harvest-specific fields
   const [harvestQuantity, setHarvestQuantity] = useState(
@@ -127,6 +130,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
       mediaTypes: "images" as any, // Use 'images' for new API
       allowsEditing: false,
       quality: 0.8,
+      cameraType: ImagePicker.CameraType.back,
     });
 
     if (!result.canceled) {
@@ -141,11 +145,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
   };
 
   const pickImage = () => {
-    Alert.alert("Add Photo", "Choose a source", [
-      { text: "Camera", onPress: openCamera },
-      { text: "Photo Library", onPress: openImageLibrary },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    setShowPhotoSourceModal(true);
   };
 
   const removeImage = (index: number) => {
@@ -214,7 +214,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
           if (item.uri) {
             photoUrls.push(item.uri);
           } else {
-            const localUri = getLocalImageUriFromFilename(item.filename);
+            const localUri = await resolveLocalImageUri(item.filename);
             if (localUri) {
               photoUrls.push(localUri);
             }
@@ -250,7 +250,12 @@ export default function JournalFormScreen({ navigation, route }: any) {
         await createJournalEntry(entryData);
       }
 
-      navigation.goBack();
+      // Trigger refresh in parent screen
+      navigation.navigate({
+        name: 'JournalList',
+        params: { refresh: Date.now() },
+        merge: true,
+      });
     } catch (error: any) {
       Alert.alert("Error", error.message);
     } finally {
@@ -537,6 +542,13 @@ export default function JournalFormScreen({ navigation, route }: any) {
         {/* Extra spacing for keyboard */}
         <View style={{ height: 300 }} />
       </ScrollView>
+
+      <PhotoSourceModal
+        visible={showPhotoSourceModal}
+        onClose={() => setShowPhotoSourceModal(false)}
+        onCamera={openCamera}
+        onLibrary={openImageLibrary}
+      />
     </KeyboardAvoidingView>
   );
 }

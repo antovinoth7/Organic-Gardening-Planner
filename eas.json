@@ -8,19 +8,19 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_SENTRY_DSN": "https://dd9db3596c55c4a11c42e64b26c3b696@o4508608422666240.ingest.us.sentry.io/4508608429154304"
+        "EXPO_PUBLIC_SENTRY_DSN": "https://de16538fdf01821acaeee58c645bfb1c@o4510631761149952.ingest.us.sentry.io/4510643005161472"
       }
     },
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_SENTRY_DSN": "https://dd9db3596c55c4a11c42e64b26c3b696@o4508608422666240.ingest.us.sentry.io/4508608429154304"
+        "EXPO_PUBLIC_SENTRY_DSN": "https://de16538fdf01821acaeee58c645bfb1c@o4510631761149952.ingest.us.sentry.io/4510643005161472"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_SENTRY_DSN": "https://dd9db3596c55c4a11c42e64b26c3b696@o4508608422666240.ingest.us.sentry.io/4508608429154304",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://de16538fdf01821acaeee58c645bfb1c@o4510631761149952.ingest.us.sentry.io/4510643005161472",
         "EXPO_PUBLIC_SENTRY_TEST": "1"
       },
       "android": {

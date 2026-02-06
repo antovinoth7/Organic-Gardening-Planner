@@ -9,8 +9,6 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { auth } from "../lib/firebase";
-import { signOut } from "firebase/auth";
 import {
   exportBackup,
   importBackup,
@@ -24,8 +22,9 @@ import { getImageStorageSize } from "../lib/imageStorage";
 import { useTheme, useThemeMode } from "../theme";
 import { useFocusEffect } from "@react-navigation/native";
 import { testSentryLogging } from "../utils/sentryTest";
+import { clearAllData } from "../lib/storage";
 
-export default function SettingsScreen() {
+export default function SettingsScreen({ navigation }: any) {
   const theme = useTheme();
   const { mode, setMode } = useThemeMode();
   const styles = createStyles(theme);
@@ -319,37 +318,49 @@ export default function SettingsScreen() {
     );
   };
 
-  const handleSignOut = async () => {
-    console.log("Sign out button pressed");
-    try {
-      console.log("Calling signOut...");
-      await signOut(auth);
-      console.log("Signed out successfully");
-    } catch (error: any) {
-      console.error("Sign out error:", error);
-      Alert.alert("Error", error.message);
-    }
+  const handleClearCache = async () => {
+    Alert.alert(
+      "Clear App Cache",
+      "This will clear the app's local data cache. Firebase data will be re-synced on next load. Your data will not be deleted.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear Cache",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              // Clear AsyncStorage cache (safe - doesn't terminate Firebase)
+              await clearAllData();
+              Alert.alert(
+                "Success",
+                "Local cache cleared. Data will be re-synced from Firebase."
+              );
+            } catch (error: any) {
+              Alert.alert("Error", error?.message || "Failed to clear cache");
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
+
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
+          <Ionicons name="arrow-back" size={22} color={theme.text} />
+        </TouchableOpacity>
         <Text style={styles.title}>Settings</Text>
+        <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView ref={scrollViewRef} style={styles.content}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-
-          <View style={styles.card}>
-            <View style={styles.infoItem}>
-              <Ionicons name="person-circle" size={20} color="#2e7d32" />
-              <Text style={styles.infoText}>
-                {auth.currentUser?.email || "Not signed in"}
-              </Text>
-            </View>
-          </View>
-        </View>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Appearance</Text>
 
@@ -646,6 +657,26 @@ export default function SettingsScreen() {
             </>
           )}
         </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>App Maintenance</Text>
+
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.infoItem}
+              onPress={handleClearCache}
+              disabled={loading}
+            >
+              <Ionicons name="trash-outline" size={20} color="#FF9800" />
+              <Text style={styles.infoText}>Clear App Cache</Text>
+            </TouchableOpacity>
+            <Text style={styles.helpText}>
+              Clears temporary data to improve performance. Your plants, tasks,
+              and journal entries are not affected.
+            </Text>
+          </View>
+        </View>
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Architecture</Text>
 
@@ -736,10 +767,6 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-          <Ionicons name="log-out-outline" size={20} color="#f44336" />
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -752,13 +779,32 @@ const createStyles = (theme: any) =>
       backgroundColor: theme.background,
     },
     header: {
-      padding: 24,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
       paddingTop: 48,
+      paddingBottom: 16,
       backgroundColor: theme.backgroundSecondary,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+    },
+    backButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: theme.background,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    headerSpacer: {
+      width: 36,
     },
     title: {
-      fontSize: 28,
-      fontWeight: "bold",
+      fontSize: 20,
+      fontWeight: "700",
       color: theme.text,
     },
     content: {
@@ -914,20 +960,11 @@ const createStyles = (theme: any) =>
       fontStyle: "italic",
       lineHeight: 18,
     },
-    signOutButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: "#fff",
-      padding: 16,
-      borderRadius: 12,
-      marginTop: 16,
-      marginBottom: 32,
-    },
-    signOutText: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: "#f44336",
-      marginLeft: 8,
+    helpText: {
+      fontSize: 13,
+      color: theme.textSecondary,
+      marginTop: 8,
+      marginLeft: 32,
+      lineHeight: 18,
     },
   });

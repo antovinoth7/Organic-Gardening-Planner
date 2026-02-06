@@ -16,6 +16,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   getPlant,
   createPlant,
@@ -34,6 +35,8 @@ import {
   FertiliserType,
   PestDiseaseRecord,
   GrowthStage,
+  PlantCatalog,
+  PlantCareProfiles,
 } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -49,118 +52,21 @@ import {
 } from "../utils/plantCareDefaults";
 import { useTheme } from "../theme";
 import CollapsibleSection from "../components/CollapsibleSection";
+import PhotoSourceModal from "../components/PhotoSourceModal";
+import {
+  DEFAULT_CHILD_LOCATIONS,
+  DEFAULT_PARENT_LOCATIONS,
+  getLocationConfig,
+} from "../services/locations";
+import {
+  DEFAULT_PLANT_CATALOG,
+  getPlantCatalog,
+} from "../services/plantCatalog";
+import { getPlantCareProfiles } from "../services/plantCareProfiles";
 import {
   sanitizeAlphaNumericSpaces,
   sanitizeLandmarkText,
 } from "../utils/textSanitizer";
-
-const PLANT_VARIETIES: Record<PlantType, string[]> = {
-  vegetable: [
-    "Tomato",
-    "Carrot",
-    "Lettuce",
-    "Cabbage",
-    "Broccoli",
-    "Cucumber",
-    "Pepper",
-    "Eggplant",
-    "Spinach",
-    "Radish",
-    "Potato",
-    "Onion",
-    "Garlic",
-    "Beans",
-    "Peas",
-  ],
-  herb: [
-    "Basil",
-    "Mint",
-    "Coriander",
-    "Parsley",
-    "Rosemary",
-    "Thyme",
-    "Oregano",
-    "Sage",
-    "Dill",
-    "Lemongrass",
-    "Curry Leaf",
-  ],
-  flower: [
-    "Rose",
-    "Sunflower",
-    "Marigold",
-    "Lily",
-    "Tulip",
-    "Jasmine",
-    "Hibiscus",
-    "Dahlia",
-    "Chrysanthemum",
-    "Orchid",
-  ],
-  fruit_tree: [
-    "Mango",
-    "Orange",
-    "Banana",
-    "Guava",
-    "Papaya",
-    "Lemon",
-    "Pomegranate",
-    "Fig",
-    "Avocado",
-    "Jackfruit",
-    "Chikoo",
-    "Water Apple",
-    "Soursop",
-    "Mangosteen",
-    "Rambutan",
-  ],
-  timber_tree: [
-    "Teak",
-    "Mahogany",
-    "Rosewood",
-    "Sandalwood",
-    "Bamboo",
-    "Wild Jack",
-    "Neem",
-  ],
-  coconut_tree: [
-    "Dwarf Coconut",
-    "Tall Coconut",
-    "Hybrid Coconut",
-    "King Coconut",
-  ],
-  shrub: [
-    "Hibiscus",
-    "Bougainvillea",
-    "Jasmine",
-    "Azalea",
-    "Gardenia",
-    "Lavender",
-    "Boxwood",
-    "Holly",
-  ],
-};
-
-const PARENT_LOCATIONS = [
-  "Mangarai",
-  "Velliavilai Home",
-  "Velliavilai Near Pond",
-  "Palappallam",
-];
-
-const CHILD_LOCATIONS = [
-  "North",
-  "South",
-  "East",
-  "West",
-  "North-East",
-  "North-West",
-  "South-East",
-  "South-West",
-  "Center",
-  "Front",
-  "Back",
-];
 
 const NOTES_MAX_LENGTH = 500;
 
@@ -171,10 +77,21 @@ export default function PlantFormScreen({ route, navigation }: any) {
   const [name, setName] = useState("");
   const [plantType, setPlantType] = useState<PlantType>("vegetable");
   const [plantVariety, setPlantVariety] = useState("");
+  const [plantCatalog, setPlantCatalog] =
+    useState<PlantCatalog>(DEFAULT_PLANT_CATALOG);
+  const [plantCareProfiles, setPlantCareProfiles] =
+    useState<PlantCareProfiles>({} as PlantCareProfiles);
+  const [careProfilesLoaded, setCareProfilesLoaded] = useState(false);
   const [spaceType, setSpaceType] = useState<SpaceType>("ground");
   const [location, setLocation] = useState("");
   const [parentLocation, setParentLocation] = useState("");
   const [childLocation, setChildLocation] = useState("");
+  const [parentLocations, setParentLocations] = useState<string[]>(
+    DEFAULT_PARENT_LOCATIONS
+  );
+  const [childLocations, setChildLocations] = useState<string[]>(
+    DEFAULT_CHILD_LOCATIONS
+  );
   const [landmarks, setLandmarks] = useState("");
   const [bedName, setBedName] = useState("");
   const [potSize, setPotSize] = useState("");
@@ -211,6 +128,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
   const [showCompanionSuggestions, setShowCompanionSuggestions] =
     useState(false);
   const [showPestDiseaseModal, setShowPestDiseaseModal] = useState(false);
+  const [showPhotoSourceModal, setShowPhotoSourceModal] = useState(false);
   const [autoApplyCareDefaults, setAutoApplyCareDefaults] = useState(true);
   const [currentPestDisease, setCurrentPestDisease] =
     useState<PestDiseaseRecord>({
@@ -241,6 +159,50 @@ export default function PlantFormScreen({ route, navigation }: any) {
       }, 500);
     }
   }, [plantId]);
+
+  const loadLocations = async () => {
+    try {
+      const config = await getLocationConfig();
+      setParentLocations(config.parentLocations);
+      setChildLocations(config.childLocations);
+    } catch (error) {
+      console.error("Error loading locations:", error);
+    }
+  };
+
+  const loadPlantCatalog = async () => {
+    try {
+      const catalog = await getPlantCatalog();
+      setPlantCatalog(catalog);
+    } catch (error) {
+      console.error("Error loading plant catalog:", error);
+    }
+  };
+
+  const loadPlantCareProfiles = async () => {
+    try {
+      const profiles = await getPlantCareProfiles();
+      setPlantCareProfiles(profiles);
+    } catch (error) {
+      console.error("Error loading plant care profiles:", error);
+    } finally {
+      setCareProfilesLoaded(true);
+    }
+  };
+
+  useEffect(() => {
+    loadLocations();
+    loadPlantCatalog();
+    loadPlantCareProfiles();
+  }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadLocations();
+      loadPlantCatalog();
+      loadPlantCareProfiles();
+    }, [])
+  );
 
   // Detect form changes
   useEffect(() => {
@@ -313,11 +275,16 @@ export default function PlantFormScreen({ route, navigation }: any) {
       !plantId &&
       plantVariety &&
       autoApplyCareDefaults &&
-      hasPlantCareProfile(plantVariety, plantType) &&
+      careProfilesLoaded &&
+      hasPlantCareProfile(plantVariety, plantType, plantCareProfiles) &&
       !autoSuggestApplied.current
     ) {
       console.log("🌱 Applying auto-suggestions for:", plantVariety);
-      const profile = getPlantCareProfile(plantVariety, plantType);
+      const profile = getPlantCareProfile(
+        plantVariety,
+        plantType,
+        plantCareProfiles
+      );
 
       if (profile) {
         autoSuggestApplied.current = true;
@@ -339,7 +306,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
         setGrowthStage(profile.initialGrowthStage);
       }
     }
-  }, [plantVariety, plantId, plantType, autoApplyCareDefaults]);
+  }, [plantVariety, plantId, plantType, autoApplyCareDefaults, careProfilesLoaded]);
 
   // Combine parent and child locations
   useEffect(() => {
@@ -349,6 +316,35 @@ export default function PlantFormScreen({ route, navigation }: any) {
       setLocation("");
     }
   }, [parentLocation, childLocation]);
+
+  const parentLocationOptions = React.useMemo(() => {
+    if (parentLocation && !parentLocations.includes(parentLocation)) {
+      return [parentLocation, ...parentLocations];
+    }
+    return parentLocations;
+  }, [parentLocations, parentLocation]);
+
+  const childLocationOptions = React.useMemo(() => {
+    if (childLocation && !childLocations.includes(childLocation)) {
+      return [childLocation, ...childLocations];
+    }
+    return childLocations;
+  }, [childLocations, childLocation]);
+
+  const specificPlantOptions = React.useMemo(() => {
+    const plants = plantCatalog.categories[plantType]?.plants ?? [];
+    if (plantVariety && !plants.includes(plantVariety)) {
+      return [plantVariety, ...plants];
+    }
+    return plants;
+  }, [plantCatalog, plantType, plantVariety]);
+
+  const varietySuggestions = React.useMemo(() => {
+    if (!plantVariety) return [];
+    return (
+      plantCatalog.categories[plantType]?.varieties?.[plantVariety] ?? []
+    );
+  }, [plantCatalog, plantType, plantVariety]);
 
   // Handle back button press
   useEffect(() => {
@@ -512,6 +508,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
       mediaTypes: "images" as any, // Use 'images' for new API
       allowsEditing: false,
       quality: 0.8,
+      cameraType: ImagePicker.CameraType.back,
     });
 
     if (!result.canceled) {
@@ -521,11 +518,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
   };
 
   const pickImage = () => {
-    Alert.alert("Add Photo", "Choose a source", [
-      { text: "Camera", onPress: openCamera },
-      { text: "Photo Library", onPress: openImageLibrary },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    setShowPhotoSourceModal(true);
   };
 
   const handleSave = async () => {
@@ -656,7 +649,12 @@ export default function PlantFormScreen({ route, navigation }: any) {
         console.warn("Failed to sync care tasks for plant:", error);
       }
 
-      navigation.goBack();
+      // Trigger refresh in parent screens by setting a navigation param
+      navigation.navigate({
+        name: 'PlantsList',
+        params: { refresh: Date.now() },
+        merge: true,
+      });
     } catch (error: any) {
       Alert.alert("Error", error.message);
       setHasUnsavedChanges(true); // Restore flag on error
@@ -749,19 +747,57 @@ export default function PlantFormScreen({ route, navigation }: any) {
               enabled={!!plantType}
             >
               <Picker.Item label="Select plant type" value="" color="#999" />
-              {PLANT_VARIETIES[plantType].map((variety) => (
-                <Picker.Item key={variety} label={variety} value={variety} />
-              ))}
+              {specificPlantOptions.length === 0 ? (
+                <Picker.Item
+                  label="No plants yet - add in More"
+                  value=""
+                  color="#999"
+                />
+              ) : (
+                specificPlantOptions.map((variety) => (
+                  <Picker.Item key={variety} label={variety} value={variety} />
+                ))
+              )}
             </Picker>
           </View>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Variety (e.g., Alphonso, Dwarf)"
-            value={variety}
-            onChangeText={(text) => setVariety(sanitizeAlphaNumericSpaces(text))}
-            placeholderTextColor={theme.inputPlaceholder}
-          />
+          {varietySuggestions.length > 0 ? (
+            <>
+              <Text style={styles.label}>Variety</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={variety}
+                  onValueChange={setVariety}
+                  style={styles.picker}
+                  itemStyle={styles.pickerItem}
+                  enabled={varietySuggestions.length > 0}
+                >
+                  <Picker.Item label="Select variety (optional)" value="" color="#999" />
+                  {varietySuggestions.map((suggestion) => (
+                    <Picker.Item key={suggestion} label={suggestion} value={suggestion} />
+                  ))}
+                  <Picker.Item label="Other (enter manually)" value="__custom__" />
+                </Picker>
+              </View>
+              {variety === "__custom__" && (
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter custom variety"
+                  value={variety === "__custom__" ? "" : variety}
+                  onChangeText={(text) => setVariety(sanitizeAlphaNumericSpaces(text))}
+                  placeholderTextColor={theme.inputPlaceholder}
+                />
+              )}
+            </>
+          ) : (
+            <TextInput
+              style={styles.input}
+              placeholder="Variety (e.g., Alphonso, Dwarf)"
+              value={variety}
+              onChangeText={(text) => setVariety(sanitizeAlphaNumericSpaces(text))}
+              placeholderTextColor={theme.inputPlaceholder}
+            />
+          )}
 
           <TouchableOpacity
             style={styles.dateButton}
@@ -800,7 +836,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
               style={styles.picker}
             >
               <Picker.Item label="Select Main Location" value="" />
-              {PARENT_LOCATIONS.map((loc) => (
+              {parentLocationOptions.map((loc) => (
                 <Picker.Item key={loc} label={loc} value={loc} />
               ))}
             </Picker>
@@ -816,7 +852,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
                   style={styles.picker}
                 >
                   <Picker.Item label="Select Direction" value="" />
-                  {CHILD_LOCATIONS.map((loc) => (
+                  {childLocationOptions.map((loc) => (
                     <Picker.Item key={loc} label={loc} value={loc} />
                   ))}
                 </Picker>
@@ -1611,6 +1647,13 @@ export default function PlantFormScreen({ route, navigation }: any) {
           </View>
         </Modal>
       </ScrollView>
+
+      <PhotoSourceModal
+        visible={showPhotoSourceModal}
+        onClose={() => setShowPhotoSourceModal(false)}
+        onCamera={openCamera}
+        onLibrary={openImageLibrary}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -1860,6 +1903,35 @@ const createStyles = (theme: any) =>
       flexWrap: "wrap",
       gap: 8,
       marginTop: 8,
+    },
+    varietySuggestions: {
+      marginBottom: 12,
+    },
+    suggestionLabel: {
+      fontSize: 12,
+      color: theme.textSecondary,
+      marginBottom: 6,
+      fontWeight: "600",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    varietySuggestionChips: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    varietySuggestionChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 16,
+      backgroundColor: theme.primaryLight,
+      borderWidth: 1,
+      borderColor: theme.primary,
+    },
+    varietySuggestionText: {
+      fontSize: 12,
+      color: theme.primary,
+      fontWeight: "600",
     },
     companionChip: {
       flexDirection: "row",

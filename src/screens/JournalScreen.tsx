@@ -21,7 +21,7 @@ import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 
 const { width } = Dimensions.get("window");
 
-export default function JournalScreen({ navigation }: any) {
+export default function JournalScreen({ navigation, route }: any) {
   const theme = useTheme();
   const styles = createStyles(theme);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -34,7 +34,7 @@ export default function JournalScreen({ navigation }: any) {
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<
     "all" | "week" | "month" | "year"
-  >("all");
+  >("month");
 
   // View mode state
   const [viewMode, setViewMode] = useState<"list" | "gallery">("list");
@@ -60,12 +60,14 @@ export default function JournalScreen({ navigation }: any) {
 
   useEffect(() => {
     let isMounted = true;
+    
+    // Load data on mount
+    loadData();
 
     const unsubscribe = navigation.addListener("focus", () => {
       if (isMounted) {
-        // Reset scroll to top
+        // Only reset scroll position, don't reload data
         scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-        loadData();
       }
     });
 
@@ -74,6 +76,15 @@ export default function JournalScreen({ navigation }: any) {
       unsubscribe();
     };
   }, [navigation]);
+
+  // Listen for refresh param from child screens (after add/edit/delete)
+  useEffect(() => {
+    const refreshParam = route?.params?.refresh;
+    if (refreshParam) {
+      loadData();
+      navigation.setParams({ refresh: undefined });
+    }
+  }, [route?.params?.refresh]);
 
   const getPlantName = (plantId: string | null) => {
     if (!plantId) return null;
@@ -174,6 +185,9 @@ export default function JournalScreen({ navigation }: any) {
 
       filtered = filtered.filter((e) => new Date(e.created_at) >= filterDate);
     }
+
+    // Sort by newest first
+    filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
     return filtered;
   }, [entries, searchQuery, selectedType, dateFilter, plants]);
@@ -587,18 +601,39 @@ export default function JournalScreen({ navigation }: any) {
             {filteredEntries.length === 0 && !loading && (
               <View style={styles.emptyState}>
                 <Ionicons name="book-outline" size={64} color={theme.border} />
-                <Text style={styles.emptyText}>
-                  {searchQuery ||
-                  selectedType || dateFilter !== "all"
-                    ? "No entries match your filters"
-                    : "No journal entries yet"}
-                </Text>
-                <Text style={styles.emptySubtext}>
-                  {searchQuery ||
-                  selectedType || dateFilter !== "all"
-                    ? "Try adjusting your filters"
-                    : "Start documenting your garden journey"}
-                </Text>
+                {entries.length === 0 ? (
+                  <>
+                    <Text style={styles.emptyText}>No journal entries yet</Text>
+                    <Text style={styles.emptySubtext}>
+                      Start documenting your garden journey
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.emptyText}>No entries found</Text>
+                    <Text style={styles.emptySubtext}>
+                      {searchQuery ? (
+                        `No results for "${searchQuery}"`
+                      ) : dateFilter !== "all" ? (
+                        `No entries in ${dateFilter === "week" ? "the past week" : dateFilter === "month" ? "this month" : "this year"}`
+                      ) : selectedType ? (
+                        `No ${selectedType} entries found`
+                      ) : (
+                        "Try adjusting your filters"
+                      )}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.clearFiltersButton}
+                      onPress={() => {
+                        setSearchQuery("");
+                        setSelectedType(null);
+                        setDateFilter("month");
+                      }}
+                    >
+                      <Text style={styles.clearFiltersText}>Clear Filters</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             )}
           </View>
@@ -953,6 +988,19 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontSize: 14,
       color: theme.textSecondary,
       marginTop: 4,
+      textAlign: "center",
+    },
+    clearFiltersButton: {
+      marginTop: 16,
+      paddingVertical: 10,
+      paddingHorizontal: 20,
+      backgroundColor: theme.primary,
+      borderRadius: 8,
+    },
+    clearFiltersText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: "#FFFFFF",
     },
     modalContainer: {
       flex: 1,

@@ -9,9 +9,9 @@ export const lightTheme = {
   backgroundTertiary: '#e8f5e9',
   
   // Text colors
-  text: '#333',
-  textSecondary: '#666',
-  textTertiary: '#999',
+  text: '#1a1a1a',
+  textSecondary: '#2f2f2f',
+  textTertiary: '#4a4a4a',
   textInverse: '#fff',
   
   // Primary colors
@@ -46,8 +46,8 @@ export const lightTheme = {
   
   // Input colors
   inputBackground: '#fff',
-  inputText: '#333',
-  inputPlaceholder: '#999',
+  inputText: '#1a1a1a',
+  inputPlaceholder: '#5f5f5f',
   inputBorder: '#ddd',
   
   // Picker colors
@@ -64,13 +64,13 @@ export const lightTheme = {
 export const darkTheme = {
   // Background colors
   background: '#121212',
-  backgroundSecondary: '#1e1e1e',
+  backgroundSecondary: '#1a1a1a',
   backgroundTertiary: '#2d4a2e',
   
   // Text colors
-  text: '#e0e0e0',
-  textSecondary: '#b0b0b0',
-  textTertiary: '#808080',
+  text: '#fafafa',
+  textSecondary: '#d6d6d6',
+  textTertiary: '#b8b8b8',
   textInverse: '#000',
   
   // Primary colors
@@ -104,9 +104,9 @@ export const darkTheme = {
   buttonText: '#000',
   
   // Input colors
-  inputBackground: '#2a2a2a',
-  inputText: '#e0e0e0',
-  inputPlaceholder: '#808080',
+  inputBackground: '#222',
+  inputText: '#f5f5f5',
+  inputPlaceholder: '#b0b0b0',
   inputBorder: '#404040',
   
   // Picker colors

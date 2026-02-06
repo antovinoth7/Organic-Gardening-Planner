@@ -44,10 +44,12 @@ Each document is scoped by `user_id` (auth is required before reading/writing).
   - `@garden_plants`, `@garden_tasks`, `@garden_task_logs`, `@garden_journal`
   - Accessed via `src/lib/storage.ts` and guarded by `src/utils/safeStorage.ts`.
 - Images:
-  - Stored in `FileSystem.documentDirectory/garden_images/`.
+  - **Android**: Stored in MediaLibrary (Pictures/GardenPlanner) - persists across app reinstalls
+  - **iOS**: Stored in `FileSystem.documentDirectory/garden_images/` - backed up to iCloud
+  - **Web**: Image URIs are blob URLs (session-based)
   - Filenames use prefixes like `plant_` and `journal_`.
   - Firestore stores filenames; AsyncStorage caches filenames and resolved local URIs.
-  - On web, image URIs are blob URLs and no local deletion is attempted.
+  - Automatic migration on Android moves old images to persistent storage on first launch after update.
 
 ## Core data flows
 ### 1) Create a plant with a photo
@@ -107,6 +109,14 @@ backup flows.
 - `ErrorBoundary` catches render errors and forwards to `errorTracker`.
 - `errorTracker` stores recent logs in AsyncStorage and forwards to Sentry.
 - `errorLogging` provides structured error logs for network/auth/storage flows.
+
+## Firebase lifecycle management
+- Firebase SDK manages Firestore cache automatically using `memoryLocalCache()`.
+- **IMPORTANT**: Never call `terminate()` on the Firestore instance - it permanently
+  terminates the client and causes "The client has already been terminated" errors.
+- App lifecycle events (background/foreground) are handled in
+  `src/utils/appLifecycle.ts`, but Firestore reconnection is automatic.
+- Cache clearing in Settings only clears AsyncStorage cache, not Firestore.
 
 ## Security and privacy
 - Firebase Auth (email/password) gates all data access.

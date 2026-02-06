@@ -12,15 +12,28 @@ interface QueueItem {
   reject: (error: any) => void;
 }
 
+const MAX_QUEUE_SIZE = 100; // Prevent memory overflow
+
 class StorageQueue {
   private queue: QueueItem[] = [];
   private isProcessing = false;
 
   async add<T>(operation: () => Promise<T>): Promise<T> {
     return new Promise((resolve, reject) => {
+      // Prevent queue overflow - reject if too many operations pending
+      if (this.queue.length >= MAX_QUEUE_SIZE) {
+        console.error(`Storage queue overflow: ${this.queue.length} items pending`);
+        reject(new Error('Storage queue overflow - too many pending operations'));
+        return;
+      }
+      
       this.queue.push({ operation, resolve, reject });
       this.process();
     });
+  }
+
+  getQueueSize(): number {
+    return this.queue.length;
   }
 
   private async process() {
@@ -47,6 +60,11 @@ class StorageQueue {
 const storageQueue = new StorageQueue();
 
 /**
+ * Get current storage queue size for monitoring
+ */
+export const getStorageQueueSize = (): number => storageQueue.getQueueSize();
+
+/**
  * Safe get with error handling and retry logic
  */
 export const safeGetData = async <T>(key: string, retries = 2): Promise<T[]> => {
@@ -69,16 +87,24 @@ export const safeGetData = async <T>(key: string, retries = 2): Promise<T[]> => 
         console.error(`Error reading ${key} (attempt ${i + 1}/${retries + 1}):`, e);
         
         // If JSON parse error, data is corrupted - clear it
-        if (e instanceof SyntaxError) {
+        if (e instanceof SyntaxError || e?.message?.includes('JSON')) {
           console.warn(`Corrupted data at ${key}, clearing...`);
-          await AsyncStorage.removeItem(key).catch(() => {});
+          try {
+            await AsyncStorage.removeItem(key);
+          } catch (clearError) {
+            console.error(`Failed to clear corrupted data at ${key}:`, clearError);
+          }
           return [];
         }
         
-        // Wait before retry
-        if (i < retries) {
-          await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
+        // On last retry, return empty array instead of throwing
+        if (i === retries) {
+          console.error(`All retries exhausted for ${key}, returning empty array`);
+          return [];
         }
+        
+        // Wait before retry with exponential backoff
+        await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, i)));
       }
     }
 

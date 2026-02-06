@@ -10,7 +10,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../theme';
 import { sanitizeAlphaNumericSpaces } from '../utils/textSanitizer';
 
-export default function TodayScreen({ navigation }: any) {
+export default function TodayScreen({ navigation, route }: any) {
   const theme = useTheme();
   const styles = createStyles(theme);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -76,12 +76,21 @@ export default function TodayScreen({ navigation }: any) {
     };
   }, []);
 
-  // Refresh data when screen comes into focus
+  // Listen for refresh param (e.g., after completing tasks)
+  useEffect(() => {
+    const refreshParam = route?.params?.refresh;
+    if (refreshParam) {
+      loadData();
+      navigation.setParams({ refresh: undefined });
+    }
+  }, [route?.params?.refresh]);
+
+  // Only reset scroll position when screen comes into focus, don't reload data
+  // User can pull-to-refresh if they want fresh data
   useFocusEffect(
     React.useCallback(() => {
       // Reset scroll to top
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-      loadData();
     }, [])
   );
 
