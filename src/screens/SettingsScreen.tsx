@@ -98,9 +98,12 @@ export default function SettingsScreen({ navigation }: any) {
             try {
               setLoading(true);
               const result = await importBackup(overwrite);
+              const cloudStatus = result.cloudSynced
+                ? "\n\nSynced to cloud (Firestore) for cross-device restore."
+                : "";
               Alert.alert(
                 "Import Complete",
-                `Imported:\n• ${result.plants} plants\n• ${result.tasks} tasks\n• ${result.journal} journal entries`,
+                `Imported:\n• ${result.plants} plants\n• ${result.tasks} tasks\n• ${result.journal} journal entries${cloudStatus}`,
                 [{ text: "OK", onPress: loadStats }]
               );
             } catch (error: any) {
@@ -159,9 +162,12 @@ export default function SettingsScreen({ navigation }: any) {
             try {
               setLoading(true);
               const result = await importBackupWithImages(overwrite);
+              const cloudStatus = result.cloudSynced
+                ? "\n\nSynced to cloud (Firestore) for cross-device restore."
+                : "";
               Alert.alert(
                 "Import Complete",
-                `Imported:\n• ${result.plants} plants\n• ${result.tasks} tasks\n• ${result.journal} journal entries\n• ${result.images} images`,
+                `Imported:\n• ${result.plants} plants\n• ${result.tasks} tasks\n• ${result.journal} journal entries\n• ${result.images} images${cloudStatus}`,
                 [{ text: "OK", onPress: loadStats }]
               );
             } catch (error: any) {

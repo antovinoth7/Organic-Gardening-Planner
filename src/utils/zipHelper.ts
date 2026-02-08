@@ -17,15 +17,34 @@ import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 
+export interface ZipImageFile {
+  uri: string;
+  filename: string;
+}
+
+const safeDecodeURIComponent = (value: string): string => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const sanitizeZipImageFilename = (filename: string): string => {
+  const normalized = filename.replace(/\\/g, '/');
+  const clean = normalized.split('/').pop() || `image_${Date.now()}.jpg`;
+  return safeDecodeURIComponent(clean).replace(/\0/g, '');
+};
+
 /**
  * Create a ZIP file containing JSON data and images
  * @param jsonData - The backup JSON data object
- * @param imageUris - Array of local image URIs to include
+ * @param imageFiles - Array of image URIs with stable filenames to include
  * @returns URI of the created ZIP file
  */
 export const createZipWithImages = async (
   jsonData: any,
-  imageUris: string[]
+  imageFiles: ZipImageFile[]
 ): Promise<string> => {
   try {
     // Prepare files for ZIP
@@ -36,12 +55,13 @@ export const createZipWithImages = async (
     files['backup.json'] = strToU8(jsonString);
     
     // Process each image
-    for (const imageUri of imageUris) {
+    for (const imageFile of imageFiles) {
+      const imageUri = imageFile.uri;
       if (!imageUri || imageUri.trim() === '') continue;
       
       try {
         // Skip if file doesn't exist
-        if (Platform.OS !== 'web') {
+        if (Platform.OS !== 'web' && imageUri.startsWith('file://')) {
           const fileInfo = await FileSystem.getInfoAsync(imageUri);
           if (!fileInfo.exists) {
             console.warn(`Image not found, skipping: ${imageUri}`);
@@ -49,8 +69,8 @@ export const createZipWithImages = async (
           }
         }
         
-        // Extract filename from URI
-        const filename = imageUri.split('/').pop() || `image_${Date.now()}.jpg`;
+        // Keep original filename from backup metadata so restore can remap reliably.
+        const filename = sanitizeZipImageFilename(imageFile.filename);
         
         // Read image as base64
         let imageData: Uint8Array;
@@ -166,7 +186,12 @@ export const extractZipWithImages = async (
     for (const [filePath, fileData] of Object.entries(unzippedFiles)) {
       if (filePath.startsWith('images/') && filePath !== 'images/') {
         try {
-          const filename = filePath.replace('images/', '');
+          const filename = sanitizeZipImageFilename(
+            filePath.replace('images/', '')
+          );
+          if (!filename) {
+            continue;
+          }
           
           if (Platform.OS === 'web') {
             // For web, create blob URL

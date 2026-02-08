@@ -338,7 +338,9 @@ const AppRoot = () => {
         
         if (result.success || result.migratedCount > 0) {
           console.log('✅ Migration completed:', result.message);
-          await AsyncStorage.setItem('@image_migration_complete', 'true');
+          if (result.completed) {
+            await AsyncStorage.setItem('@image_migration_complete', 'true');
+          }
           
           if (result.migratedCount > 0) {
             Alert.alert(

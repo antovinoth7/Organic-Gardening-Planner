@@ -44,6 +44,16 @@ export interface SavedImage {
 // Android uses MediaLibrary (persists across reinstalls)
 const IMAGES_DIR = Platform.OS === 'web' ? null : `${FileSystem.documentDirectory}garden_images/`;
 const ALBUM_NAME = 'GardenPlanner';
+const MEDIA_LOOKUP_PAGE_SIZE = 200;
+const MEDIA_LOOKUP_MAX_PAGES = 20;
+
+let mediaLookupCache: Map<string, string> | null = null;
+let mediaLookupPromise: Promise<Map<string, string>> | null = null;
+
+const clearMediaLookupCache = () => {
+  mediaLookupCache = null;
+  mediaLookupPromise = null;
+};
 
 /**
  * Request media library permissions on Android
@@ -69,6 +79,87 @@ const requestMediaLibraryPermissions = async (): Promise<boolean> => {
     console.warn('MediaLibrary permissions not available, falling back to documentDirectory:', error);
     return false;
   }
+};
+
+const upsertAssetLookup = (
+  lookup: Map<string, string>,
+  asset: MediaLibrary.Asset
+) => {
+  if (asset.id) {
+    lookup.set(String(asset.id), asset.uri);
+  }
+
+  if (asset.filename) {
+    const filename = asset.filename.toLowerCase();
+    if (!lookup.has(filename)) {
+      lookup.set(filename, asset.uri);
+    }
+  }
+};
+
+const scanMediaAssets = async (
+  lookup: Map<string, string>,
+  options: any = {}
+) => {
+  let after: string | undefined;
+  let pageCount = 0;
+
+  while (pageCount < MEDIA_LOOKUP_MAX_PAGES) {
+    const page = await MediaLibrary.getAssetsAsync({
+      ...options,
+      first: MEDIA_LOOKUP_PAGE_SIZE,
+      ...(after ? { after } : {}),
+    });
+
+    page.assets.forEach((asset) => upsertAssetLookup(lookup, asset));
+
+    if (!page.hasNextPage || !page.endCursor) {
+      break;
+    }
+
+    after = page.endCursor;
+    pageCount += 1;
+  }
+};
+
+const getAndroidMediaLookup = async (): Promise<Map<string, string>> => {
+  if (Platform.OS !== 'android' || isExpoGo) {
+    return new Map();
+  }
+
+  if (mediaLookupCache) {
+    return mediaLookupCache;
+  }
+
+  if (!mediaLookupPromise) {
+    mediaLookupPromise = (async () => {
+      const lookup = new Map<string, string>();
+      const hasPermission = await requestMediaLibraryPermissions();
+
+      if (!hasPermission) {
+        return lookup;
+      }
+
+      try {
+        const album = await MediaLibrary.getAlbumAsync(ALBUM_NAME);
+        if (album) {
+          await scanMediaAssets(lookup, { album });
+        }
+
+        // Also do a broader scan for legacy or manually restored data not in the album.
+        await scanMediaAssets(lookup);
+      } catch (error) {
+        console.warn('Failed to build MediaLibrary lookup cache:', error);
+      }
+
+      mediaLookupCache = lookup;
+      return lookup;
+    })().finally(() => {
+      mediaLookupPromise = null;
+    });
+  }
+
+  return mediaLookupPromise;
 };
 
 /**
@@ -156,6 +247,7 @@ const saveImageLocally = async (
 
       // Save to MediaLibrary (persists across reinstalls)
       const asset = await MediaLibrary.createAssetAsync(assetSourceUri);
+      clearMediaLookupCache();
       
       // Try to organize into an album
       try {
@@ -321,7 +413,7 @@ export const saveImageLocallyWithFilename = async (
   prefix: string = 'img'
 ): Promise<SavedImage> => {
   const uri = await saveImageLocally(sourceUri, prefix);
-  const filename = getFilenameFromUri(uri);
+  const filename = await resolveSavedImageFilename(uri);
   return { uri, filename };
 };
 
@@ -341,6 +433,33 @@ export const getFilenameFromUri = (uri: string): string | null => {
   }
 };
 
+const getAndroidAssetIdFromUri = (uri: string): string | null => {
+  if (!uri || Platform.OS !== 'android' || !uri.startsWith('content://')) {
+    return null;
+  }
+
+  const cleanUri = uri.split('?')[0].split('#')[0];
+  return cleanUri.split('/').pop() || null;
+};
+
+async function resolveSavedImageFilename(uri: string): Promise<string | null> {
+  if (Platform.OS === 'android') {
+    const assetId = getAndroidAssetIdFromUri(uri);
+    if (assetId) {
+      try {
+        const asset = await MediaLibrary.getAssetInfoAsync(assetId);
+        if (asset?.filename) {
+          return asset.filename;
+        }
+      } catch {
+        // Fall back to URI parsing if MediaLibrary metadata is unavailable.
+      }
+    }
+  }
+
+  return getFilenameFromUri(uri);
+}
+
 /**
  * Resolve Android MediaLibrary asset ID to a usable content:// URI.
  */
@@ -354,6 +473,18 @@ const resolveMediaLibraryAssetUri = async (
   } catch {
     return null;
   }
+};
+
+const resolveMediaLibraryUriByFilename = async (
+  filename: string
+): Promise<string | null> => {
+  if (!filename || Platform.OS !== 'android') return null;
+
+  const cleanFilename = getFilenameFromUri(filename);
+  if (!cleanFilename) return null;
+
+  const lookup = await getAndroidMediaLookup();
+  return lookup.get(cleanFilename.toLowerCase()) ?? null;
 };
 
 /**
@@ -392,6 +523,11 @@ export const resolveLocalImageUri = async (
       if (mediaLibraryUri) {
         return mediaLibraryUri;
       }
+
+      const mediaLibraryUriFromFilename = await resolveMediaLibraryUriByFilename(uri);
+      if (mediaLibraryUriFromFilename) {
+        return mediaLibraryUriFromFilename;
+      }
     }
     const localUri = getLocalImageUriFromFilename(uri);
     if (localUri && (await imageExists(localUri))) {
@@ -408,6 +544,13 @@ export const resolveLocalImageUri = async (
 
   const filename = getFilenameFromUri(uri);
   if (!filename) return null;
+
+  if (Platform.OS === 'android') {
+    const mediaLibraryUri = await resolveMediaLibraryUriByFilename(filename);
+    if (mediaLibraryUri) {
+      return mediaLibraryUri;
+    }
+  }
 
   const localUri = getLocalImageUriFromFilename(filename);
   if (localUri && (await imageExists(localUri))) {
@@ -444,6 +587,7 @@ export { requestMediaLibraryPermissions, isExpoGo };
  * Call this once on app startup or in settings
  */
 export const migrateImagesToMediaLibrary = async (): Promise<{
+  completed: boolean;
   success: boolean;
   migratedCount: number;
   errorCount: number;
@@ -452,6 +596,7 @@ export const migrateImagesToMediaLibrary = async (): Promise<{
   // Only run on Android
   if (Platform.OS !== 'android') {
     return {
+      completed: true,
       success: true,
       migratedCount: 0,
       errorCount: 0,
@@ -463,6 +608,7 @@ export const migrateImagesToMediaLibrary = async (): Promise<{
     // In Expo Go, skip migration silently - MediaLibrary is not available
     if (isExpoGo) {
       return {
+        completed: false,
         success: true,
         migratedCount: 0,
         errorCount: 0,
@@ -474,6 +620,7 @@ export const migrateImagesToMediaLibrary = async (): Promise<{
     const hasPermission = await requestMediaLibraryPermissions();
     if (!hasPermission) {
       return {
+        completed: false,
         success: true, // Not a failure, just not possible in this environment
         migratedCount: 0,
         errorCount: 0,
@@ -484,6 +631,7 @@ export const migrateImagesToMediaLibrary = async (): Promise<{
     // Check if old directory exists
     if (!IMAGES_DIR) {
       return {
+        completed: true,
         success: true,
         migratedCount: 0,
         errorCount: 0,
@@ -494,6 +642,7 @@ export const migrateImagesToMediaLibrary = async (): Promise<{
     const dirInfo = await FileSystem.getInfoAsync(IMAGES_DIR);
     if (!dirInfo.exists) {
       return {
+        completed: true,
         success: true,
         migratedCount: 0,
         errorCount: 0,
@@ -505,6 +654,7 @@ export const migrateImagesToMediaLibrary = async (): Promise<{
     const files = await FileSystem.readDirectoryAsync(IMAGES_DIR);
     if (files.length === 0) {
       return {
+        completed: true,
         success: true,
         migratedCount: 0,
         errorCount: 0,
@@ -555,7 +705,12 @@ export const migrateImagesToMediaLibrary = async (): Promise<{
       }
     }
 
+    if (migratedCount > 0) {
+      clearMediaLookupCache();
+    }
+
     return {
+      completed: errorCount === 0,
       success: errorCount === 0,
       migratedCount,
       errorCount,
@@ -564,6 +719,7 @@ export const migrateImagesToMediaLibrary = async (): Promise<{
   } catch (error) {
     console.error('Error during migration:', error);
     return {
+      completed: false,
       success: false,
       migratedCount: 0,
       errorCount: 0,

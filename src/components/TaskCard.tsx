@@ -62,6 +62,7 @@ export default function TaskCard({
     },
   };
   const priorityStyle = priority ? priorityPalette[priority] : null;
+  const priorityLabel = priority ? priority.toUpperCase() : null;
 
   return (
     <View style={[styles.card, isOverdue && styles.overdueCard]}>
@@ -75,7 +76,7 @@ export default function TaskCard({
           <Text style={styles.taskType}>
             {task.task_type.charAt(0).toUpperCase() + task.task_type.slice(1)}
           </Text>
-          {priorityStyle && (
+          {priorityStyle && priorityLabel && (
             <View
               style={[
                 styles.priorityBadge,
@@ -86,7 +87,7 @@ export default function TaskCard({
               ]}
             >
               <Text style={[styles.priorityText, { color: priorityStyle.text }]}>
-                {priority.toUpperCase()}
+                {priorityLabel}
               </Text>
             </View>
           )}

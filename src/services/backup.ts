@@ -19,9 +19,10 @@ import * as FileSystem from "expo-file-system/legacy";
 import { shareAsync, isAvailableAsync } from "expo-sharing";
 import { getDocumentAsync } from "expo-document-picker";
 import { getData, setData, KEYS } from "../lib/storage";
-import { getPlants } from "./plants";
+import { getArchivedPlants, getPlants } from "./plants";
 import { getTaskTemplates, getTaskLogs } from "./tasks";
 import { getJournalEntries } from "./journal";
+import { auth, db, refreshAuthToken } from "../lib/firebase";
 import {
   Plant,
   TaskTemplate,
@@ -44,10 +45,26 @@ import {
   savePlantCareProfiles,
 } from "./plantCareProfiles";
 import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
-import { createZipWithImages, extractZipWithImages } from "../utils/zipHelper";
+import {
+  createZipWithImages,
+  extractZipWithImages,
+  ZipImageFile,
+} from "../utils/zipHelper";
 import { Platform } from "react-native";
 import {
+  Timestamp,
+  collection,
+  doc,
+  getDocs,
+  query,
+  where,
+  writeBatch,
+  type QueryDocumentSnapshot,
+} from "firebase/firestore";
+import {
   getFilenameFromUri,
+  imageExists,
+  migrateImagesToMediaLibrary,
   resolveLocalImageUri,
   resolveLocalImageUris,
 } from "../lib/imageStorage";
@@ -66,6 +83,421 @@ interface BackupData {
   // Only the image filenames are included in the plant/journal objects
 }
 
+const BACKUP_PLANT_PAGE_SIZE = 200;
+const PLANTS_COLLECTION = "plants";
+const TASKS_COLLECTION = "task_templates";
+const TASK_LOGS_COLLECTION = "task_logs";
+const JOURNAL_COLLECTION = "journal_entries";
+const MAX_FIRESTORE_BATCH_WRITES = 450;
+
+type BackupFirestoreCollectionName =
+  | typeof PLANTS_COLLECTION
+  | typeof TASKS_COLLECTION
+  | typeof TASK_LOGS_COLLECTION
+  | typeof JOURNAL_COLLECTION;
+
+interface FirestoreImportRecord {
+  id: string;
+  data: Record<string, any>;
+}
+
+type FirestoreWriteOperation =
+  | { type: "set"; record: FirestoreImportRecord }
+  | { type: "delete"; id: string };
+
+const toFirestoreTimestamp = (value: unknown): Timestamp | null => {
+  if (!value) return null;
+
+  if (value instanceof Timestamp) {
+    return value;
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return Timestamp.fromDate(value);
+  }
+
+  if (typeof value === "number") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return Timestamp.fromDate(parsed);
+    }
+    return null;
+  }
+
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return Timestamp.fromDate(parsed);
+    }
+    return null;
+  }
+
+  if (typeof value === "object") {
+    const asAny = value as Record<string, any>;
+    if (
+      typeof asAny.seconds === "number" &&
+      typeof asAny.nanoseconds === "number"
+    ) {
+      return new Timestamp(asAny.seconds, asAny.nanoseconds);
+    }
+    if (typeof asAny.toDate === "function") {
+      try {
+        const parsed = asAny.toDate();
+        if (parsed instanceof Date && !Number.isNaN(parsed.getTime())) {
+          return Timestamp.fromDate(parsed);
+        }
+      } catch {
+        // Ignore invalid custom timestamp object.
+      }
+    }
+  }
+
+  return null;
+};
+
+const stripUndefinedFields = (value: any): any => {
+  if (value === undefined) return undefined;
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => stripUndefinedFields(item))
+      .filter((item) => item !== undefined);
+  }
+
+  if (value && typeof value === "object") {
+    if (value instanceof Timestamp || value instanceof Date) {
+      return value;
+    }
+
+    const result: Record<string, any> = {};
+    Object.entries(value).forEach(([key, nested]) => {
+      if (nested === undefined) return;
+      const sanitized = stripUndefinedFields(nested);
+      if (sanitized !== undefined) {
+        result[key] = sanitized;
+      }
+    });
+    return result;
+  }
+
+  return value;
+};
+
+const toPlantImportRecord = (
+  plant: Plant,
+  userId: string
+): FirestoreImportRecord | null => {
+  if (!plant.id) return null;
+
+  const photoFilename =
+    plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "");
+  const { id, photo_url: _photoUrl, created_at: _createdAt, deleted_at: _deletedAt, ...rest } = plant;
+
+  const payload = stripUndefinedFields({
+    ...rest,
+    user_id: userId,
+    photo_filename: photoFilename ?? null,
+    created_at: toFirestoreTimestamp(plant.created_at) ?? Timestamp.now(),
+    deleted_at: toFirestoreTimestamp(plant.deleted_at) ?? null,
+    is_deleted: plant.is_deleted ?? false,
+  });
+
+  return { id, data: payload };
+};
+
+const toTaskImportRecord = (
+  task: TaskTemplate,
+  userId: string
+): FirestoreImportRecord | null => {
+  if (!task.id) return null;
+
+  const { id, created_at: _createdAt, next_due_at: _nextDueAt, ...rest } = task;
+  const payload = stripUndefinedFields({
+    ...rest,
+    user_id: userId,
+    created_at: toFirestoreTimestamp(task.created_at) ?? Timestamp.now(),
+    next_due_at: toFirestoreTimestamp(task.next_due_at) ?? null,
+  });
+
+  return { id, data: payload };
+};
+
+const toTaskLogImportRecord = (
+  log: TaskLog,
+  userId: string
+): FirestoreImportRecord | null => {
+  if (!log.id) return null;
+
+  const doneAt =
+    toFirestoreTimestamp(log.done_at) ??
+    toFirestoreTimestamp(log.created_at) ??
+    Timestamp.now();
+  const createdAt = toFirestoreTimestamp(log.created_at) ?? doneAt;
+
+  const { id, done_at: _doneAt, created_at: _createdAt, ...rest } = log;
+  const payload = stripUndefinedFields({
+    ...rest,
+    user_id: userId,
+    done_at: doneAt,
+    created_at: createdAt,
+  });
+
+  return { id, data: payload };
+};
+
+const toJournalImportRecord = (
+  entry: JournalEntry,
+  userId: string
+): FirestoreImportRecord | null => {
+  if (!entry.id) return null;
+
+  const legacyUrls =
+    entry.photo_urls && entry.photo_urls.length > 0
+      ? entry.photo_urls
+      : entry.photo_url
+      ? [entry.photo_url]
+      : [];
+  const photoFilenames =
+    entry.photo_filenames && entry.photo_filenames.length > 0
+      ? entry.photo_filenames
+      : legacyUrls
+          .map((uri) => getFilenameFromUri(uri))
+          .filter((filename): filename is string => !!filename);
+
+  const {
+    id,
+    photo_urls: _photoUrls,
+    photo_url: _photoUrl,
+    created_at: _createdAt,
+    ...rest
+  } = entry;
+
+  const payload = stripUndefinedFields({
+    ...rest,
+    user_id: userId,
+    photo_filenames: photoFilenames,
+    created_at: toFirestoreTimestamp(entry.created_at) ?? Timestamp.now(),
+  });
+
+  return { id, data: payload };
+};
+
+const commitFirestoreOperations = async (
+  collectionName: BackupFirestoreCollectionName,
+  operations: FirestoreWriteOperation[]
+): Promise<void> => {
+  if (operations.length === 0) return;
+
+  let batch = writeBatch(db);
+  let operationCount = 0;
+
+  const commitCurrentBatch = async () => {
+    if (operationCount === 0) return;
+
+    await withTimeoutAndRetry(() => batch.commit(), {
+      timeoutMs: 20000,
+      maxRetries: 2,
+    });
+
+    batch = writeBatch(db);
+    operationCount = 0;
+  };
+
+  for (const operation of operations) {
+    if (operation.type === "delete") {
+      batch.delete(doc(db, collectionName, operation.id));
+    } else {
+      batch.set(doc(db, collectionName, operation.record.id), operation.record.data, {
+        merge: false,
+      });
+    }
+
+    operationCount += 1;
+
+    if (operationCount >= MAX_FIRESTORE_BATCH_WRITES) {
+      await commitCurrentBatch();
+    }
+  }
+
+  await commitCurrentBatch();
+};
+
+const syncCollectionFromBackup = async (
+  collectionName: BackupFirestoreCollectionName,
+  userId: string,
+  overwrite: boolean,
+  records: FirestoreImportRecord[]
+): Promise<void> => {
+  const uniqueRecords = Array.from(
+    records.reduce((map, record) => {
+      if (record.id) {
+        map.set(record.id, record);
+      }
+      return map;
+    }, new Map<string, FirestoreImportRecord>()).values()
+  );
+
+  const setOperations: FirestoreWriteOperation[] = uniqueRecords.map((record) => ({
+    type: "set",
+    record,
+  }));
+  const deleteOperations: FirestoreWriteOperation[] = [];
+
+  if (overwrite) {
+    const incomingIds = new Set(uniqueRecords.map((record) => record.id));
+    const existingSnapshot = await withTimeoutAndRetry(
+      () =>
+        getDocs(
+          query(collection(db, collectionName), where("user_id", "==", userId))
+        ),
+      { timeoutMs: 20000, maxRetries: 2 }
+    );
+
+    existingSnapshot.docs.forEach((docSnap) => {
+      if (!incomingIds.has(docSnap.id)) {
+        deleteOperations.push({ type: "delete", id: docSnap.id });
+      }
+    });
+  }
+
+  await commitFirestoreOperations(collectionName, [
+    ...deleteOperations,
+    ...setOperations,
+  ]);
+};
+
+const syncBackupDataToFirestore = async (
+  overwrite: boolean,
+  importedPlants: Plant[],
+  importedTasks: TaskTemplate[],
+  importedTaskLogs: TaskLog[],
+  importedJournal: JournalEntry[]
+): Promise<void> => {
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error("Not authenticated");
+  }
+
+  const tokenReady = await refreshAuthToken();
+  if (!tokenReady) {
+    throw new Error("Authentication expired. Please sign in again.");
+  }
+
+  const plantRecords = importedPlants
+    .map((plant) => toPlantImportRecord(plant, user.uid))
+    .filter((record): record is FirestoreImportRecord => !!record);
+  const taskRecords = importedTasks
+    .map((task) => toTaskImportRecord(task, user.uid))
+    .filter((record): record is FirestoreImportRecord => !!record);
+  const taskLogRecords = importedTaskLogs
+    .map((log) => toTaskLogImportRecord(log, user.uid))
+    .filter((record): record is FirestoreImportRecord => !!record);
+  const journalRecords = importedJournal
+    .map((entry) => toJournalImportRecord(entry, user.uid))
+    .filter((record): record is FirestoreImportRecord => !!record);
+
+  await syncCollectionFromBackup(
+    PLANTS_COLLECTION,
+    user.uid,
+    overwrite,
+    plantRecords
+  );
+  await syncCollectionFromBackup(
+    TASKS_COLLECTION,
+    user.uid,
+    overwrite,
+    taskRecords
+  );
+  await syncCollectionFromBackup(
+    TASK_LOGS_COLLECTION,
+    user.uid,
+    overwrite,
+    taskLogRecords
+  );
+  await syncCollectionFromBackup(
+    JOURNAL_COLLECTION,
+    user.uid,
+    overwrite,
+    journalRecords
+  );
+};
+
+const getAllPlantsForBackup = async (): Promise<Plant[]> => {
+  const allPlants: Plant[] = [];
+  const seenIds = new Set<string>();
+
+  let lastDoc: QueryDocumentSnapshot | undefined;
+
+  while (true) {
+    const { plants, lastDoc: nextLastDoc } = await getPlants(
+      BACKUP_PLANT_PAGE_SIZE,
+      lastDoc
+    );
+
+    plants.forEach((plant) => {
+      if (seenIds.has(plant.id)) return;
+      seenIds.add(plant.id);
+      allPlants.push(plant);
+    });
+
+    if (!nextLastDoc || plants.length === 0) {
+      break;
+    }
+
+    lastDoc = nextLastDoc;
+  }
+
+  try {
+    const archivedPlants = await getArchivedPlants();
+    archivedPlants.forEach((plant) => {
+      if (seenIds.has(plant.id)) return;
+      seenIds.add(plant.id);
+      allPlants.push(plant);
+    });
+  } catch (error) {
+    console.warn("Failed to fetch archived plants for backup:", error);
+  }
+
+  return allPlants;
+};
+
+const getNormalizedFilename = (value?: string | null): string | null => {
+  const filename = getFilenameFromUri(value ?? "");
+  return filename ? filename.toLowerCase() : null;
+};
+
+const buildImageUriLookup = (imageUris: Map<string, string>) => {
+  const normalized = new Map<string, string>();
+  imageUris.forEach((uri, filename) => {
+    const key = getNormalizedFilename(filename);
+    if (key) {
+      normalized.set(key, uri);
+    }
+  });
+
+  return (filename?: string | null): string | null => {
+    const key = getNormalizedFilename(filename);
+    if (!key) return null;
+    return normalized.get(key) ?? null;
+  };
+};
+
+const resolveImportedImageUri = async (
+  getImportedImageUri: (filename?: string | null) => string | null,
+  filename?: string | null
+): Promise<string | null> => {
+  const importedUri = getImportedImageUri(filename);
+
+  if (importedUri) {
+    const resolvedImportedUri = await resolveLocalImageUri(importedUri);
+    if (resolvedImportedUri && (await imageExists(resolvedImportedUri))) {
+      return resolvedImportedUri;
+    }
+  }
+
+  return resolveLocalImageUri(filename ?? null);
+};
+
 /**
  * Export all data to a JSON backup file
  * @returns The file URI of the created backup
@@ -75,15 +507,15 @@ export const exportBackup = async (): Promise<string> => {
     console.log("Starting backup export...");
 
     // Fetch all data from Firestore (or use cached if offline) with timeout
-    const [{ plants }, tasks, taskLogs, journal] = await withTimeoutAndRetry(
+    const [plants, tasks, taskLogs, journal] = await withTimeoutAndRetry(
       () =>
         Promise.all([
-          getPlants(),
+          getAllPlantsForBackup(),
           getTaskTemplates(),
           getTaskLogs(),
           getJournalEntries(),
         ]),
-      { timeoutMs: 20000 } // 20 second timeout for backup export
+      { timeoutMs: 30000 } // 30 second timeout because plants can be paginated
     );
 
     const normalizedPlants = plants.map((plant) => {
@@ -178,6 +610,7 @@ export const importBackup = async (
   tasks: number;
   taskLogs: number;
   journal: number;
+  cloudSynced: boolean;
 }> => {
   try {
     console.log("Starting backup import...");
@@ -302,6 +735,15 @@ export const importBackup = async (
       })
     );
 
+    // Persist imported data to Firestore first for cross-device durability.
+    await syncBackupDataToFirestore(
+      overwrite,
+      normalizedPlants,
+      backup.tasks,
+      backup.taskLogs,
+      normalizedJournal
+    );
+
     // Import data based on overwrite mode
     if (overwrite) {
       // Replace all data
@@ -390,6 +832,7 @@ export const importBackup = async (
       tasks: backup.tasks.length,
       taskLogs: backup.taskLogs.length,
       journal: backup.journal.length,
+      cloudSynced: true,
     };
   } catch (error) {
     console.error("Error importing backup:", error);
@@ -526,15 +969,15 @@ export const exportBackupWithImages = async (): Promise<string> => {
     console.log("Starting backup export with images...");
 
     // Fetch all data from Firestore with timeout
-    const [{ plants }, tasks, taskLogs, journal] = await withTimeoutAndRetry(
+    const [plants, tasks, taskLogs, journal] = await withTimeoutAndRetry(
       () =>
         Promise.all([
-          getPlants(),
+          getAllPlantsForBackup(),
           getTaskTemplates(),
           getTaskLogs(),
           getJournalEntries(),
         ]),
-      { timeoutMs: 20000 }
+      { timeoutMs: 30000 }
     );
 
     const normalizedPlants = plants.map((plant) => {
@@ -585,7 +1028,7 @@ export const exportBackupWithImages = async (): Promise<string> => {
     };
 
     // Collect all image URIs from plants and journal entries
-    const imageUris: string[] = [];
+    const imageFiles: ZipImageFile[] = [];
     const imageFilenames = new Set<string>();
 
     normalizedPlants.forEach((plant) => {
@@ -600,19 +1043,25 @@ export const exportBackupWithImages = async (): Promise<string> => {
       }
     });
 
-    const resolvedImageUris = await Promise.all(
-      Array.from(imageFilenames).map((filename) => resolveLocalImageUri(filename))
+    const resolvedImages = await Promise.all(
+      Array.from(imageFilenames).map(async (filename) => ({
+        filename,
+        uri: await resolveLocalImageUri(filename),
+      }))
     );
-    resolvedImageUris.forEach((uri) => {
-      if (uri) {
-        imageUris.push(uri);
+    resolvedImages.forEach((image) => {
+      if (image.uri) {
+        imageFiles.push({
+          filename: image.filename,
+          uri: image.uri,
+        });
       }
     });
 
-    console.log(`Found ${imageUris.length} images to backup`);
+    console.log(`Found ${imageFiles.length} images to backup`);
 
     // Create ZIP with JSON and images
-    const zipUri = await createZipWithImages(backup, imageUris);
+    const zipUri = await createZipWithImages(backup, imageFiles);
 
     console.log("Backup with images created:", zipUri);
 
@@ -648,6 +1097,7 @@ export const importBackupWithImages = async (
   taskLogs: number;
   journal: number;
   images: number;
+  cloudSynced: boolean;
 }> => {
   try {
     console.log("Starting backup import with images...");
@@ -676,6 +1126,17 @@ export const importBackupWithImages = async (
       result.assets[0].uri,
       IMAGES_DIR
     );
+    const getImportedImageUri = buildImageUriLookup(imageUris);
+
+    // Move extracted images to persistent MediaLibrary on Android when possible.
+    if (Platform.OS === "android") {
+      try {
+        const migration = await migrateImagesToMediaLibrary();
+        console.log("Post-import migration:", migration.message);
+      } catch (migrationError) {
+        console.warn("Post-import migration failed:", migrationError);
+      }
+    }
 
     // Validate backup structure
     const backup = jsonData as BackupData;
@@ -708,42 +1169,60 @@ export const importBackupWithImages = async (
     console.log(`- Images: ${imageUris.size}`);
 
     // Update image URIs and filenames in the backup data
-    const updatedPlants = backup.plants.map((plant) => {
-      const photoFilename =
-        plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "");
-      const newUri = photoFilename ? imageUris.get(photoFilename) : null;
-      return {
-        ...plant,
-        photo_filename: photoFilename ?? null,
-        photo_url: newUri ?? null,
-      };
-    });
+    const updatedPlants = await Promise.all(
+      backup.plants.map(async (plant) => {
+        const photoFilename =
+          plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "");
+        const newUri = await resolveImportedImageUri(
+          getImportedImageUri,
+          photoFilename
+        );
+        return {
+          ...plant,
+          photo_filename: photoFilename ?? null,
+          photo_url: newUri ?? null,
+        };
+      })
+    );
 
-    const updatedJournal = backup.journal.map((entry) => {
-      const legacyUrls =
-        entry.photo_urls && entry.photo_urls.length > 0
-          ? entry.photo_urls
-          : entry.photo_url
-          ? [entry.photo_url]
-          : [];
-      const photoFilenames =
-        entry.photo_filenames && entry.photo_filenames.length > 0
-          ? entry.photo_filenames
-          : legacyUrls
-              .map((uri) => getFilenameFromUri(uri))
-              .filter((filename): filename is string => !!filename);
-      const updatedPhotos = photoFilenames
-        .map((filename) =>
-          filename && imageUris.has(filename) ? imageUris.get(filename)! : null
-        )
-        .filter((uri): uri is string => !!uri);
-      return {
-        ...entry,
-        photo_filenames: photoFilenames,
-        photo_urls: updatedPhotos,
-        photo_url: null,
-      };
-    });
+    const updatedJournal = await Promise.all(
+      backup.journal.map(async (entry) => {
+        const legacyUrls =
+          entry.photo_urls && entry.photo_urls.length > 0
+            ? entry.photo_urls
+            : entry.photo_url
+            ? [entry.photo_url]
+            : [];
+        const photoFilenames =
+          entry.photo_filenames && entry.photo_filenames.length > 0
+            ? entry.photo_filenames
+            : legacyUrls
+                .map((uri) => getFilenameFromUri(uri))
+                .filter((filename): filename is string => !!filename);
+        const updatedPhotos = (
+          await Promise.all(
+            photoFilenames.map(async (filename) => {
+              return resolveImportedImageUri(getImportedImageUri, filename);
+            })
+          )
+        ).filter((uri): uri is string => !!uri);
+        return {
+          ...entry,
+          photo_filenames: photoFilenames,
+          photo_urls: updatedPhotos,
+          photo_url: null,
+        };
+      })
+    );
+
+    // Persist imported data to Firestore first for cross-device durability.
+    await syncBackupDataToFirestore(
+      overwrite,
+      updatedPlants,
+      backup.tasks,
+      backup.taskLogs,
+      updatedJournal
+    );
 
     // Import data based on overwrite mode
     if (overwrite) {
@@ -830,6 +1309,7 @@ export const importBackupWithImages = async (
       taskLogs: backup.taskLogs.length,
       journal: backup.journal.length,
       images: imageUris.size,
+      cloudSynced: true,
     };
   } catch (error) {
     console.error("Error importing backup with images:", error);
@@ -849,13 +1329,13 @@ export const exportImagesOnly = async (): Promise<string> => {
     console.log("Starting images-only export...");
 
     // Fetch all data to get image URIs
-    const [{ plants }, journal] = await withTimeoutAndRetry(
-      () => Promise.all([getPlants(), getJournalEntries()]),
-      { timeoutMs: 20000 }
+    const [plants, journal] = await withTimeoutAndRetry(
+      () => Promise.all([getAllPlantsForBackup(), getJournalEntries()]),
+      { timeoutMs: 30000 }
     );
 
     // Collect all image URIs
-    const imageUris: string[] = [];
+    const imageFiles: ZipImageFile[] = [];
     const imageFilenames = new Set<string>();
 
     // Add plant images
@@ -884,30 +1364,36 @@ export const exportImagesOnly = async (): Promise<string> => {
       photoFilenames.forEach((filename) => imageFilenames.add(filename));
     });
 
-    const resolvedImageUris = await Promise.all(
-      Array.from(imageFilenames).map((filename) => resolveLocalImageUri(filename))
+    const resolvedImages = await Promise.all(
+      Array.from(imageFilenames).map(async (filename) => ({
+        filename,
+        uri: await resolveLocalImageUri(filename),
+      }))
     );
-    resolvedImageUris.forEach((uri) => {
-      if (uri) {
-        imageUris.push(uri);
+    resolvedImages.forEach((image) => {
+      if (image.uri) {
+        imageFiles.push({
+          filename: image.filename,
+          uri: image.uri,
+        });
       }
     });
 
-    console.log(`Found ${imageUris.length} images to export`);
+    console.log(`Found ${imageFiles.length} images to export`);
 
-    if (imageUris.length === 0) {
+    if (imageFiles.length === 0) {
       throw new Error("No images found to export");
     }
 
     // Create a minimal manifest file
     const manifest = {
       exportDate: new Date().toISOString(),
-      imageCount: imageUris.length,
+      imageCount: imageFiles.length,
       note: "This is an images-only backup. Import this on another device to restore photos.",
     };
 
     // Create ZIP with images only (plus manifest)
-    const zipUri = await createZipWithImages(manifest, imageUris);
+    const zipUri = await createZipWithImages(manifest, imageFiles);
 
     console.log("Images-only backup created:", zipUri);
 
@@ -961,6 +1447,16 @@ export const importImagesOnly = async (): Promise<number> => {
       result.assets[0].uri,
       IMAGES_DIR
     );
+    const getImportedImageUri = buildImageUriLookup(imageUris);
+
+    if (Platform.OS === "android") {
+      try {
+        const migration = await migrateImagesToMediaLibrary();
+        console.log("Post-import migration:", migration.message);
+      } catch (migrationError) {
+        console.warn("Post-import migration failed:", migrationError);
+      }
+    }
 
     console.log(`Extracted ${imageUris.size} images to local storage`);
     console.log("Available image filenames:", Array.from(imageUris.keys()));
@@ -974,12 +1470,14 @@ export const importImagesOnly = async (): Promise<number> => {
     let journalUpdated = 0;
 
     // Update plant photo URIs in local cache
-    const updatedPlants = plants.map((plant) => {
+    const updatedPlants = await Promise.all(plants.map(async (plant) => {
       const photoFilename =
         plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "");
       if (!photoFilename) return plant;
 
-      const newUri = imageUris.get(photoFilename) ?? null;
+      const newUri =
+        (await resolveImportedImageUri(getImportedImageUri, photoFilename)) ??
+        null;
       const nextPlant = {
         ...plant,
         photo_filename: photoFilename,
@@ -992,10 +1490,10 @@ export const importImagesOnly = async (): Promise<number> => {
         plantsUpdated++;
       }
       return nextPlant;
-    });
+    }));
 
     // Update journal photo URIs in local cache
-    const updatedJournal = journal.map((entry) => {
+    const updatedJournal = await Promise.all(journal.map(async (entry) => {
       const legacyUrls =
         entry.photo_urls && entry.photo_urls.length > 0
           ? entry.photo_urls
@@ -1011,12 +1509,15 @@ export const importImagesOnly = async (): Promise<number> => {
       if (photoFilenames.length === 0) return entry;
 
       const currentUrls = entry.photo_urls ?? [];
-      const updatedPhotos = photoFilenames
-        .map((filename, index) => {
-          const matched = imageUris.get(filename);
-          return matched ?? currentUrls[index] ?? null;
-        })
-        .filter((uri): uri is string => !!uri);
+      const updatedPhotos = (
+        await Promise.all(
+          photoFilenames.map(async (filename, index) => {
+            const matched =
+              await resolveImportedImageUri(getImportedImageUri, filename);
+            return matched ?? currentUrls[index] ?? null;
+          })
+        )
+      ).filter((uri): uri is string => !!uri);
 
       const nextEntry = {
         ...entry,
@@ -1035,7 +1536,7 @@ export const importImagesOnly = async (): Promise<number> => {
         journalUpdated++;
       }
       return nextEntry;
-    });
+    }));
 
     // Save updated data to local storage
     await setData(KEYS.PLANTS, updatedPlants);
