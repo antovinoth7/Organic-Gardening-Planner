@@ -19,101 +19,219 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
   categories: {
     vegetable: {
       plants: [
+        "Brinjal",
+        "Long Brinjal",
+        "Ladies Finger",
         "Tomato",
-        "Carrot",
-        "Lettuce",
-        "Cabbage",
-        "Broccoli",
+        "Chilli",
+        "Tapioca",
+        "Drumstick",
+        "Amaranthus",
+        "Methi",
+        "Cowpea",
+        "Beans",
+        "Bitter Gourd",
+        "Snake Gourd",
+        "Ridge Gourd",
+        "Bottle Gourd",
+        "Pumpkin",
+        "Ash Gourd",
         "Cucumber",
-        "Pepper",
-        "Eggplant",
         "Spinach",
         "Radish",
-        "Potato",
         "Onion",
+        "Shallot",
         "Garlic",
-        "Beans",
-        "Peas",
+        "Cabbage",
+        "Cauliflower",
+        "Carrot",
+        "Potato",
+        "Eggplant",
+        "Pepper",
       ],
-      varieties: {},
+      varieties: {
+        Brinjal: ["Long Purple", "Round Green", "Striped"],
+        "Long Brinjal": ["Long Green", "Violet Long", "Local"],
+        "Ladies Finger": ["CO 4", "CO 5", "Arka Anamika"],
+        Tomato: ["Country Tomato", "Hybrid Tomato", "Cherry Tomato"],
+        Chilli: ["Bird's Eye", "Gundu", "Long Chilli"],
+        Tapioca: ["Mulluvadi", "CO 2", "H-165"],
+        Drumstick: ["PKM 1", "PKM 2", "Local"],
+        Amaranthus: ["Arai Keerai", "Siru Keerai", "Mulai Keerai"],
+        Methi: ["Kasuri", "Pusa Early", "Local"],
+        Cowpea: ["Bush", "Pole", "Red Cowpea"],
+        Beans: ["Bush Beans", "Pole Beans", "Double Beans"],
+        "Bitter Gourd": ["Mithipagal", "Long Green", "CO 1"],
+        "Snake Gourd": ["Long White", "Striped", "CO 2"],
+        "Ridge Gourd": ["Long Ridge", "Dark Green", "CO 1"],
+        "Bottle Gourd": ["Long Bottle", "Round Bottle", "CO 1"],
+        Pumpkin: ["Parangikkai", "CO 2", "Red Pumpkin"],
+        "Ash Gourd": ["White Ash", "Long Ash", "CO 1"],
+        Cucumber: ["Country Cucumber", "Hybrid Green", "Slicing"],
+        Onion: ["Bellary", "Nasik Red", "CO Onion"],
+        Shallot: ["Sambar Onion", "Small Red", "CO Shallot"],
+        Radish: ["Pusa Chetki", "White Long", "Pink"],
+        Spinach: ["Palak", "Local Green", "Hybrid Leafy"],
+        Cabbage: ["Golden Acre", "CO 1", "Green Ball"],
+        Cauliflower: ["Pusa Snowball", "CO 1", "Early White"],
+      },
     },
     herb: {
       plants: [
-        "Basil",
-        "Mint",
         "Coriander",
+        "Mint",
+        "Curry Leaf",
+        "Lemongrass",
+        "Tulsi",
+        "Basil",
+        "Dill",
         "Parsley",
         "Rosemary",
         "Thyme",
         "Oregano",
-        "Sage",
-        "Dill",
-        "Lemongrass",
-        "Curry Leaf",
       ],
-      varieties: {},
+      varieties: {
+        Coriander: ["CO 4", "CO 5", "Local"],
+        Mint: ["Peppermint", "Spearmint", "Country Mint"],
+        "Curry Leaf": ["Dwarf", "Regular", "Local"],
+        Lemongrass: ["East Indian", "West Indian", "Local"],
+        Tulsi: ["Krishna Tulsi", "Rama Tulsi"],
+      },
     },
     flower: {
       plants: [
-        "Rose",
-        "Sunflower",
         "Marigold",
-        "Lily",
-        "Tulip",
         "Jasmine",
         "Hibiscus",
-        "Dahlia",
+        "Rose",
         "Chrysanthemum",
+        "Crossandra",
+        "Ixora",
+        "Sunflower",
+        "Dahlia",
         "Orchid",
       ],
-      varieties: {},
+      varieties: {
+        Marigold: ["African", "French", "Local Orange"],
+        Jasmine: ["Malli", "Mullai", "Jathi Malli"],
+        Hibiscus: ["Red", "Yellow", "Double Petal"],
+      },
     },
     fruit_tree: {
       plants: [
-        "Mango",
-        "Orange",
         "Banana",
+        "Mango",
         "Guava",
         "Papaya",
         "Lemon",
         "Pomegranate",
-        "Fig",
-        "Avocado",
         "Jackfruit",
         "Chikoo",
         "Water Apple",
+        "Custard Apple",
+        "Amla",
+        "Orange",
+        "Fig",
+        "Avocado",
         "Soursop",
         "Mangosteen",
         "Rambutan",
       ],
-      varieties: {},
+      varieties: {
+        Banana: ["Nendran", "Poovan", "Rasthali", "Robusta", "Monthan"],
+        Mango: ["Alphonso", "Banganapalli", "Neelum", "Imam Pasand"],
+        Guava: ["Allahabad Safeda", "Pink Guava", "Local"],
+        Papaya: ["Red Lady", "CO 8", "Local"],
+        Lemon: ["Grafted Lemon", "Country Lemon"],
+        Pomegranate: ["Bhagwa", "Ganesh", "Arakta"],
+        Jackfruit: ["Palur 1", "Palur 2", "Local"],
+        "Custard Apple": ["Balanagar", "Arka Sahan", "Local"],
+        Amla: ["NA 7", "Krishna", "Kanchan"],
+      },
     },
     timber_tree: {
-      plants: ["Teak", "Mahogany", "Rosewood", "Sandalwood", "Bamboo", "Wild Jack", "Neem"],
+      plants: [
+        "Neem",
+        "Teak",
+        "Mahogany",
+        "Rosewood",
+        "Sandalwood",
+        "Bamboo",
+        "Wild Jack",
+      ],
       varieties: {},
     },
     coconut_tree: {
       plants: ["Dwarf Coconut", "Tall Coconut", "Hybrid Coconut", "King Coconut"],
-      varieties: {},
+      varieties: {
+        "Dwarf Coconut": ["COD", "Malayan Dwarf"],
+        "Tall Coconut": ["West Coast Tall", "East Coast Tall"],
+      },
     },
     shrub: {
       plants: [
         "Hibiscus",
+        "Ixora",
+        "Nandiyavattai",
         "Bougainvillea",
         "Jasmine",
-        "Azalea",
+        "Crossandra",
+        "Lantana",
         "Gardenia",
-        "Lavender",
-        "Boxwood",
-        "Holly",
       ],
-      varieties: {},
+      varieties: {
+        Hibiscus: ["Single", "Double", "Red"],
+        Ixora: ["Red", "Yellow", "Orange"],
+      },
     },
   },
 };
 
 const SETTINGS_COLLECTION = "user_settings";
 const PLANT_CATALOG_FIELD = "plantCatalog";
+const REQUIRED_LOCAL_PLANTS: Partial<Record<PlantType, string[]>> = {
+  vegetable: [
+    "Brinjal",
+    "Ladies Finger",
+    "Chilli",
+    "Drumstick",
+    "Tapioca",
+  ],
+};
+const KNOWN_VARIETY_ALIASES: Record<string, string> = {
+  "lady's finger": "ladies finger",
+  "ladies finger": "ladies finger",
+  eggplant: "brinjal",
+  aubergine: "brinjal",
+  okra: "ladies finger",
+  bhindi: "ladies finger",
+  vendakkai: "ladies finger",
+  kathirikai: "brinjal",
+  "chilli pepper": "chilli",
+  chili: "chilli",
+  chilli: "chilli",
+  maravalli: "tapioca",
+  cassava: "tapioca",
+  murungai: "drumstick",
+  drumstick: "drumstick",
+  keerai: "amaranthus",
+  pudina: "mint",
+  kothamalli: "coriander",
+  karuveppilai: "curry leaf",
+};
+
+const toLookupKey = (value: string): string =>
+  value.toLowerCase().replace(/\s+/g, " ").trim();
+
+const getCanonicalPlantKey = (value: string): string => {
+  const key = toLookupKey(value);
+  return KNOWN_VARIETY_ALIASES[key] ?? key;
+};
+
+const hasEquivalentPlant = (plants: string[], target: string): boolean => {
+  const targetKey = getCanonicalPlantKey(target);
+  return plants.some((plant) => getCanonicalPlantKey(plant) === targetKey);
+};
 
 const normalizeList = (values: string[] | undefined | null): string[] => {
   if (!Array.isArray(values)) return [];
@@ -134,7 +252,9 @@ const normalizeVarieties = (
   varieties: Record<string, string[]> | undefined | null,
   validPlants: string[]
 ): Record<string, string[]> => {
-  const validSet = new Set(validPlants.map((plant) => plant.toLowerCase()));
+  const validPlantMap = new Map(
+    validPlants.map((plant) => [toLookupKey(plant), plant])
+  );
   const result: Record<string, string[]> = {};
 
   if (!varieties || typeof varieties !== "object") return result;
@@ -142,25 +262,84 @@ const normalizeVarieties = (
   Object.entries(varieties).forEach(([plantName, list]) => {
     const normalizedPlantName = plantName?.toString().trim();
     if (!normalizedPlantName) return;
-    if (!validSet.has(normalizedPlantName.toLowerCase())) return;
+    const plantKey = toLookupKey(normalizedPlantName);
+    const aliasKey = KNOWN_VARIETY_ALIASES[plantKey];
+    const canonicalPlantName =
+      validPlantMap.get(plantKey) ??
+      (aliasKey ? validPlantMap.get(aliasKey) : undefined);
+    if (!canonicalPlantName) return;
     const normalizedList = normalizeList(list);
     if (normalizedList.length === 0) return;
-    result[normalizedPlantName] = normalizedList;
+    result[canonicalPlantName] = normalizedList;
   });
 
   return result;
 };
 
+const createVarietyLookup = (
+  varieties: Record<string, string[]> | undefined | null
+): Record<string, string[]> => {
+  const lookup: Record<string, string[]> = {};
+  if (!varieties || typeof varieties !== "object") return lookup;
+
+  Object.entries(varieties).forEach(([plantName, list]) => {
+    const key = toLookupKey(plantName);
+    const normalized = normalizeList(list);
+    if (!key || normalized.length === 0) return;
+    lookup[key] = normalized;
+  });
+
+  return lookup;
+};
+
+const getKnownVarietiesForPlant = (
+  plantName: string,
+  defaultVarietyLookup: Record<string, string[]>
+): string[] => {
+  const plantKey = toLookupKey(plantName);
+  const aliasKey = KNOWN_VARIETY_ALIASES[plantKey];
+  const defaults = defaultVarietyLookup[plantKey] ??
+    (aliasKey ? defaultVarietyLookup[aliasKey] : undefined);
+  return defaults ? [...defaults] : [];
+};
+
 const normalizeCategory = (
   category: PlantCatalogCategory | undefined | null,
   defaultPlants: string[],
+  defaultVarieties: Record<string, string[]>,
+  requiredPlants: string[],
   hasCategory: boolean
 ): PlantCatalogCategory => {
   const plants = normalizeList(category?.plants);
-  const resolvedPlants = hasCategory ? plants : defaultPlants;
+  const resolvedPlants = hasCategory ? [...plants] : [...defaultPlants];
+  requiredPlants.forEach((plantName) => {
+    if (!hasEquivalentPlant(resolvedPlants, plantName)) {
+      resolvedPlants.push(plantName);
+    }
+  });
+  const normalizedIncomingVarieties = normalizeVarieties(
+    category?.varieties,
+    resolvedPlants
+  );
+  const incomingVarietySet = new Set(
+    Object.keys(normalizedIncomingVarieties).map((plant) => toLookupKey(plant))
+  );
+  const defaultVarietyLookup = createVarietyLookup(defaultVarieties);
+  const mergedVarieties: Record<string, string[]> = {
+    ...normalizedIncomingVarieties,
+  };
+
+  resolvedPlants.forEach((plantName) => {
+    if (incomingVarietySet.has(toLookupKey(plantName))) return;
+    const defaults = getKnownVarietiesForPlant(plantName, defaultVarietyLookup);
+    if (defaults.length > 0) {
+      mergedVarieties[plantName] = defaults;
+    }
+  });
+
   return {
     plants: resolvedPlants,
-    varieties: normalizeVarieties(category?.varieties, resolvedPlants),
+    varieties: mergedVarieties,
   };
 };
 
@@ -178,6 +357,8 @@ const normalizeCatalog = (catalog?: PlantCatalog | null): PlantCatalog => {
     categories[type] = normalizeCategory(
       incomingCategory,
       defaultCategory.plants,
+      defaultCategory.varieties,
+      REQUIRED_LOCAL_PLANTS[type] ?? [],
       hasCategory
     );
   });

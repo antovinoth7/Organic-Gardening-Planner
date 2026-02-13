@@ -99,7 +99,7 @@ export const getPlants = async (
     );
     
     const plants = plantsData.map((plant, index) => {
-      const { photoIdentifier, ...plantData } = plant;
+      const { photoIdentifier: _photoIdentifier, ...plantData } = plant;
       return {
         ...plantData,
         photo_url: resolvedUrls[index] ?? null,

@@ -1,5 +1,5 @@
 import { TaskTemplate, TaskLog, Plant, TaskType } from "../types/database.types";
-import { db, auth } from "../lib/firebase";
+import { db, auth, refreshAuthToken } from "../lib/firebase";
 import {
   collection,
   doc,
@@ -15,7 +15,8 @@ import {
 } from "firebase/firestore";
 import { getData, setData, KEYS } from "../lib/storage";
 import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
-import { logError } from "../utils/errorLogging";import { refreshAuthToken } from '../lib/firebase';import { getCurrentSeason } from "../utils/seasonHelpers";
+import { logError } from "../utils/errorLogging";
+import { getCurrentSeason } from "../utils/seasonHelpers";
 
 const TASKS_COLLECTION = "task_templates";
 const TASK_LOGS_COLLECTION = "task_logs";

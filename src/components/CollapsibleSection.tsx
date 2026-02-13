@@ -28,6 +28,8 @@ interface CollapsibleSectionProps {
   fieldCount?: number;
   children: React.ReactNode;
   defaultExpanded?: boolean;
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
   hasError?: boolean;
   autoFilled?: boolean;
 }
@@ -38,16 +40,24 @@ export default function CollapsibleSection({
   fieldCount,
   children,
   defaultExpanded = true,
+  expanded,
+  onExpandedChange,
   hasError = false,
   autoFilled = false,
 }: CollapsibleSectionProps) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
   const theme = useTheme();
   const styles = createStyles(theme);
+  const isControlled = typeof expanded === "boolean";
+  const isExpanded = isControlled ? !!expanded : internalExpanded;
 
   const toggleExpanded = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpanded(!expanded);
+    const next = !isExpanded;
+    if (!isControlled) {
+      setInternalExpanded(next);
+    }
+    onExpandedChange?.(next);
   };
 
   return (
@@ -82,13 +92,13 @@ export default function CollapsibleSection({
           {hasError && <View style={styles.errorDot} />}
         </View>
         <Ionicons
-          name={expanded ? "chevron-up" : "chevron-down"}
+          name={isExpanded ? "chevron-up" : "chevron-down"}
           size={20}
           color={theme.textSecondary}
         />
       </TouchableOpacity>
 
-      {expanded && <View style={styles.content}>{children}</View>}
+      {isExpanded && <View style={styles.content}>{children}</View>}
     </View>
   );
 }

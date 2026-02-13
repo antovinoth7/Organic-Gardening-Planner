@@ -1,5 +1,5 @@
 import { JournalEntry } from '../types/database.types';
-import { db, auth } from '../lib/firebase';
+import { db, auth, refreshAuthToken } from '../lib/firebase';
 import { 
   collection, 
   doc, 
@@ -23,7 +23,7 @@ import {
 } from '../lib/imageStorage';
 import { getData, setData, KEYS } from '../lib/storage';
 import { withTimeoutAndRetry } from '../utils/firestoreTimeout';
-import { logError } from '../utils/errorLogging';import { refreshAuthToken } from '../lib/firebase';
+import { logError } from '../utils/errorLogging';
 const JOURNAL_COLLECTION = 'journal_entries';
 
 /**

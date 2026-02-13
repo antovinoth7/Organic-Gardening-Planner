@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
-import { useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../theme";
 import {
   DEFAULT_PLANT_CATALOG,

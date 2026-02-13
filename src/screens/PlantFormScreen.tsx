@@ -69,6 +69,16 @@ import {
 } from "../utils/textSanitizer";
 
 const NOTES_MAX_LENGTH = 500;
+type FormMode = "quick" | "advanced";
+type FormSectionKey = "basic" | "care" | "harvest";
+const sanitizeNumberText = (value: string) => value.replace(/[^0-9]/g, "");
+const TAMIL_NADU_HARVEST_SEASONS = [
+  "Year Round",
+  "Summer (Mar-May)",
+  "Southwest Monsoon (Jun-Sep)",
+  "Northeast Monsoon (Oct-Dec)",
+  "Cool Dry (Jan-Feb)",
+];
 
 export default function PlantFormScreen({ route, navigation }: any) {
   const { plantId } = route.params || {};
@@ -101,6 +111,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
   const [harvestStartDate, setHarvestStartDate] = useState("");
   const [harvestEndDate, setHarvestEndDate] = useState("");
   const [notes, setNotes] = useState("");
+  const [formMode, setFormMode] = useState<FormMode>("quick");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoFilename, setPhotoFilename] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -129,6 +140,15 @@ export default function PlantFormScreen({ route, navigation }: any) {
     useState(false);
   const [showPestDiseaseModal, setShowPestDiseaseModal] = useState(false);
   const [showPhotoSourceModal, setShowPhotoSourceModal] = useState(false);
+  const [customVarietyMode, setCustomVarietyMode] = useState(false);
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
+  const [sectionExpanded, setSectionExpanded] = useState<
+    Record<FormSectionKey, boolean>
+  >({
+    basic: true,
+    care: true,
+    harvest: false,
+  });
   const [autoApplyCareDefaults, setAutoApplyCareDefaults] = useState(true);
   const [currentPestDisease, setCurrentPestDisease] =
     useState<PestDiseaseRecord>({
@@ -151,6 +171,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
   useEffect(() => {
     if (plantId) {
+      setFormMode("advanced");
       loadPlant();
     } else {
       // For new plants, mark as loaded after delay to allow auto-suggest
@@ -204,6 +225,74 @@ export default function PlantFormScreen({ route, navigation }: any) {
     }, [])
   );
 
+  const setSectionExpandedState = (
+    section: FormSectionKey,
+    expanded: boolean
+  ) => {
+    setSectionExpanded((prev) => ({ ...prev, [section]: expanded }));
+  };
+
+  const getValidationErrors = () => {
+    const errors: Record<FormSectionKey, string[]> = {
+      basic: [],
+      care: [],
+      harvest: [],
+    };
+
+    if (!name.trim()) {
+      errors.basic.push("Please enter a plant name");
+    }
+
+    if (!plantVariety.trim()) {
+      errors.basic.push("Please select a specific plant type");
+    }
+
+    if (!parentLocation.trim()) {
+      errors.basic.push("Please select a main location");
+    }
+
+    if (!childLocation.trim()) {
+      errors.basic.push("Please select a direction/section");
+    }
+
+    if (
+      !wateringFrequency.trim() ||
+      Number.isNaN(parseInt(wateringFrequency, 10)) ||
+      parseInt(wateringFrequency, 10) < 1
+    ) {
+      errors.care.push("Please enter a valid watering frequency (number of days)");
+    }
+
+    if (
+      !fertilisingFrequency.trim() ||
+      Number.isNaN(parseInt(fertilisingFrequency, 10)) ||
+      parseInt(fertilisingFrequency, 10) < 1
+    ) {
+      errors.care.push("Please enter a valid fertilising frequency (number of days)");
+    }
+
+    if (notes.length > NOTES_MAX_LENGTH) {
+      errors.harvest.push(
+        `Notes must be ${NOTES_MAX_LENGTH} characters or less`
+      );
+    }
+
+    return errors;
+  };
+
+  const validationErrors = React.useMemo(
+    () => getValidationErrors(),
+    [
+      name,
+      plantVariety,
+      parentLocation,
+      childLocation,
+      wateringFrequency,
+      fertilisingFrequency,
+      notes,
+    ]
+  );
+
   // Detect form changes
   useEffect(() => {
     if (initialDataLoaded.current) {
@@ -238,6 +327,9 @@ export default function PlantFormScreen({ route, navigation }: any) {
     companionPlants,
     expectedHarvestDate,
     pestDiseaseHistory,
+    growthStage,
+    pruningFrequency,
+    pruningNotes,
   ]);
 
   // Auto-calculate expected harvest date when plant variety or planting date changes
@@ -267,6 +359,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
   // Reset auto-suggest flag when plant variety changes
   useEffect(() => {
     autoSuggestApplied.current = false;
+    setCustomVarietyMode(false);
   }, [plantVariety]);
 
   // AUTO-SUGGEST: Apply smart defaults when plant variety is selected
@@ -317,6 +410,17 @@ export default function PlantFormScreen({ route, navigation }: any) {
     }
   }, [parentLocation, childLocation]);
 
+  useEffect(() => {
+    if (formMode === "quick") {
+      setSectionExpanded((prev) => ({
+        ...prev,
+        basic: true,
+        care: true,
+        harvest: false,
+      }));
+    }
+  }, [formMode]);
+
   const parentLocationOptions = React.useMemo(() => {
     if (parentLocation && !parentLocations.includes(parentLocation)) {
       return [parentLocation, ...parentLocations];
@@ -345,6 +449,14 @@ export default function PlantFormScreen({ route, navigation }: any) {
       plantCatalog.categories[plantType]?.varieties?.[plantVariety] ?? []
     );
   }, [plantCatalog, plantType, plantVariety]);
+
+  const harvestSeasonOptions = React.useMemo(() => {
+    if (!harvestSeason) return TAMIL_NADU_HARVEST_SEASONS;
+    if (TAMIL_NADU_HARVEST_SEASONS.includes(harvestSeason)) {
+      return TAMIL_NADU_HARVEST_SEASONS;
+    }
+    return [harvestSeason, ...TAMIL_NADU_HARVEST_SEASONS];
+  }, [harvestSeason]);
 
   // Handle back button press
   useEffect(() => {
@@ -435,6 +547,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
         setBedName(plant.bed_name || "");
         setPotSize(plant.pot_size || "");
         setVariety(plant.variety || "");
+        setCustomVarietyMode(false);
         setLandmarks(plant.landmarks || "");
         setPlantingDate(plant.planting_date || "");
         setHarvestSeason(plant.harvest_season || "");
@@ -522,56 +635,17 @@ export default function PlantFormScreen({ route, navigation }: any) {
   };
 
   const handleSave = async () => {
-    // Validate required fields
-    if (!name.trim()) {
-      Alert.alert("Validation Error", "Please enter a plant name");
-      return;
-    }
-
-    if (!plantVariety.trim()) {
-      Alert.alert("Validation Error", "Please select a specific plant type");
-      return;
-    }
-
-    if (!parentLocation.trim()) {
-      Alert.alert("Validation Error", "Please select a main location");
-      return;
-    }
-
-    if (!childLocation.trim()) {
-      Alert.alert("Validation Error", "Please select a direction/section");
-      return;
-    }
-
-    if (notes.length > NOTES_MAX_LENGTH) {
-      Alert.alert(
-        "Validation Error",
-        `Notes must be ${NOTES_MAX_LENGTH} characters or less`
-      );
-      return;
-    }
-
-    if (
-      !wateringFrequency.trim() ||
-      isNaN(parseInt(wateringFrequency)) ||
-      parseInt(wateringFrequency) < 1
-    ) {
-      Alert.alert(
-        "Validation Error",
-        "Please enter a valid watering frequency (number of days)"
-      );
-      return;
-    }
-
-    if (
-      !fertilisingFrequency.trim() ||
-      isNaN(parseInt(fertilisingFrequency)) ||
-      parseInt(fertilisingFrequency) < 1
-    ) {
-      Alert.alert(
-        "Validation Error",
-        "Please enter a valid fertilising frequency (number of days)"
-      );
+    setShowValidationErrors(true);
+    const sectionOrder: FormSectionKey[] = ["basic", "care", "harvest"];
+    const firstErrorSection = sectionOrder.find(
+      (section) => validationErrors[section].length > 0
+    );
+    if (firstErrorSection) {
+      if (firstErrorSection === "harvest" && formMode === "quick") {
+        setFormMode("advanced");
+      }
+      setSectionExpandedState(firstErrorSection, true);
+      Alert.alert("Validation Error", validationErrors[firstErrorSection][0]);
       return;
     }
 
@@ -615,8 +689,8 @@ export default function PlantFormScreen({ route, navigation }: any) {
         sunlight: sunlight,
         soil_type: soilType,
         water_requirement: waterRequirement,
-        watering_frequency_days: parseInt(wateringFrequency) || null,
-        fertilising_frequency_days: parseInt(fertilisingFrequency) || null,
+        watering_frequency_days: parseInt(wateringFrequency, 10) || null,
+        fertilising_frequency_days: parseInt(fertilisingFrequency, 10) || null,
         preferred_fertiliser: preferredFertiliser,
         mulching_used: mulchingUsed,
         health_status: healthStatus,
@@ -628,7 +702,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
         // Phase 1: Growth & Pruning
         growth_stage: growthStage,
         pruning_frequency_days: pruningFrequency
-          ? parseInt(pruningFrequency)
+          ? parseInt(pruningFrequency, 10)
           : null,
         pruning_notes: pruningNotes.trim() || null,
       };
@@ -690,12 +764,51 @@ export default function PlantFormScreen({ route, navigation }: any) {
         style={styles.content}
         contentContainerStyle={styles.scrollContent}
       >
+        <View style={styles.modeToggleContainer}>
+          <TouchableOpacity
+            style={[
+              styles.modeToggleButton,
+              formMode === "quick" && styles.modeToggleButtonActive,
+            ]}
+            onPress={() => setFormMode("quick")}
+          >
+            <Text
+              style={[
+                styles.modeToggleText,
+                formMode === "quick" && styles.modeToggleTextActive,
+              ]}
+            >
+              Quick Add
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.modeToggleButton,
+              formMode === "advanced" && styles.modeToggleButtonActive,
+            ]}
+            onPress={() => setFormMode("advanced")}
+          >
+            <Text
+              style={[
+                styles.modeToggleText,
+                formMode === "advanced" && styles.modeToggleTextActive,
+              ]}
+            >
+              Advanced
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <CollapsibleSection
           title="Basic Information"
           icon="information-circle"
           fieldCount={8}
           defaultExpanded={true}
-          hasError={!name || !plantType || !plantVariety}
+          expanded={sectionExpanded.basic}
+          onExpandedChange={(expanded) =>
+            setSectionExpandedState("basic", expanded)
+          }
+          hasError={showValidationErrors && validationErrors.basic.length > 0}
         >
           <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
             {photoUri ? (
@@ -723,6 +836,8 @@ export default function PlantFormScreen({ route, navigation }: any) {
               onValueChange={(value) => {
                 setPlantType(value);
                 setPlantVariety("");
+                setVariety("");
+                setCustomVarietyMode(false);
               }}
               style={styles.picker}
               itemStyle={styles.pickerItem}
@@ -761,67 +876,95 @@ export default function PlantFormScreen({ route, navigation }: any) {
             </Picker>
           </View>
 
-          {varietySuggestions.length > 0 ? (
+          {formMode === "advanced" &&
+            (varietySuggestions.length > 0 ? (
+              <>
+                <Text style={styles.label}>Variety</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={customVarietyMode ? "__custom__" : variety}
+                    onValueChange={(value) => {
+                      if (value === "__custom__") {
+                        setCustomVarietyMode(true);
+                        setVariety("");
+                        return;
+                      }
+                      setCustomVarietyMode(false);
+                      setVariety(value);
+                    }}
+                    style={styles.picker}
+                    itemStyle={styles.pickerItem}
+                    enabled={varietySuggestions.length > 0}
+                  >
+                    <Picker.Item
+                      label="Select variety (optional)"
+                      value=""
+                      color="#999"
+                    />
+                    {varietySuggestions.map((suggestion) => (
+                      <Picker.Item
+                        key={suggestion}
+                        label={suggestion}
+                        value={suggestion}
+                      />
+                    ))}
+                    <Picker.Item
+                      label="Other (enter manually)"
+                      value="__custom__"
+                    />
+                  </Picker>
+                </View>
+                {customVarietyMode && (
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter custom variety"
+                    value={variety}
+                    onChangeText={(text) =>
+                      setVariety(sanitizeAlphaNumericSpaces(text))
+                    }
+                    placeholderTextColor={theme.inputPlaceholder}
+                  />
+                )}
+              </>
+            ) : (
+              <TextInput
+                style={styles.input}
+                placeholder="Variety (e.g., Alphonso, Dwarf)"
+                value={variety}
+                onChangeText={(text) =>
+                  setVariety(sanitizeAlphaNumericSpaces(text))
+                }
+                placeholderTextColor={theme.inputPlaceholder}
+              />
+            ))}
+
+          {formMode === "advanced" && (
             <>
-              <Text style={styles.label}>Variety</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={variety}
-                  onValueChange={setVariety}
-                  style={styles.picker}
-                  itemStyle={styles.pickerItem}
-                  enabled={varietySuggestions.length > 0}
+              <TouchableOpacity
+                style={styles.dateButton}
+                onPress={() => setShowPlantingDatePicker(true)}
+              >
+                <Text
+                  style={plantingDate ? styles.dateText : styles.datePlaceholder}
                 >
-                  <Picker.Item label="Select variety (optional)" value="" color="#999" />
-                  {varietySuggestions.map((suggestion) => (
-                    <Picker.Item key={suggestion} label={suggestion} value={suggestion} />
-                  ))}
-                  <Picker.Item label="Other (enter manually)" value="__custom__" />
-                </Picker>
-              </View>
-              {variety === "__custom__" && (
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter custom variety"
-                  value={variety === "__custom__" ? "" : variety}
-                  onChangeText={(text) => setVariety(sanitizeAlphaNumericSpaces(text))}
-                  placeholderTextColor={theme.inputPlaceholder}
+                  {plantingDate || "Planting Date (tap to select)"}
+                </Text>
+                <Ionicons name="calendar-outline" size={20} color="#666" />
+              </TouchableOpacity>
+              {showPlantingDatePicker && (
+                <DateTimePicker
+                  value={plantingDate ? new Date(plantingDate) : new Date()}
+                  mode="date"
+                  display="default"
+                  onChange={(event, selectedDate) => {
+                    setShowPlantingDatePicker(false);
+                    if (selectedDate) {
+                      setPlantingDate(selectedDate.toISOString().split("T")[0]);
+                    }
+                  }}
                 />
               )}
             </>
-          ) : (
-            <TextInput
-              style={styles.input}
-              placeholder="Variety (e.g., Alphonso, Dwarf)"
-              value={variety}
-              onChangeText={(text) => setVariety(sanitizeAlphaNumericSpaces(text))}
-              placeholderTextColor={theme.inputPlaceholder}
-            />
-          )}
-
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowPlantingDatePicker(true)}
-          >
-            <Text
-              style={plantingDate ? styles.dateText : styles.datePlaceholder}
-            >
-              {plantingDate || "Planting Date (tap to select)"}
-            </Text>
-            <Ionicons name="calendar-outline" size={20} color="#666" />
-          </TouchableOpacity>
-          {showPlantingDatePicker && (
-            <DateTimePicker
-              value={plantingDate ? new Date(plantingDate) : new Date()}
-              mode="date"
-              display="default"
-              onChange={(event, selectedDate) => {
-                setShowPlantingDatePicker(false);
-                if (selectedDate) {
-                  setPlantingDate(selectedDate.toISOString().split("T")[0]);
-                }
-              }}
-            />
           )}
 
           <Text style={styles.label}>Location *</Text>
@@ -867,21 +1010,30 @@ export default function PlantFormScreen({ route, navigation }: any) {
             </View>
           )}
 
-          <Text style={styles.label}>Landmarks</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Nearby landmark or reference point"
-            value={landmarks}
-            onChangeText={(text) => setLandmarks(sanitizeLandmarkText(text))}
-            placeholderTextColor={theme.inputPlaceholder}
-          />
+          {formMode === "advanced" && (
+            <>
+              <Text style={styles.label}>Landmarks</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nearby landmark or reference point"
+                value={landmarks}
+                onChangeText={(text) => setLandmarks(sanitizeLandmarkText(text))}
+                placeholderTextColor={theme.inputPlaceholder}
+              />
+            </>
+          )}
         </CollapsibleSection>
 
         <CollapsibleSection
           title="Care & Growing Conditions"
           icon="leaf"
-          fieldCount={13}
+          fieldCount={formMode === "quick" ? 2 : 13}
           defaultExpanded={false}
+          expanded={sectionExpanded.care}
+          onExpandedChange={(expanded) =>
+            setSectionExpandedState("care", expanded)
+          }
+          hasError={showValidationErrors && validationErrors.care.length > 0}
         >
           {!plantId && (
             <>
@@ -902,146 +1054,154 @@ export default function PlantFormScreen({ route, navigation }: any) {
               </Text>
             </>
           )}
-          <Text style={styles.sectionHeader}>🪴 Growing Space</Text>
+          {formMode === "advanced" && (
+            <>
+              <Text style={styles.sectionHeader}>🪴 Growing Space</Text>
 
-          <View style={styles.spaceTypeContainer}>
-            <TouchableOpacity
-              style={[
-                styles.spaceTypeButton,
-                spaceType === "ground" && styles.spaceTypeActive,
-              ]}
-              onPress={() => setSpaceType("ground")}
-            >
-              <Ionicons
-                name="earth"
-                size={20}
-                color={spaceType === "ground" ? "#2e7d32" : "#999"}
-              />
-              <Text
-                style={[
-                  styles.spaceTypeText,
-                  spaceType === "ground" && styles.spaceTypeTextActive,
-                ]}
-              >
-                Ground
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.spaceTypeButton,
-                spaceType === "bed" && styles.spaceTypeActive,
-              ]}
-              onPress={() => setSpaceType("bed")}
-            >
-              <Ionicons
-                name="apps"
-                size={20}
-                color={spaceType === "bed" ? "#2e7d32" : "#999"}
-              />
-              <Text
-                style={[
-                  styles.spaceTypeText,
-                  spaceType === "bed" && styles.spaceTypeTextActive,
-                ]}
-              >
-                Bed
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.spaceTypeButton,
-                spaceType === "pot" && styles.spaceTypeActive,
-              ]}
-              onPress={() => setSpaceType("pot")}
-            >
-              <Ionicons
-                name="cube-outline"
-                size={20}
-                color={spaceType === "pot" ? "#2e7d32" : "#999"}
-              />
-              <Text
-                style={[
-                  styles.spaceTypeText,
-                  spaceType === "pot" && styles.spaceTypeTextActive,
-                ]}
-              >
-                Pot
-              </Text>
-            </TouchableOpacity>
-          </View>
+              <View style={styles.spaceTypeContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.spaceTypeButton,
+                    spaceType === "ground" && styles.spaceTypeActive,
+                  ]}
+                  onPress={() => setSpaceType("ground")}
+                >
+                  <Ionicons
+                    name="earth"
+                    size={20}
+                    color={spaceType === "ground" ? "#2e7d32" : "#999"}
+                  />
+                  <Text
+                    style={[
+                      styles.spaceTypeText,
+                      spaceType === "ground" && styles.spaceTypeTextActive,
+                    ]}
+                  >
+                    Ground
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.spaceTypeButton,
+                    spaceType === "bed" && styles.spaceTypeActive,
+                  ]}
+                  onPress={() => setSpaceType("bed")}
+                >
+                  <Ionicons
+                    name="apps"
+                    size={20}
+                    color={spaceType === "bed" ? "#2e7d32" : "#999"}
+                  />
+                  <Text
+                    style={[
+                      styles.spaceTypeText,
+                      spaceType === "bed" && styles.spaceTypeTextActive,
+                    ]}
+                  >
+                    Bed
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.spaceTypeButton,
+                    spaceType === "pot" && styles.spaceTypeActive,
+                  ]}
+                  onPress={() => setSpaceType("pot")}
+                >
+                  <Ionicons
+                    name="cube-outline"
+                    size={20}
+                    color={spaceType === "pot" ? "#2e7d32" : "#999"}
+                  />
+                  <Text
+                    style={[
+                      styles.spaceTypeText,
+                      spaceType === "pot" && styles.spaceTypeTextActive,
+                    ]}
+                  >
+                    Pot
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
-          {spaceType === "pot" && (
-            <TextInput
-              style={styles.input}
-              placeholder="Pot Size (e.g., 12 inch)"
-              value={potSize}
-              onChangeText={(text) => setPotSize(sanitizeAlphaNumericSpaces(text))}
-              placeholderTextColor={theme.inputPlaceholder}
-            />
+              {spaceType === "pot" && (
+                <TextInput
+                  style={styles.input}
+                  placeholder="Pot Size (e.g., 12 inch)"
+                  value={potSize}
+                  onChangeText={(text) =>
+                    setPotSize(sanitizeAlphaNumericSpaces(text))
+                  }
+                  placeholderTextColor={theme.inputPlaceholder}
+                />
+              )}
+              {spaceType === "bed" && (
+                <TextInput
+                  style={styles.input}
+                  placeholder="Bed Name (e.g., Veggie Bed 1)"
+                  value={bedName}
+                  onChangeText={(text) =>
+                    setBedName(sanitizeAlphaNumericSpaces(text))
+                  }
+                  placeholderTextColor={theme.inputPlaceholder}
+                />
+              )}
+
+              <Text style={styles.sectionHeader}>☀️ Environmental Needs</Text>
+
+              <Text style={styles.label}>Sunlight Level *</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={sunlight}
+                  onValueChange={setSunlight}
+                  style={styles.picker}
+                  itemStyle={styles.pickerItem}
+                >
+                  <Picker.Item label="☀️ Full Sun (6+ hours)" value="full_sun" />
+                  <Picker.Item
+                    label="⛅ Partial Sun (3-6 hours)"
+                    value="partial_sun"
+                  />
+                  <Picker.Item label="🌤️ Shade (< 3 hours)" value="shade" />
+                </Picker>
+              </View>
+
+              <Text style={styles.label}>Soil Type *</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={soilType}
+                  onValueChange={setSoilType}
+                  style={styles.picker}
+                  itemStyle={styles.pickerItem}
+                >
+                  <Picker.Item label="Garden Soil" value="garden_soil" />
+                  <Picker.Item label="Potting Mix" value="potting_mix" />
+                  <Picker.Item label="Coco Peat Mix" value="coco_peat" />
+                  <Picker.Item label="Custom Mix" value="custom" />
+                </Picker>
+              </View>
+
+              <Text style={styles.label}>Water Requirement *</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={waterRequirement}
+                  onValueChange={setWaterRequirement}
+                  style={styles.picker}
+                  itemStyle={styles.pickerItem}
+                >
+                  <Picker.Item label="💧 Low (Drought tolerant)" value="low" />
+                  <Picker.Item
+                    label="💧💧 Medium (Regular watering)"
+                    value="medium"
+                  />
+                  <Picker.Item
+                    label="💧💧💧 High (Frequent watering)"
+                    value="high"
+                  />
+                </Picker>
+              </View>
+            </>
           )}
-          {spaceType === "bed" && (
-            <TextInput
-              style={styles.input}
-              placeholder="Bed Name (e.g., Veggie Bed 1)"
-              value={bedName}
-              onChangeText={(text) => setBedName(sanitizeAlphaNumericSpaces(text))}
-              placeholderTextColor={theme.inputPlaceholder}
-            />
-          )}
-
-          <Text style={styles.sectionHeader}>☀️ Environmental Needs</Text>
-
-          <Text style={styles.label}>Sunlight Level *</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={sunlight}
-              onValueChange={setSunlight}
-              style={styles.picker}
-              itemStyle={styles.pickerItem}
-            >
-              <Picker.Item label="☀️ Full Sun (6+ hours)" value="full_sun" />
-              <Picker.Item
-                label="⛅ Partial Sun (3-6 hours)"
-                value="partial_sun"
-              />
-              <Picker.Item label="🌤️ Shade (< 3 hours)" value="shade" />
-            </Picker>
-          </View>
-
-          <Text style={styles.label}>Soil Type *</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={soilType}
-              onValueChange={setSoilType}
-              style={styles.picker}
-              itemStyle={styles.pickerItem}
-            >
-              <Picker.Item label="Garden Soil" value="garden_soil" />
-              <Picker.Item label="Potting Mix" value="potting_mix" />
-              <Picker.Item label="Coco Peat Mix" value="coco_peat" />
-              <Picker.Item label="Custom Mix" value="custom" />
-            </Picker>
-          </View>
-
-          <Text style={styles.label}>Water Requirement *</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={waterRequirement}
-              onValueChange={setWaterRequirement}
-              style={styles.picker}
-              itemStyle={styles.pickerItem}
-            >
-              <Picker.Item label="💧 Low (Drought tolerant)" value="low" />
-              <Picker.Item
-                label="💧💧 Medium (Regular watering)"
-                value="medium"
-              />
-              <Picker.Item
-                label="💧💧💧 High (Frequent watering)"
-                value="high"
-              />
-            </Picker>
-          </View>
 
           <Text style={styles.sectionHeader}>💧 Watering & Feeding</Text>
           <Text style={styles.label}>Watering Frequency (days)</Text>
@@ -1050,7 +1210,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
             style={styles.input}
             placeholder="Watering Frequency (days) *"
             value={wateringFrequency}
-            onChangeText={setWateringFrequency}
+            onChangeText={(text) => setWateringFrequency(sanitizeNumberText(text))}
             keyboardType="numeric"
             placeholderTextColor={theme.inputPlaceholder}
           />
@@ -1060,105 +1220,123 @@ export default function PlantFormScreen({ route, navigation }: any) {
             style={styles.input}
             placeholder="Fertilising Frequency (days) *"
             value={fertilisingFrequency}
-            onChangeText={setFertilisingFrequency}
+            onChangeText={(text) =>
+              setFertilisingFrequency(sanitizeNumberText(text))
+            }
             keyboardType="numeric"
             placeholderTextColor={theme.inputPlaceholder}
           />
 
-          <Text style={styles.label}>Preferred Organic Fertiliser</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={preferredFertiliser}
-              onValueChange={setPreferredFertiliser}
-              style={styles.picker}
-              itemStyle={styles.pickerItem}
-            >
-              <Picker.Item label="Compost" value="compost" />
-              <Picker.Item label="Vermicompost" value="vermicompost" />
-              <Picker.Item label="Fish Emulsion" value="fish_emulsion" />
-              <Picker.Item label="Seaweed Extract" value="seaweed" />
-              <Picker.Item label="Neem Cake" value="neem_cake" />
-              <Picker.Item label="Other" value="other" />
-            </Picker>
-          </View>
+          {formMode === "advanced" && (
+            <>
+              <Text style={styles.label}>Preferred Organic Fertiliser</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={preferredFertiliser}
+                  onValueChange={setPreferredFertiliser}
+                  style={styles.picker}
+                  itemStyle={styles.pickerItem}
+                >
+                  <Picker.Item label="Compost" value="compost" />
+                  <Picker.Item label="Vermicompost" value="vermicompost" />
+                  <Picker.Item label="Fish Emulsion" value="fish_emulsion" />
+                  <Picker.Item label="Seaweed Extract" value="seaweed" />
+                  <Picker.Item label="Neem Cake" value="neem_cake" />
+                  <Picker.Item label="Other" value="other" />
+                </Picker>
+              </View>
 
-          <TouchableOpacity
-            style={styles.checkboxContainer}
-            onPress={() => setMulchingUsed(!mulchingUsed)}
-          >
-            <Ionicons
-              name={mulchingUsed ? "checkbox" : "square-outline"}
-              size={24}
-              color={mulchingUsed ? "#2e7d32" : "#999"}
-            />
-            <Text style={styles.checkboxLabel}>Mulching Used</Text>
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.checkboxContainer}
+                onPress={() => setMulchingUsed(!mulchingUsed)}
+              >
+                <Ionicons
+                  name={mulchingUsed ? "checkbox" : "square-outline"}
+                  size={24}
+                  color={mulchingUsed ? "#2e7d32" : "#999"}
+                />
+                <Text style={styles.checkboxLabel}>Mulching Used</Text>
+              </TouchableOpacity>
 
-          <Text style={styles.sectionHeader}>🌿 Plant Status & Growth</Text>
+              <Text style={styles.sectionHeader}>🌿 Plant Status & Growth</Text>
 
-          <Text style={styles.label}>Plant Health Status</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={healthStatus}
-              onValueChange={setHealthStatus}
-              style={styles.picker}
-              itemStyle={styles.pickerItem}
-            >
-              <Picker.Item label="✅ Healthy" value="healthy" />
-              <Picker.Item label="⚠️ Stressed" value="stressed" />
-              <Picker.Item label="🔄 Recovering" value="recovering" />
-              <Picker.Item label="❌ Sick" value="sick" />
-            </Picker>
-          </View>
+              <Text style={styles.label}>Plant Health Status</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={healthStatus}
+                  onValueChange={setHealthStatus}
+                  style={styles.picker}
+                  itemStyle={styles.pickerItem}
+                >
+                  <Picker.Item label="✅ Healthy" value="healthy" />
+                  <Picker.Item label="⚠️ Stressed" value="stressed" />
+                  <Picker.Item label="🔄 Recovering" value="recovering" />
+                  <Picker.Item label="❌ Sick" value="sick" />
+                </Picker>
+              </View>
 
-          <Text style={styles.label}>Growth Stage</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={growthStage}
-              onValueChange={setGrowthStage}
-              style={styles.picker}
-              itemStyle={styles.pickerItem}
-            >
-              <Picker.Item label="🌱 Seedling" value="seedling" />
-              <Picker.Item label="🌿 Vegetative" value="vegetative" />
-              <Picker.Item label="🌸 Flowering" value="flowering" />
-              <Picker.Item label="🍎 Fruiting" value="fruiting" />
-              <Picker.Item label="🌳 Mature" value="mature" />
-              <Picker.Item label="📉 Declining" value="declining" />
-            </Picker>
-          </View>
+              <Text style={styles.label}>Growth Stage</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={growthStage}
+                  onValueChange={setGrowthStage}
+                  style={styles.picker}
+                  itemStyle={styles.pickerItem}
+                >
+                  <Picker.Item label="🌱 Seedling" value="seedling" />
+                  <Picker.Item label="🌿 Vegetative" value="vegetative" />
+                  <Picker.Item label="🌸 Flowering" value="flowering" />
+                  <Picker.Item label="🍎 Fruiting" value="fruiting" />
+                  <Picker.Item label="🌳 Mature" value="mature" />
+                  <Picker.Item label="📉 Declining" value="declining" />
+                </Picker>
+              </View>
 
-          <Text style={styles.sectionHeader}>✂️ Pruning </Text>
+              <Text style={styles.sectionHeader}>✂️ Pruning </Text>
 
-          <Text style={styles.label}>Pruning Frequency (days)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g., 60"
-            value={pruningFrequency}
-            onChangeText={setPruningFrequency}
-            keyboardType="numeric"
-            placeholderTextColor="#999"
-          />
+              <Text style={styles.label}>Pruning Frequency (days)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., 60"
+                value={pruningFrequency}
+                onChangeText={(text) =>
+                  setPruningFrequency(sanitizeNumberText(text))
+                }
+                keyboardType="numeric"
+                placeholderTextColor="#999"
+              />
 
-          <Text style={styles.label}>Pruning Notes</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Add notes about pruning techniques, timing, or observations"
-            value={pruningNotes}
-            onChangeText={(text) => setPruningNotes(sanitizeAlphaNumericSpaces(text))}
-            multiline
-            numberOfLines={2}
-            placeholderTextColor="#999"
-          />
+              <Text style={styles.label}>Pruning Notes</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Add notes about pruning techniques, timing, or observations"
+                value={pruningNotes}
+                onChangeText={(text) =>
+                  setPruningNotes(sanitizeAlphaNumericSpaces(text))
+                }
+                multiline
+                numberOfLines={2}
+                placeholderTextColor="#999"
+              />
+            </>
+          )}
         </CollapsibleSection>
 
         {/* Harvest Information & Companions */}
-        <CollapsibleSection
-          title="Harvest & Companions"
-          icon="calendar"
-          fieldCount={plantType === "fruit_tree" ? 3 : 1}
-          defaultExpanded={false}
-        >
+        {formMode === "advanced" && (
+          <CollapsibleSection
+            title="Harvest & Companions"
+            icon="calendar"
+            fieldCount={plantType === "fruit_tree" ? 3 : 1}
+            defaultExpanded={false}
+            expanded={sectionExpanded.harvest}
+            onExpandedChange={(expanded) =>
+              setSectionExpandedState("harvest", expanded)
+            }
+            hasError={
+              showValidationErrors && validationErrors.harvest.length > 0
+            }
+          >
           <Text style={styles.label}>Harvest Season</Text>
           <View style={styles.pickerContainer}>
             <Picker
@@ -1168,18 +1346,9 @@ export default function PlantFormScreen({ route, navigation }: any) {
               itemStyle={styles.pickerItem}
             >
               <Picker.Item label="Select season" value="" color="#999" />
-              <Picker.Item label="Year Round" value="Year Round" />
-              <Picker.Item label="Summer (Mar-Jun)" value="Summer (Mar-Jun)" />
-              <Picker.Item
-                label="Monsoon/Kharif (Jun-Oct)"
-                value="Monsoon/Kharif (Jun-Oct)"
-              />
-              <Picker.Item
-                label="Winter/Rabi (Oct-Mar)"
-                value="Winter/Rabi (Oct-Mar)"
-              />
-              <Picker.Item label="Spring (Jan-Mar)" value="Spring (Jan-Mar)" />
-              <Picker.Item label="Autumn (Sep-Nov)" value="Autumn (Sep-Nov)" />
+              {harvestSeasonOptions.map((season) => (
+                <Picker.Item key={season} label={season} value={season} />
+              ))}
             </Picker>
           </View>
 
@@ -1426,21 +1595,26 @@ export default function PlantFormScreen({ route, navigation }: any) {
               No pest or disease records yet
             </Text>
           )}
-        </CollapsibleSection>
+          </CollapsibleSection>
+        )}
 
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder="Notes"
-          value={notes}
-          onChangeText={(text) => setNotes(sanitizeAlphaNumericSpaces(text))}
-          multiline
-          numberOfLines={4}
-          maxLength={NOTES_MAX_LENGTH}
-          placeholderTextColor="#999"
-        />
-        <Text style={styles.noteCounter}>
-          {notes.length}/{NOTES_MAX_LENGTH}
-        </Text>
+        {formMode === "advanced" && (
+          <>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Notes"
+              value={notes}
+              onChangeText={(text) => setNotes(sanitizeAlphaNumericSpaces(text))}
+              multiline
+              numberOfLines={4}
+              maxLength={NOTES_MAX_LENGTH}
+              placeholderTextColor="#999"
+            />
+            <Text style={styles.noteCounter}>
+              {notes.length}/{NOTES_MAX_LENGTH}
+            </Text>
+          </>
+        )}
 
         {/* Pest/Disease Modal */}
         <Modal
@@ -1704,6 +1878,33 @@ const createStyles = (theme: any) =>
     },
     scrollContent: {
       paddingBottom: 100,
+    },
+    modeToggleContainer: {
+      flexDirection: "row",
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 12,
+      padding: 4,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    modeToggleButton: {
+      flex: 1,
+      borderRadius: 10,
+      paddingVertical: 10,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    modeToggleButtonActive: {
+      backgroundColor: theme.primaryLight,
+    },
+    modeToggleText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: theme.textSecondary,
+    },
+    modeToggleTextActive: {
+      color: theme.primary,
     },
     photoButton: {
       alignSelf: "center",

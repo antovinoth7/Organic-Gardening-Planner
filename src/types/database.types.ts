@@ -122,9 +122,6 @@ export interface TaskTemplate {
   preferred_time: string | null;
   enabled: boolean;
   next_due_at: string;
-  // PHASE 1: Smart Scheduling
-  skip_if_raining?: boolean | null;
-  adjust_for_season?: boolean | null;
   priority_level?: 'critical' | 'high' | 'medium' | 'low' | null;
   created_at: string;
 }
