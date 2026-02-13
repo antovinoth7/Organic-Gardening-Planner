@@ -19,6 +19,26 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
   categories: {
     vegetable: {
       plants: [
+        "Tomato (Thakkali)",
+        "Brinjal (Kathirikai)",
+        "Bhendi / Okra (Vendakkai)",
+        "Chilli (Milagai)",
+        "Cluster Beans (Kothavarangai)",
+        "Broad Beans (Avarakkai)",
+        "Drumstick (Murungakkai)",
+        "Ridge Gourd (Peerkangai)",
+        "Bitter Gourd (Pavakkai)",
+        "Snake Gourd (Pudalangai)",
+        "Bottle Gourd (Suraikkai)",
+        "Pumpkin (Parangikkai)",
+        "Ash Gourd (Poosanikai)",
+        "Amaranth Greens (Arai Keerai)",
+        "Spinach (Pasalai Keerai)",
+        "Coriander Greens (Kothamalli)",
+        "Fenugreek Greens (Vendhaya Keerai)",
+        "Curry Leaf Seedling",
+        "Banana Stem",
+        "Banana Flower",
         "Tomato",
         "Carrot",
         "Lettuce",
@@ -35,10 +55,22 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
         "Beans",
         "Peas",
       ],
-      varieties: {},
+      varieties: {
+        "Tomato (Thakkali)": ["PKM 1", "CO 3", "Arka Rakshak", "Arka Vikas"],
+        "Brinjal (Kathirikai)": ["CO 2", "Matti Gulla", "Long Green", "Round Purple"],
+        "Bhendi / Okra (Vendakkai)": ["COBhH 1", "Arka Anamika", "Parbhani Kranti"],
+        "Chilli (Milagai)": ["K1", "K2", "Byadgi", "Gundu Milagai"],
+        "Drumstick (Murungakkai)": ["PKM 1", "PKM 2"],
+      },
     },
     herb: {
       plants: [
+        "Holy Basil (Thulasi)",
+        "Indian Borage (Karpooravalli)",
+        "Ajwain Leaf",
+        "Betel Leaf (Vetrilai)",
+        "Turmeric",
+        "Ginger",
         "Basil",
         "Mint",
         "Coriander",
@@ -51,10 +83,17 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
         "Lemongrass",
         "Curry Leaf",
       ],
-      varieties: {},
+      varieties: {
+        "Holy Basil (Thulasi)": ["Rama Tulsi", "Krishna Tulsi"],
+        Turmeric: ["Erode Local", "Salem", "Pragati"],
+        Ginger: ["Rio-de-Janeiro", "Maran", "Nadia"],
+      },
     },
     flower: {
       plants: [
+        "Jasmine (Malli)",
+        "Crossandra (Kanakambaram)",
+        "Tuberose (Sampangi)",
         "Rose",
         "Sunflower",
         "Marigold",
@@ -66,10 +105,20 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
         "Chrysanthemum",
         "Orchid",
       ],
-      varieties: {},
+      varieties: {
+        "Jasmine (Malli)": ["Madurai Malli", "Gundu Malli", "Ramanathapuram Gundumalli"],
+        "Crossandra (Kanakambaram)": ["Delhi Orange", "Lutea Yellow"],
+      },
     },
     fruit_tree: {
       plants: [
+        "Mango (Ma)",
+        "Banana (Vazhai)",
+        "Guava (Koyya)",
+        "Lemon (Elumichai)",
+        "Amla (Nellikai)",
+        "Custard Apple (Seethapazham)",
+        "Indian Gooseberry",
         "Mango",
         "Orange",
         "Banana",
@@ -86,7 +135,13 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
         "Mangosteen",
         "Rambutan",
       ],
-      varieties: {},
+      varieties: {
+        "Mango (Ma)": ["Alphonso", "Banganapalli", "Imam Pasand", "Neelum"],
+        "Banana (Vazhai)": ["Poovan", "Nendran", "Rasthali", "Robusta"],
+        "Guava (Koyya)": ["Lucknow 49", "Arka Kiran", "Allahabad Safeda"],
+        "Lemon (Elumichai)": ["PKM 1", "Assam Lemon"],
+        "Amla (Nellikai)": ["NA-7", "Krishna", "Kanchan"],
+      },
     },
     timber_tree: {
       plants: ["Teak", "Mahogany", "Rosewood", "Sandalwood", "Bamboo", "Wild Jack", "Neem"],
@@ -98,6 +153,8 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
     },
     shrub: {
       plants: [
+        "Ixora",
+        "Henna (Maruthani)",
         "Hibiscus",
         "Bougainvillea",
         "Jasmine",
@@ -107,9 +164,69 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
         "Boxwood",
         "Holly",
       ],
-      varieties: {},
+      varieties: {
+        Hibiscus: ["Red Single", "Yellow Double"],
+        Ixora: ["Red Dwarf", "Orange"],
+      },
     },
   },
+};
+
+const mergeUnique = (base: string[], additions: string[]): string[] => {
+  const seen = new Set(base.map((item) => item.toLowerCase()));
+  const merged = [...base];
+
+  additions.forEach((item) => {
+    if (!seen.has(item.toLowerCase())) {
+      seen.add(item.toLowerCase());
+      merged.push(item);
+    }
+  });
+
+  return merged;
+};
+
+export const mergeCatalogWithStarterDefaults = (
+  catalog: PlantCatalog
+): PlantCatalog => {
+  const mergedCategories = { ...catalog.categories } as Record<
+    PlantType,
+    PlantCatalogCategory
+  >;
+
+  PLANT_CATEGORIES.forEach((type) => {
+    const currentCategory = mergedCategories[type] ?? { plants: [], varieties: {} };
+    const starterCategory = DEFAULT_PLANT_CATALOG.categories[type];
+    const mergedPlants = mergeUnique(currentCategory.plants ?? [], starterCategory.plants);
+
+    const mergedVarieties: Record<string, string[]> = {
+      ...(currentCategory.varieties ?? {}),
+    };
+
+    Object.entries(starterCategory.varieties ?? {}).forEach(
+      ([plantName, starterVarieties]) => {
+        const currentVarieties = mergedVarieties[plantName] ?? [];
+        mergedVarieties[plantName] = mergeUnique(currentVarieties, starterVarieties);
+      }
+    );
+
+    mergedCategories[type] = {
+      plants: mergedPlants,
+      varieties: mergedVarieties,
+    };
+  });
+
+  return normalizeCatalog({ categories: mergedCategories });
+};
+
+export const catalogNeedsStarterImport = (catalog: PlantCatalog): boolean => {
+  return PLANT_CATEGORIES.some((type) => {
+    const starterPlants = DEFAULT_PLANT_CATALOG.categories[type].plants;
+    const catalogPlants = new Set(
+      (catalog.categories[type]?.plants ?? []).map((plant) => plant.toLowerCase())
+    );
+    return starterPlants.some((plant) => !catalogPlants.has(plant.toLowerCase()));
+  });
 };
 
 const SETTINGS_COLLECTION = "user_settings";

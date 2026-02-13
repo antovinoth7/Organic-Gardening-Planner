@@ -74,6 +74,23 @@ const INCOMPATIBLE_PLANTS: Record<string, string[]> = {
 // Days to maturity/harvest for different plants (from planting date)
 const DAYS_TO_HARVEST: Record<string, number> = {
   // Vegetables (days)
+  "Tomato (Thakkali)": 75,
+  "Brinjal (Kathirikai)": 85,
+  "Bhendi / Okra (Vendakkai)": 55,
+  "Chilli (Milagai)": 90,
+  "Cluster Beans (Kothavarangai)": 60,
+  "Broad Beans (Avarakkai)": 70,
+  "Drumstick (Murungakkai)": 180,
+  "Ridge Gourd (Peerkangai)": 65,
+  "Bitter Gourd (Pavakkai)": 65,
+  "Snake Gourd (Pudalangai)": 70,
+  "Bottle Gourd (Suraikkai)": 65,
+  "Pumpkin (Parangikkai)": 95,
+  "Ash Gourd (Poosanikai)": 100,
+  "Amaranth Greens (Arai Keerai)": 30,
+  "Spinach (Pasalai Keerai)": 35,
+  "Coriander Greens (Kothamalli)": 40,
+  "Fenugreek Greens (Vendhaya Keerai)": 28,
   Tomato: 75,
   Carrot: 70,
   Lettuce: 45,
@@ -95,6 +112,12 @@ const DAYS_TO_HARVEST: Record<string, number> = {
   Peas: 65,
 
   // Herbs (days to first harvest)
+  "Holy Basil (Thulasi)": 60,
+  "Indian Borage (Karpooravalli)": 80,
+  "Ajwain Leaf": 70,
+  "Betel Leaf (Vetrilai)": 120,
+  Turmeric: 240,
+  Ginger: 240,
   Basil: 60,
   Mint: 90,
   Coriander: 45,
@@ -110,6 +133,13 @@ const DAYS_TO_HARVEST: Record<string, number> = {
 
 // Days to maturity for fruit trees (years converted to days)
 const YEARS_TO_FIRST_HARVEST: Record<string, number> = {
+  "Mango (Ma)": 3,
+  "Banana (Vazhai)": 1,
+  "Guava (Koyya)": 2,
+  "Lemon (Elumichai)": 2,
+  "Amla (Nellikai)": 3,
+  "Custard Apple (Seethapazham)": 3,
+  "Indian Gooseberry": 3,
   Mango: 3,
   Orange: 3,
   Banana: 1,

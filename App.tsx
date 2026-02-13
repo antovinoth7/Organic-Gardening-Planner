@@ -29,6 +29,12 @@ import SettingsScreen from "./src/screens/SettingsScreen";
 import MoreScreen from "./src/screens/MoreScreen";
 import ManageLocationsScreen from "./src/screens/ManageLocationsScreen";
 import ManagePlantCatalogScreen from "./src/screens/ManagePlantCatalogScreen";
+import {
+  catalogNeedsStarterImport,
+  getPlantCatalog,
+  mergeCatalogWithStarterDefaults,
+  savePlantCatalog,
+} from "./src/services/plantCatalog";
 
 const expoExtra = (Constants.expoConfig?.extra ?? {}) as Record<
   string,
@@ -265,9 +271,12 @@ const AppTabs = () => {
   );
 };
 
+const REGIONAL_STARTER_PROMPT_KEY_PREFIX = "@regional_starter_prompt_v1";
+
 const AppRoot = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasPromptedStarterImport, setHasPromptedStarterImport] = useState(false);
   const theme = useTheme();
   const { resolvedMode } = useThemeMode();
 
@@ -360,6 +369,7 @@ const AppRoot = () => {
         }
         setUser(user);
         setLoading(false);
+        setHasPromptedStarterImport(false);
 
         // Update error logging context
         setErrorLogUserId(user?.uid);
@@ -415,6 +425,60 @@ const AppRoot = () => {
       cleanupLifecycle();
     };
   }, []);
+
+
+
+  useEffect(() => {
+    if (!user || hasPromptedStarterImport) return;
+
+    const runStarterImportPrompt = async () => {
+      const promptKey = `${REGIONAL_STARTER_PROMPT_KEY_PREFIX}_${user.uid}`;
+      const promptStatus = await AsyncStorage.getItem(promptKey);
+      if (promptStatus === "shown") {
+        setHasPromptedStarterImport(true);
+        return;
+      }
+
+      const currentCatalog = await getPlantCatalog();
+      if (!catalogNeedsStarterImport(currentCatalog)) {
+        await AsyncStorage.setItem(promptKey, "shown");
+        setHasPromptedStarterImport(true);
+        return;
+      }
+
+      Alert.alert(
+        "Import Regional Starter Data",
+        "We added a Tamil Nadu-focused starter plant catalog (629159). Import it now? Your custom plants and varieties will be kept.",
+        [
+          {
+            text: "Not now",
+            style: "cancel",
+            onPress: async () => {
+              await AsyncStorage.setItem(promptKey, "shown");
+              setHasPromptedStarterImport(true);
+            },
+          },
+          {
+            text: "Import",
+            onPress: async () => {
+              try {
+                const mergedCatalog = mergeCatalogWithStarterDefaults(currentCatalog);
+                await savePlantCatalog(mergedCatalog);
+              } finally {
+                await AsyncStorage.setItem(promptKey, "shown");
+                setHasPromptedStarterImport(true);
+              }
+            },
+          },
+        ]
+      );
+    };
+
+    runStarterImportPrompt().catch((error) => {
+      console.error("Regional starter prompt failed:", error);
+      setHasPromptedStarterImport(true);
+    });
+  }, [user, hasPromptedStarterImport]);
 
   if (loading) return null; // Show splash screen
 
