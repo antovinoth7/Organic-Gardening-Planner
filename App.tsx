@@ -39,26 +39,15 @@ const sentryDsnFromExtra =
     ? (expoExtra["sentryDsn"] as string)
     : undefined;
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN || sentryDsnFromExtra;
-const allowDevSentry =
-  process.env.EXPO_PUBLIC_SENTRY_TEST === "1" ||
-  expoExtra["sentryTest"] === "1" ||
-  expoExtra["sentryTest"] === true;
 const captureConsoleBreadcrumbs =
   process.env.EXPO_PUBLIC_SENTRY_CAPTURE_CONSOLE === "1" ||
   expoExtra["sentryCaptureConsole"] === "1" ||
   expoExtra["sentryCaptureConsole"] === true;
 const isDev = __DEV__;
 
-if (isDev && allowDevSentry && typeof process !== "undefined") {
-  // Allow Sentry init while running on Metro dev server when explicitly enabled.
-  process.env = process.env ?? {};
-  process.env.___SENTRY_METRO_DEV_SERVER___ = "false";
-}
-
 // Only log Sentry config in development
 if (isDev) {
   console.log("🔧 Sentry DSN loaded:", sentryDsn ? "YES" : "NO");
-  console.log("🔧 Sentry dev logging enabled:", allowDevSentry ? "YES" : "NO");
   console.log("🔧 Environment:", isDev ? "development" : "production");
 }
 

@@ -20,8 +20,7 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_SENTRY_DSN": "https://de16538fdf01821acaeee58c645bfb1c@o4510631761149952.ingest.us.sentry.io/4510643005161472",
-        "EXPO_PUBLIC_SENTRY_TEST": "1"
+        "EXPO_PUBLIC_SENTRY_DSN": "https://de16538fdf01821acaeee58c645bfb1c@o4510631761149952.ingest.us.sentry.io/4510643005161472"
       },
       "android": {
         "buildType": "apk"

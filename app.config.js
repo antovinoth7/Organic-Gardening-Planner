@@ -11,7 +11,7 @@ module.exports = ({ config }) => {
   const basePlugins = Array.isArray(config.plugins) ? config.plugins : [];
   const plugins = ensurePlugin(
     basePlugins,
-    "@react-native-community/datetimepicker"
+    "@react-native-community/datetimepicker",
   );
 
   return {
@@ -19,7 +19,6 @@ module.exports = ({ config }) => {
     extra: {
       ...(config.extra ?? {}),
       sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-      sentryTest: process.env.EXPO_PUBLIC_SENTRY_TEST,
       sentryCaptureConsole: process.env.EXPO_PUBLIC_SENTRY_CAPTURE_CONSOLE,
     },
     plugins,

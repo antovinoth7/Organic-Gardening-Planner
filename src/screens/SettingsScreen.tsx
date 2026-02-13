@@ -9,19 +9,10 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  exportBackup,
-  importBackup,
-  getBackupStats,
-  exportBackupWithImages,
-  importBackupWithImages,
-  exportImagesOnly,
-  importImagesOnly,
-} from "../services/backup";
+import { exportImagesOnly, importImagesOnly } from "../services/backup";
 import { getImageStorageSize } from "../lib/imageStorage";
 import { useTheme, useThemeMode } from "../theme";
 import { useFocusEffect } from "@react-navigation/native";
-import { testSentryLogging } from "../utils/sentryTest";
 import { clearAllData } from "../lib/storage";
 
 export default function SettingsScreen({ navigation }: any) {
@@ -30,13 +21,6 @@ export default function SettingsScreen({ navigation }: any) {
   const styles = createStyles(theme);
   const scrollViewRef = useRef<ScrollView>(null);
   const [loading, setLoading] = useState(false);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const [stats, setStats] = useState<{
-    plantCount: number;
-    taskCount: number;
-    journalCount: number;
-    lastExport: string | null;
-  }>({ plantCount: 0, taskCount: 0, journalCount: 0, lastExport: null });
   const [imageStorageSize, setImageStorageSize] = useState(0);
 
   useEffect(() => {
@@ -47,14 +31,12 @@ export default function SettingsScreen({ navigation }: any) {
   useFocusEffect(
     React.useCallback(() => {
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-    }, [])
+    }, []),
   );
 
   const loadStats = async () => {
     try {
-      const backupStats = await getBackupStats();
       const imageSize = await getImageStorageSize();
-      setStats(backupStats);
       setImageStorageSize(imageSize);
     } catch (error) {
       console.error("Error loading stats:", error);
@@ -65,122 +47,6 @@ export default function SettingsScreen({ navigation }: any) {
     if (bytes === 0) return "0 MB";
     const mb = bytes / (1024 * 1024);
     return mb.toFixed(2) + " MB";
-  };
-
-  const handleExportBackup = async () => {
-    try {
-      setLoading(true);
-      await exportBackup();
-      Alert.alert(
-        "Backup Created",
-        "Your garden data has been exported. Save this file to your cloud storage (Google Drive, OneDrive, etc.) for safekeeping.",
-        [{ text: "OK", onPress: loadStats }]
-      );
-    } catch (error: any) {
-      Alert.alert("Export Failed", error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleImportBackup = async (overwrite: boolean) => {
-    Alert.alert(
-      "Import Backup",
-      overwrite
-        ? "This will REPLACE all your current data with the backup. Continue?"
-        : "This will MERGE the backup with your current data. Continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Continue",
-          style: overwrite ? "destructive" : "default",
-          onPress: async () => {
-            try {
-              setLoading(true);
-              const result = await importBackup(overwrite);
-              const cloudStatus = result.cloudSynced
-                ? "\n\nSynced to cloud (Firestore) for cross-device restore."
-                : "";
-              Alert.alert(
-                "Import Complete",
-                `Imported:\n• ${result.plants} plants\n• ${result.tasks} tasks\n• ${result.journal} journal entries${cloudStatus}`,
-                [{ text: "OK", onPress: loadStats }]
-              );
-            } catch (error: any) {
-              if (error.message !== "Import cancelled") {
-                Alert.alert("Import Failed", error.message);
-              }
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleExportBackupWithImages = async () => {
-    Alert.alert(
-      "Export Complete Backup",
-      "This will create a ZIP file containing all your data AND images. This file may be large.\n\nUse this for full device-to-device transfers.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Export",
-          onPress: async () => {
-            try {
-              setLoading(true);
-              await exportBackupWithImages();
-              Alert.alert(
-                "Complete Backup Created",
-                "Your garden data and images have been exported as a ZIP file. Save this to your cloud storage for complete device transfer.",
-                [{ text: "OK", onPress: loadStats }]
-              );
-            } catch (error: any) {
-              Alert.alert("Export Failed", error.message);
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleImportBackupWithImages = async (overwrite: boolean) => {
-    Alert.alert(
-      "Import Complete Backup",
-      overwrite
-        ? "This will REPLACE all your current data and images with the backup. Continue?"
-        : "This will MERGE the backup data and images with your current data. Continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Continue",
-          style: overwrite ? "destructive" : "default",
-          onPress: async () => {
-            try {
-              setLoading(true);
-              const result = await importBackupWithImages(overwrite);
-              const cloudStatus = result.cloudSynced
-                ? "\n\nSynced to cloud (Firestore) for cross-device restore."
-                : "";
-              Alert.alert(
-                "Import Complete",
-                `Imported:\n• ${result.plants} plants\n• ${result.tasks} tasks\n• ${result.journal} journal entries\n• ${result.images} images${cloudStatus}`,
-                [{ text: "OK", onPress: loadStats }]
-              );
-            } catch (error: any) {
-              if (error.message !== "Import cancelled") {
-                Alert.alert("Import Failed", error.message);
-              }
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ]
-    );
   };
 
   const handleExportImagesOnly = async () => {
@@ -198,7 +64,7 @@ export default function SettingsScreen({ navigation }: any) {
               Alert.alert(
                 "Images Exported",
                 "Your garden images have been exported as a ZIP file. This contains only photos, no data.",
-                [{ text: "OK", onPress: loadStats }]
+                [{ text: "OK", onPress: loadStats }],
               );
             } catch (error: any) {
               Alert.alert("Export Failed", error.message);
@@ -207,7 +73,7 @@ export default function SettingsScreen({ navigation }: any) {
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -226,7 +92,7 @@ export default function SettingsScreen({ navigation }: any) {
               Alert.alert(
                 "Images Imported",
                 `Successfully imported ${count} image(s). Your data remains unchanged.`,
-                [{ text: "OK", onPress: loadStats }]
+                [{ text: "OK", onPress: loadStats }],
               );
             } catch (error: any) {
               if (error.message !== "Import cancelled") {
@@ -237,90 +103,7 @@ export default function SettingsScreen({ navigation }: any) {
             }
           },
         },
-      ]
-    );
-  };
-
-  const handleTestSentry = () => {
-    Alert.alert(
-      "Test Sentry Logging",
-      "Choose a test type to verify Sentry integration:",
-      [
-        {
-          text: "Info Message",
-          onPress: () => {
-            testSentryLogging.testInfo();
-            Alert.alert("✅ Info Logged", "Check console and Sentry dashboard");
-          },
-        },
-        {
-          text: "Warning",
-          onPress: () => {
-            testSentryLogging.testWarning();
-            Alert.alert(
-              "⚠️  Warning Logged",
-              "Check console and Sentry dashboard"
-            );
-          },
-        },
-        {
-          text: "Error Exception",
-          onPress: () => {
-            testSentryLogging.testError();
-            Alert.alert(
-              "🔴 Error Logged",
-              "Check console and Sentry dashboard"
-            );
-          },
-        },
-        {
-          text: "Test Breadcrumbs",
-          onPress: () => {
-            testSentryLogging.testBreadcrumbs();
-            Alert.alert(
-              "🍞 Breadcrumbs Logged",
-              "Check event in Sentry for breadcrumb trail"
-            );
-          },
-        },
-        {
-          text: "Test Context & Tags",
-          onPress: () => {
-            testSentryLogging.testWithContext();
-            Alert.alert(
-              "📊 Context Logged",
-              "Check event in Sentry for custom context"
-            );
-          },
-        },
-        { text: "Cancel", style: "cancel" },
-      ]
-    );
-  };
-
-  const handleProdSentryTest = async () => {
-    try {
-      await testSentryLogging.testProduction();
-      Alert.alert(
-        "Sentry Production Test",
-        "Test event sent. Check Sentry for environment=production and tag test_type:production."
-      );
-    } catch (error: any) {
-      Alert.alert(
-        "Sentry Production Test Failed",
-        error?.message || "Unknown error"
-      );
-    }
-  };
-
-  const confirmProdSentryTest = () => {
-    Alert.alert(
-      "Send Production Test",
-      "This will send a test event to your production Sentry project. Continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Send", onPress: handleProdSentryTest },
-      ]
+      ],
     );
   };
 
@@ -339,7 +122,7 @@ export default function SettingsScreen({ navigation }: any) {
               await clearAllData();
               Alert.alert(
                 "Success",
-                "Local cache cleared. Data will be re-synced from Firebase."
+                "Local cache cleared. Data will be re-synced from Firebase.",
               );
             } catch (error: any) {
               Alert.alert("Error", error?.message || "Failed to clear cache");
@@ -348,10 +131,9 @@ export default function SettingsScreen({ navigation }: any) {
             }
           },
         },
-      ]
+      ],
     );
   };
-
 
   return (
     <View style={styles.container}>
@@ -427,148 +209,6 @@ export default function SettingsScreen({ navigation }: any) {
           </View>
         </View>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Data Backup (Text Only)</Text>
-          <Text style={styles.sectionDescription}>
-            Quick backup of your text data (plants, tasks, journals). Images are
-            NOT included. Best for quick data sync or backup.
-          </Text>
-
-          <View style={styles.card}>
-            <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stats.plantCount}</Text>
-                <Text style={styles.statLabel}>Plants</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stats.taskCount}</Text>
-                <Text style={styles.statLabel}>Tasks</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stats.journalCount}</Text>
-                <Text style={styles.statLabel}>Journal</Text>
-              </View>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.backupButton, styles.exportButton]}
-            onPress={handleExportBackup}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="download-outline" size={20} color="#fff" />
-                <Text style={styles.backupButtonText}>
-                  Export Data Only (JSON)
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.backupButton, styles.importButton]}
-            onPress={() => handleImportBackup(false)}
-            disabled={loading}
-          >
-            <Ionicons name="cloud-upload-outline" size={20} color="#2e7d32" />
-            <Text style={[styles.backupButtonText, { color: "#2e7d32" }]}>
-              Import & Merge
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.backupButton, styles.replaceButton]}
-            onPress={() => handleImportBackup(true)}
-            disabled={loading}
-          >
-            <Ionicons name="refresh-outline" size={20} color="#f57c00" />
-            <Text style={[styles.backupButtonText, { color: "#f57c00" }]}>
-              Import & Replace All
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            Complete Backup (Data + Images)
-          </Text>
-          <Text style={styles.sectionDescription}>
-            Full backup including all photos as a ZIP file. Use this for
-            complete device-to-device transfers. File size:{" "}
-            {formatBytes(imageStorageSize)} (approx).
-          </Text>
-
-          <View style={styles.card}>
-            <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stats.plantCount}</Text>
-                <Text style={styles.statLabel}>Plants</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stats.taskCount}</Text>
-                <Text style={styles.statLabel}>Tasks</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stats.journalCount}</Text>
-                <Text style={styles.statLabel}>Journal</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>
-                  {formatBytes(imageStorageSize)}
-                </Text>
-                <Text style={styles.statLabel}>Images</Text>
-              </View>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.backupButton, styles.exportButton]}
-            onPress={handleExportBackupWithImages}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="archive-outline" size={20} color="#fff" />
-                <Text style={styles.backupButtonText}>
-                  Export Complete Backup (ZIP)
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.backupButton, styles.importButton]}
-            onPress={() => handleImportBackupWithImages(false)}
-            disabled={loading}
-          >
-            <Ionicons name="cloud-upload-outline" size={20} color="#2e7d32" />
-            <Text style={[styles.backupButtonText, { color: "#2e7d32" }]}>
-              Import & Merge Complete Backup
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.backupButton, styles.replaceButton]}
-            onPress={() => handleImportBackupWithImages(true)}
-            disabled={loading}
-          >
-            <Ionicons name="refresh-outline" size={20} color="#f57c00" />
-            <Text style={[styles.backupButtonText, { color: "#f57c00" }]}>
-              Import & Replace All (with Images)
-            </Text>
-          </TouchableOpacity>
-
-          <Text style={styles.backupNote}>
-            💡 Tip: Use "Complete Backup" when switching devices. Save the ZIP
-            file to Google Drive, OneDrive, or external storage for safekeeping.
-          </Text>
-        </View>
-
-        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Images-Only Backup</Text>
           <Text style={styles.sectionDescription}>
             Export or import ONLY your photos without any data. Useful for
@@ -612,59 +252,6 @@ export default function SettingsScreen({ navigation }: any) {
         </View>
 
         <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Diagnostics</Text>
-            <TouchableOpacity
-              style={styles.sectionToggle}
-              onPress={() => setShowDiagnostics((prev) => !prev)}
-            >
-              <Ionicons
-                name={showDiagnostics ? "chevron-up" : "chevron-down"}
-                size={20}
-                color={theme.textSecondary}
-              />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.sectionDescription}>
-            Optional tools for validating error reporting. Use only when
-            troubleshooting.
-          </Text>
-
-          {showDiagnostics && (
-            <>
-              <TouchableOpacity
-                style={[styles.backupButton, styles.testButton]}
-                onPress={handleTestSentry}
-              >
-                <Ionicons name="bug-outline" size={20} color="#9c27b0" />
-                <Text style={[styles.backupButtonText, { color: "#9c27b0" }]}>
-                  Test Sentry Logging
-                </Text>
-              </TouchableOpacity>
-
-              <Text style={styles.backupNote}>
-                Tests include info messages, warnings, errors, breadcrumbs, and
-                custom contexts.
-              </Text>
-
-              <TouchableOpacity
-                style={[styles.backupButton, styles.testButton]}
-                onPress={confirmProdSentryTest}
-              >
-                <Ionicons name="bug-outline" size={20} color="#9c27b0" />
-                <Text style={[styles.backupButtonText, { color: "#9c27b0" }]}>
-                  Send Production Test Event
-                </Text>
-              </TouchableOpacity>
-
-              <Text style={styles.backupNote}>
-                Sends a test event to production with tag test_type:production.
-              </Text>
-            </>
-          )}
-        </View>
-
-        <View style={styles.section}>
           <Text style={styles.sectionTitle}>App Maintenance</Text>
 
           <View style={styles.card}>
@@ -684,45 +271,6 @@ export default function SettingsScreen({ navigation }: any) {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Architecture</Text>
-
-          <View style={styles.card}>
-            <View style={styles.infoItem}>
-              <Ionicons name="cloud-outline" size={20} color="#2e7d32" />
-              <Text style={styles.infoText}>
-                Text data synced via Firebase (free tier)
-              </Text>
-            </View>
-            <View style={styles.infoItem}>
-              <Ionicons
-                name="phone-portrait-outline"
-                size={20}
-                color="#2e7d32"
-              />
-              <Text style={styles.infoText}>
-                Images stored locally on device only
-              </Text>
-            </View>
-            <View style={styles.infoItem}>
-              <Ionicons name="wifi-outline" size={20} color="#2e7d32" />
-              <Text style={styles.infoText}>
-                Works offline with local cache
-              </Text>
-            </View>
-            <View style={styles.infoItem}>
-              <Ionicons
-                name="shield-checkmark-outline"
-                size={20}
-                color="#2e7d32"
-              />
-              <Text style={styles.infoText}>
-                Free forever - no subscriptions
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.section}>
           <Text style={styles.sectionTitle}>About</Text>
 
           <View style={styles.card}>
@@ -735,44 +283,6 @@ export default function SettingsScreen({ navigation }: any) {
             </View>
           </View>
         </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Features</Text>
-
-          <View style={styles.card}>
-            <View style={styles.infoItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#2e7d32" />
-              <Text style={styles.infoText}>
-                Track plants and their locations
-              </Text>
-            </View>
-            <View style={styles.infoItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#2e7d32" />
-              <Text style={styles.infoText}>
-                Set recurring tasks (water, fertilise, etc.)
-              </Text>
-            </View>
-            <View style={styles.infoItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#2e7d32" />
-              <Text style={styles.infoText}>Garden journal with photos</Text>
-            </View>
-            <View style={styles.infoItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#2e7d32" />
-              <Text style={styles.infoText}>
-                Calendar view of upcoming tasks
-              </Text>
-            </View>
-            <View style={styles.infoItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#2e7d32" />
-              <Text style={styles.infoText}>Cloud sync across all devices</Text>
-            </View>
-            <View style={styles.infoItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#2e7d32" />
-              <Text style={styles.infoText}>Works offline with auto-sync</Text>
-            </View>
-          </View>
-        </View>
-
       </ScrollView>
     </View>
   );
@@ -819,14 +329,6 @@ const createStyles = (theme: any) =>
     },
     section: {
       marginBottom: 24,
-    },
-    sectionHeaderRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    sectionToggle: {
-      padding: 4,
     },
     sectionTitle: {
       fontSize: 16,
@@ -909,24 +411,6 @@ const createStyles = (theme: any) =>
     themeButtonTextActive: {
       color: theme.primary,
     },
-    statsContainer: {
-      flexDirection: "row",
-      justifyContent: "space-around",
-      paddingVertical: 8,
-    },
-    statItem: {
-      alignItems: "center",
-    },
-    statValue: {
-      fontSize: 24,
-      fontWeight: "700",
-      color: theme.primary,
-    },
-    statLabel: {
-      fontSize: 12,
-      color: theme.textSecondary,
-      marginTop: 4,
-    },
     backupButton: {
       flexDirection: "row",
       alignItems: "center",
@@ -942,16 +426,6 @@ const createStyles = (theme: any) =>
       backgroundColor: "#fff",
       borderWidth: 2,
       borderColor: "#2e7d32",
-    },
-    replaceButton: {
-      backgroundColor: "#fff",
-      borderWidth: 2,
-      borderColor: "#f57c00",
-    },
-    testButton: {
-      backgroundColor: "#fff",
-      borderWidth: 2,
-      borderColor: "#9c27b0",
     },
     backupButtonText: {
       fontSize: 16,

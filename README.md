@@ -6,7 +6,7 @@ A personal, free-forever gardening planner built with React Native (Expo) and Fi
 - Firestore stores text data and image filenames only (free tier friendly).
 - Photos stay on the device (no cloud image storage costs).
 - Offline-friendly reads via AsyncStorage cache.
-- Manual backups to your own storage (JSON or ZIP).
+- Manual image backups to your own storage (ZIP).
 
 ## Architecture (short)
 - Client: Expo React Native app with tab + stack navigation.
@@ -22,7 +22,7 @@ See `ARCHITECTURE.md` for the full breakdown.
 - Calendar view (week/month) and "Today" tasks.
 - Search and filter across plants, journal, and care plan.
 - Garden journal with photos and plant links.
-- Data-only JSON, complete ZIP (data + images), and images-only ZIP backups in Settings.
+- Images-only ZIP backup and restore in Settings.
 - Theme toggle (system/light/dark).
 - Offline-friendly read path with cached data.
 
@@ -65,7 +65,6 @@ See `ARCHITECTURE.md` for the full breakdown.
    EXPO_PUBLIC_FIREBASE_APP_ID=your_app_id
    # Optional
    EXPO_PUBLIC_SENTRY_DSN=your_sentry_dsn
-   EXPO_PUBLIC_SENTRY_TEST=0
    EXPO_PUBLIC_SENTRY_CAPTURE_CONSOLE=0
    ```
 
@@ -79,12 +78,13 @@ See `ARCHITECTURE.md` for the full breakdown.
    ```
 
 ## Backups
-- Settings includes data-only JSON, complete ZIP (data + images), and images-only ZIP backups.
-- Import flows support merge or replace, depending on the option selected.
+- Settings includes images-only ZIP backup export/import.
+- Images import updates local image mappings without changing text data.
 
 See `BACKUP_GUIDE.md` for detailed workflows.
 
 ## Project structure (key paths)
+
 ```text
 src/
   components/    UI building blocks
@@ -97,6 +97,7 @@ src/
 ```
 
 ## Data model (short)
+
 Firestore collections:
 - plants
 - task_templates
@@ -108,6 +109,7 @@ Local storage:
 - Images in FileSystem documentDirectory/garden_images/
 
 ## Offline behavior
+
 - Reads fall back to AsyncStorage if Firestore is unavailable.
 - Writes attempt Firestore first and update the local cache on success.
 - If you are offline, create/update actions may fail and should be retried.
@@ -117,6 +119,7 @@ Local storage:
 - Image URIs are treated as blob URLs and cannot be deleted the same way as on device.
 
 ## Configuration
+
 Task types:
 - water
 - fertilise
@@ -140,7 +143,8 @@ Plant types:
 - shrub
 
 ## Troubleshooting
-- Images missing: photos are stored locally. Use images-only or complete ZIP backups when moving devices.
+
+- Images missing: photos are stored locally. Use images-only ZIP backups when moving devices.
 - Auth errors: confirm Email/Password provider is enabled and env vars are correct.
 - Backup import errors: ensure JSON is valid and ZIP contains `backup.json`.
 
