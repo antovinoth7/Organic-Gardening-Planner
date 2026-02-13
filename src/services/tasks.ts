@@ -15,10 +15,75 @@ import {
 } from "firebase/firestore";
 import { getData, setData, KEYS } from "../lib/storage";
 import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
-import { logError } from "../utils/errorLogging";import { refreshAuthToken } from '../lib/firebase';import { getCurrentSeason } from "../utils/seasonHelpers";
+import { logError } from "../utils/errorLogging";
+import { refreshAuthToken } from "../lib/firebase";
+import { getCurrentSeason } from "../utils/seasonHelpers";
+import { safeGetItem, safeSetItem } from "../utils/safeStorage";
 
 const TASKS_COLLECTION = "task_templates";
 const TASK_LOGS_COLLECTION = "task_logs";
+const LOCAL_SETTINGS_KEY = KEYS.LOCAL_SETTINGS;
+
+type LocalTaskSettings = {
+  isRainingToday?: boolean;
+};
+
+const PRIORITY_RANK: Record<"critical" | "high" | "medium" | "low", number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+const getSeasonAdjustedFrequency = (
+  baseFrequency: number,
+  taskType: TaskType,
+  adjustForSeason?: boolean | null
+): number => {
+  if (!adjustForSeason) return Math.max(0, Math.round(baseFrequency));
+
+  const season = getCurrentSeason();
+  let multiplier = 1;
+
+  if (taskType === "water") {
+    multiplier = season === "summer" ? 0.7 : season === "monsoon" ? 1.3 : 1.1;
+  } else if (taskType === "fertilise") {
+    multiplier = season === "winter" ? 1.2 : 1;
+  } else if (taskType === "prune") {
+    multiplier = season === "monsoon" ? 1.15 : 1;
+  }
+
+  const adjusted = Math.round(baseFrequency * multiplier);
+  if (baseFrequency <= 0) return 0;
+  return Math.max(1, adjusted);
+};
+
+const getLocalTaskSettings = async (): Promise<LocalTaskSettings> => {
+  const raw = await safeGetItem(LOCAL_SETTINGS_KEY);
+  if (!raw) return { isRainingToday: false };
+
+  try {
+    const parsed = JSON.parse(raw) as LocalTaskSettings;
+    return {
+      isRainingToday: Boolean(parsed?.isRainingToday),
+    };
+  } catch {
+    return { isRainingToday: false };
+  }
+};
+
+export const getDailyRainToggle = async (): Promise<boolean> => {
+  const settings = await getLocalTaskSettings();
+  return Boolean(settings.isRainingToday);
+};
+
+export const setDailyRainToggle = async (isRainingToday: boolean): Promise<void> => {
+  const settings = await getLocalTaskSettings();
+  await safeSetItem(
+    LOCAL_SETTINGS_KEY,
+    JSON.stringify({ ...settings, isRainingToday })
+  );
+};
 
 /**
  * Get all task templates with offline-first approach
@@ -43,6 +108,9 @@ export const getTaskTemplates = async (): Promise<TaskTemplate[]> => {
     const tasks = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
+      skip_if_raining: doc.data().skip_if_raining ?? false,
+      adjust_for_season: doc.data().adjust_for_season ?? false,
+      priority_level: doc.data().priority_level ?? "medium",
       created_at:
         doc.data().created_at?.toDate?.()?.toISOString() ||
         doc.data().created_at,
@@ -81,6 +149,8 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
     999
   );
 
+  const localSettings = await getLocalTaskSettings();
+
   try {
     // Simplified query without orderBy to avoid composite index requirement
     const q = query(
@@ -97,6 +167,9 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
     let tasks = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
+      skip_if_raining: doc.data().skip_if_raining ?? false,
+      adjust_for_season: doc.data().adjust_for_season ?? false,
+      priority_level: doc.data().priority_level ?? "medium",
       created_at:
         doc.data().created_at?.toDate?.()?.toISOString() ||
         doc.data().created_at,
@@ -108,12 +181,19 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
     // Filter tasks: include overdue tasks and tasks due today
     tasks = tasks.filter((task) => {
       if (!task.next_due_at) return false;
+      if (localSettings.isRainingToday && task.skip_if_raining) return false;
       const dueDate = new Date(task.next_due_at);
       // Show tasks that are overdue or due today
       return dueDate <= todayEnd;
     });
 
-    tasks.sort((a, b) => a.next_due_at.localeCompare(b.next_due_at));
+    tasks.sort((a, b) => {
+      const priorityA = a.priority_level || "medium";
+      const priorityB = b.priority_level || "medium";
+      const rankDiff = PRIORITY_RANK[priorityA] - PRIORITY_RANK[priorityB];
+      if (rankDiff !== 0) return rankDiff;
+      return a.next_due_at.localeCompare(b.next_due_at);
+    });
 
     return tasks;
   } catch (error) {
@@ -131,10 +211,17 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
     );
     const filtered = cachedTasks.filter((task) => {
       if (!task.enabled || !task.next_due_at) return false;
+      if (localSettings.isRainingToday && task.skip_if_raining) return false;
       const dueDate = new Date(task.next_due_at);
       return dueDate <= todayEnd;
     });
-    filtered.sort((a, b) => a.next_due_at.localeCompare(b.next_due_at));
+    filtered.sort((a, b) => {
+      const priorityA = a.priority_level || "medium";
+      const priorityB = b.priority_level || "medium";
+      const rankDiff = PRIORITY_RANK[priorityA] - PRIORITY_RANK[priorityB];
+      if (rankDiff !== 0) return rankDiff;
+      return a.next_due_at.localeCompare(b.next_due_at);
+    });
     return filtered;
   }
 };
@@ -147,6 +234,9 @@ export const createTaskTemplate = async (
 
   const newTemplate = {
     ...template,
+    skip_if_raining: template.skip_if_raining ?? false,
+    adjust_for_season: template.adjust_for_season ?? false,
+    priority_level: template.priority_level ?? "medium",
     user_id: user.uid,
     created_at: Timestamp.now(),
     next_due_at: template.next_due_at
@@ -177,6 +267,9 @@ export const updateTaskTemplate = async (
   const docRef = doc(db, TASKS_COLLECTION, id);
 
   const firestoreUpdates: Record<string, any> = { ...updates };
+  if (updates.skip_if_raining === undefined) delete firestoreUpdates.skip_if_raining;
+  if (updates.adjust_for_season === undefined) delete firestoreUpdates.adjust_for_season;
+  if (updates.priority_level === undefined) delete firestoreUpdates.priority_level;
   if (updates.next_due_at) {
     firestoreUpdates.next_due_at = Timestamp.fromDate(
       new Date(updates.next_due_at)
@@ -280,10 +373,15 @@ export const markTaskDone = async (
   const frequencyDays = Number.isFinite(template.frequency_days)
     ? template.frequency_days
     : 0;
+  const adjustedFrequencyDays = getSeasonAdjustedFrequency(
+    frequencyDays,
+    template.task_type,
+    template.adjust_for_season ?? false
+  );
 
   // Calculate next due date at 6 PM (18:00) instead of using completion time
   const nextDueAt = new Date(doneAt);
-  nextDueAt.setDate(nextDueAt.getDate() + frequencyDays);
+  nextDueAt.setDate(nextDueAt.getDate() + adjustedFrequencyDays);
   nextDueAt.setHours(18, 0, 0, 0); // Always set to 6:00 PM
 
   const startOfDay = new Date(doneAt);
@@ -298,7 +396,7 @@ export const markTaskDone = async (
   });
 
   if (alreadyDoneToday) {
-    if (frequencyDays <= 0) {
+    if (adjustedFrequencyDays <= 0) {
       await updateDoc(doc(db, TASKS_COLLECTION, template.id), {
         enabled: false,
       });
@@ -320,13 +418,15 @@ export const markTaskDone = async (
 
   // Update next due date
   const docRef = doc(db, TASKS_COLLECTION, template.id);
-  const updates: { next_due_at?: Timestamp; enabled?: boolean } = {};
-  if (frequencyDays <= 0) {
+  const updates: { next_due_at?: Timestamp; enabled?: boolean; priority_level?: string } = {};
+  if (adjustedFrequencyDays <= 0) {
     updates.enabled = false;
     updates.next_due_at = Timestamp.fromDate(doneAt);
   } else if (!Number.isNaN(nextDueAt.getTime())) {
     updates.next_due_at = Timestamp.fromDate(nextDueAt);
   }
+
+  updates.priority_level = template.priority_level || "medium";
 
   if (Object.keys(updates).length > 0) {
     await updateDoc(docRef, updates);
@@ -400,7 +500,8 @@ const parseDateValue = (value?: string | null): Date | null => {
 const computeNextDueAt = (
   plant: Plant,
   taskType: TaskType,
-  frequency: number
+  frequency: number,
+  adjustForSeason?: boolean | null
 ): string => {
   const reference =
     taskType === "water"
@@ -413,8 +514,14 @@ const computeNextDueAt = (
 
   const base = parseDateValue(reference) || new Date();
 
+  const adjustedFrequency = getSeasonAdjustedFrequency(
+    frequency,
+    taskType,
+    adjustForSeason
+  );
+
   const nextDueAt = new Date(base);
-  nextDueAt.setDate(nextDueAt.getDate() + frequency);
+  nextDueAt.setDate(nextDueAt.getDate() + adjustedFrequency);
   nextDueAt.setHours(18, 0, 0, 0);
 
   return nextDueAt.toISOString();
@@ -446,6 +553,23 @@ export const generateRecurringTasksFromPlants = async (
       );
 
       if (!existingWaterTask) {
+        const priorityLevel = calculateTaskPriority(
+          {
+            id: "",
+            user_id: user.uid,
+            plant_id: plant.id,
+            task_type: "water",
+            frequency_days: schedule.water_frequency_days,
+            preferred_time: null,
+            enabled: true,
+            next_due_at: new Date().toISOString(),
+            adjust_for_season: true,
+            skip_if_raining: true,
+            priority_level: null,
+            created_at: new Date().toISOString(),
+          },
+          plant
+        );
         await createTaskTemplate({
           plant_id: plant.id,
           task_type: "water",
@@ -453,10 +577,14 @@ export const generateRecurringTasksFromPlants = async (
           next_due_at: computeNextDueAt(
             plant,
             "water",
-            schedule.water_frequency_days
+            schedule.water_frequency_days,
+            true
           ),
           enabled: true,
           preferred_time: null,
+          adjust_for_season: true,
+          skip_if_raining: true,
+          priority_level: priorityLevel,
         });
       }
     }
@@ -471,6 +599,23 @@ export const generateRecurringTasksFromPlants = async (
       );
 
       if (!existingFertiliseTask) {
+        const priorityLevel = calculateTaskPriority(
+          {
+            id: "",
+            user_id: user.uid,
+            plant_id: plant.id,
+            task_type: "fertilise",
+            frequency_days: schedule.fertilise_frequency_days,
+            preferred_time: null,
+            enabled: true,
+            next_due_at: new Date().toISOString(),
+            adjust_for_season: true,
+            skip_if_raining: false,
+            priority_level: null,
+            created_at: new Date().toISOString(),
+          },
+          plant
+        );
         await createTaskTemplate({
           plant_id: plant.id,
           task_type: "fertilise",
@@ -478,10 +623,14 @@ export const generateRecurringTasksFromPlants = async (
           next_due_at: computeNextDueAt(
             plant,
             "fertilise",
-            schedule.fertilise_frequency_days
+            schedule.fertilise_frequency_days,
+            true
           ),
           enabled: true,
           preferred_time: null,
+          adjust_for_season: true,
+          skip_if_raining: false,
+          priority_level: priorityLevel,
         });
       }
     }
@@ -493,6 +642,23 @@ export const generateRecurringTasksFromPlants = async (
       );
 
       if (!existingPruneTask) {
+        const priorityLevel = calculateTaskPriority(
+          {
+            id: "",
+            user_id: user.uid,
+            plant_id: plant.id,
+            task_type: "prune",
+            frequency_days: schedule.prune_frequency_days,
+            preferred_time: null,
+            enabled: true,
+            next_due_at: new Date().toISOString(),
+            adjust_for_season: true,
+            skip_if_raining: false,
+            priority_level: null,
+            created_at: new Date().toISOString(),
+          },
+          plant
+        );
         await createTaskTemplate({
           plant_id: plant.id,
           task_type: "prune",
@@ -500,10 +666,14 @@ export const generateRecurringTasksFromPlants = async (
           next_due_at: computeNextDueAt(
             plant,
             "prune",
-            schedule.prune_frequency_days
+            schedule.prune_frequency_days,
+            true
           ),
           enabled: true,
           preferred_time: null,
+          adjust_for_season: true,
+          skip_if_raining: false,
+          priority_level: priorityLevel,
         });
       }
     }
@@ -533,7 +703,8 @@ export const syncCareTasksForPlant = async (plant: Plant): Promise<void> => {
   const plantCreatedAt = parseDateValue(plant.created_at);
 
   for (const { taskType, frequency } of desiredFrequencies) {
-    const nextDueAt = computeNextDueAt(plant, taskType, frequency);
+    const defaultSkipIfRaining = taskType === "water";
+    const nextDueAt = computeNextDueAt(plant, taskType, frequency, true);
     const existing = plantTasks.find((task) => task.task_type === taskType);
     if (existing) {
       const updates: Partial<TaskTemplate> = {};
@@ -543,6 +714,16 @@ export const syncCareTasksForPlant = async (plant: Plant): Promise<void> => {
       }
       if (!existing.enabled) {
         updates.enabled = true;
+      }
+      const computedPriority = calculateTaskPriority(existing, plant);
+      if ((existing.priority_level || "medium") !== computedPriority) {
+        updates.priority_level = computedPriority;
+      }
+      if (existing.adjust_for_season === undefined || existing.adjust_for_season === null) {
+        updates.adjust_for_season = true;
+      }
+      if (existing.skip_if_raining === undefined || existing.skip_if_raining === null) {
+        updates.skip_if_raining = defaultSkipIfRaining;
       }
       const existingDueDate = parseDateValue(existing.next_due_at);
       if (!existingDueDate) {
@@ -563,6 +744,22 @@ export const syncCareTasksForPlant = async (plant: Plant): Promise<void> => {
       next_due_at: nextDueAt,
       enabled: true,
       preferred_time: null,
+      adjust_for_season: true,
+      skip_if_raining: defaultSkipIfRaining,
+      priority_level: calculateTaskPriority(
+        {
+          id: "",
+          user_id: "",
+          plant_id: plant.id,
+          task_type: taskType,
+          frequency_days: frequency,
+          preferred_time: null,
+          enabled: true,
+          next_due_at: nextDueAt,
+          created_at: new Date().toISOString(),
+        },
+        plant
+      ),
     });
   }
 };

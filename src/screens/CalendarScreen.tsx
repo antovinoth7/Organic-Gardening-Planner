@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Animated, Platform, Switch } from 'react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { getTaskTemplates, createTaskTemplate, markTaskDone, deleteTasksForPlantIds } from '../services/tasks';
@@ -55,6 +55,9 @@ export default function CalendarScreen() {
   const [isOneTimeTask, setIsOneTimeTask] = useState(false);
   const [startDate, setStartDate] = useState(new Date());
   const [preferredTime, setPreferredTime] = useState<'morning' | 'afternoon' | 'evening' | null>(null);
+  const [adjustForSeason, setAdjustForSeason] = useState(false);
+  const [skipIfRaining, setSkipIfRaining] = useState(false);
+  const [priorityLevel, setPriorityLevel] = useState<'critical' | 'high' | 'medium' | 'low'>('medium');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
@@ -262,6 +265,9 @@ export default function CalendarScreen() {
         next_due_at: dueDate.toISOString(),
         enabled: true,
         preferred_time: preferredTime,
+        adjust_for_season: adjustForSeason,
+        skip_if_raining: skipIfRaining,
+        priority_level: priorityLevel,
       });
       Alert.alert('Success', 'Task created successfully!');
       resetCreateTaskForm();
@@ -281,6 +287,9 @@ export default function CalendarScreen() {
     setIsOneTimeTask(false);
     setStartDate(new Date());
     setPreferredTime(null);
+    setAdjustForSeason(false);
+    setSkipIfRaining(false);
+    setPriorityLevel('medium');
   };
 
   const applyFrequencyPreset = (days: number, _label: string) => {
@@ -1132,6 +1141,31 @@ export default function CalendarScreen() {
                   </View>
                 )}
 
+                <Text style={styles.label}>Scheduling Flags</Text>
+                <View style={styles.flagRow}>
+                  <Text style={styles.flagLabel}>Adjust frequency by season</Text>
+                  <Switch value={adjustForSeason} onValueChange={setAdjustForSeason} />
+                </View>
+                <View style={styles.flagRow}>
+                  <Text style={styles.flagLabel}>Skip if raining</Text>
+                  <Switch value={skipIfRaining} onValueChange={setSkipIfRaining} />
+                </View>
+
+                <Text style={styles.label}>Priority</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={priorityLevel}
+                    onValueChange={(value) => setPriorityLevel(value as 'critical' | 'high' | 'medium' | 'low')}
+                    style={styles.picker}
+                    itemStyle={styles.pickerItem}
+                  >
+                    <Picker.Item label="Critical" value="critical" color={theme.pickerText} />
+                    <Picker.Item label="High" value="high" color={theme.pickerText} />
+                    <Picker.Item label="Medium" value="medium" color={theme.pickerText} />
+                    <Picker.Item label="Low" value="low" color={theme.pickerText} />
+                  </Picker>
+                </View>
+
                 <TouchableOpacity 
                   style={[styles.createButton, loading && styles.createButtonDisabled]}
                   onPress={handleCreateTask}
@@ -1924,6 +1958,18 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   toggleButtonTextActive: {
     color: theme.primary,
     fontWeight: '600',
+  },
+  flagRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  flagLabel: {
+    fontSize: 14,
+    color: theme.text,
+    flex: 1,
+    marginRight: 12,
   },
   presets: {
     flexDirection: 'row',

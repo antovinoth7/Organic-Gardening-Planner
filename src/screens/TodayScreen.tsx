@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Alert, Modal, TextInput } from 'react-native';
-import { getTodayTasks, markTaskDone, updateTaskTemplate, getTaskLogs, calculateTaskPriority } from '../services/tasks';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Alert, Modal, TextInput, Switch } from 'react-native';
+import { getTodayTasks, markTaskDone, updateTaskTemplate, getTaskLogs, calculateTaskPriority, getDailyRainToggle, setDailyRainToggle } from '../services/tasks';
 import { getPlants } from '../services/plants';
 import { TaskTemplate, Plant, TaskLog } from '../types/database.types';
 import TaskCard from '../components/TaskCard';
@@ -23,6 +23,10 @@ export default function TodayScreen({ navigation, route }: any) {
   const [skipReason, setSkipReason] = useState('');
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [skippingTask, setSkippingTask] = useState(false);
+  const [isRainingToday, setIsRainingTodayState] = useState(false);
+  const [showTaskSettingsModal, setShowTaskSettingsModal] = useState(false);
+  const [taskAdjustForSeason, setTaskAdjustForSeason] = useState(false);
+  const [taskSkipIfRaining, setTaskSkipIfRaining] = useState(false);
   const isMountedRef = React.useRef(true);
   const completedTemplateIds = useMemo(
     () => new Set(taskLogs.map(log => log.template_id)),
@@ -34,10 +38,11 @@ export default function TodayScreen({ navigation, route }: any) {
       setLoading(true);
     }
     try {
-      const [tasksData, { plants: plantsData }, logs] = await Promise.all([
+      const [tasksData, { plants: plantsData }, logs, rainingToggle] = await Promise.all([
         getTodayTasks(),
         getPlants(),
         getTaskLogs(),
+        getDailyRainToggle(),
       ]);
       
       if (!isMountedRef.current) return;
@@ -58,6 +63,7 @@ export default function TodayScreen({ navigation, route }: any) {
       setTasks(filteredTasks);
       setPlants(plantsData);
       setTaskLogs(todayLogs);
+      setIsRainingTodayState(rainingToggle);
     } catch (error: any) {
       if (!isMountedRef.current) return;
       Alert.alert('Error', error.message);
@@ -160,6 +166,39 @@ export default function TodayScreen({ navigation, route }: any) {
     }
   };
 
+
+  const handleRainToggle = async (value: boolean) => {
+    try {
+      await setDailyRainToggle(value);
+      setIsRainingTodayState(value);
+      loadData();
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  };
+
+  const openTaskSettings = (task: TaskTemplate) => {
+    setSelectedTask(task);
+    setTaskAdjustForSeason(Boolean(task.adjust_for_season));
+    setTaskSkipIfRaining(Boolean(task.skip_if_raining));
+    setShowTaskSettingsModal(true);
+  };
+
+  const saveTaskSettings = async () => {
+    if (!selectedTask) return;
+
+    try {
+      await updateTaskTemplate(selectedTask.id, {
+        adjust_for_season: taskAdjustForSeason,
+        skip_if_raining: taskSkipIfRaining,
+      });
+      setShowTaskSettingsModal(false);
+      setSelectedTask(null);
+      loadData();
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  };
   const getPlantName = useCallback((plantId: string | null) => {
     if (!plantId) return 'General';
     if (!plants || plants.length === 0) return 'Unknown';
@@ -184,6 +223,23 @@ export default function TodayScreen({ navigation, route }: any) {
     return Math.floor((today.getTime() - startOfDate.getTime()) / (1000 * 60 * 60 * 24));
   }, []);
 
+
+  const priorityOrder: Record<'critical' | 'high' | 'medium' | 'low', number> = {
+    critical: 0,
+    high: 1,
+    medium: 2,
+    low: 3,
+  };
+
+  const sortByPriorityAndDueDate = (taskList: TaskTemplate[]) => {
+    return [...taskList].sort((a, b) => {
+      const priorityA = (a.priority_level || 'medium') as 'critical' | 'high' | 'medium' | 'low';
+      const priorityB = (b.priority_level || 'medium') as 'critical' | 'high' | 'medium' | 'low';
+      const priorityDiff = priorityOrder[priorityA] - priorityOrder[priorityB];
+      if (priorityDiff !== 0) return priorityDiff;
+      return new Date(a.next_due_at).getTime() - new Date(b.next_due_at).getTime();
+    });
+  };
   // Calculate stats
   const stats = useMemo(() => {
     const taskIds = new Set((tasks || []).map(task => task.id));
@@ -221,22 +277,22 @@ export default function TodayScreen({ navigation, route }: any) {
   const overdueTasks = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return (tasks || []).filter(t => {
+    return sortByPriorityAndDueDate((tasks || []).filter(t => {
       if (!t || !t.next_due_at) return false;
       if (completedTemplateIds.has(t.id)) return false;
       const dueDate = new Date(t.next_due_at);
       return dueDate < today;
-    });
+    }));
   }, [tasks, completedTemplateIds]);
   
   const todayTasks = useMemo(() => {
     const today = new Date();
-    return (tasks || []).filter(t => {
+    return sortByPriorityAndDueDate((tasks || []).filter(t => {
       if (!t || !t.next_due_at) return false;
       if (completedTemplateIds.has(t.id)) return false;
       const dueDate = new Date(t.next_due_at);
       return dueDate.toDateString() === today.toDateString();
-    });
+    }));
   }, [tasks, completedTemplateIds]);
 
   return (
@@ -249,6 +305,10 @@ export default function TodayScreen({ navigation, route }: any) {
     >
       <View style={styles.header}>
         <Text style={styles.title}>My Garden</Text>
+        <View style={styles.rainToggleRow}>
+          <Text style={styles.rainToggleLabel}>Rain today</Text>
+          <Switch value={isRainingToday} onValueChange={handleRainToggle} />
+        </View>
         <Text style={styles.date}>{new Date().toLocaleDateString('en-US', { 
           weekday: 'long', 
           month: 'long', 
@@ -380,7 +440,7 @@ export default function TodayScreen({ navigation, route }: any) {
           </View>
           {overdueTasks.map(task => {
             const plant = getPlantById(task.plant_id);
-            const priority = calculateTaskPriority(task, plant);
+            const priority = task.priority_level || calculateTaskPriority(task, plant);
 
             return (
               <View key={task.id} style={styles.taskWrapper}>
@@ -399,6 +459,10 @@ export default function TodayScreen({ navigation, route }: any) {
                   >
                     <Ionicons name="time-outline" size={16} color="#2196f3" />
                     <Text style={styles.actionText}>Snooze 2h</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.actionButton} onPress={() => openTaskSettings(task)}>
+                    <Ionicons name="options-outline" size={16} color="#607d8b" />
+                    <Text style={styles.actionText}>Flags</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
                     style={styles.actionButton}
@@ -427,7 +491,7 @@ export default function TodayScreen({ navigation, route }: any) {
           </View>
           {todayTasks.map(task => {
             const plant = getPlantById(task.plant_id);
-            const priority = calculateTaskPriority(task, plant);
+            const priority = task.priority_level || calculateTaskPriority(task, plant);
 
             return (
               <View key={task.id} style={styles.taskWrapper}>
@@ -445,6 +509,10 @@ export default function TodayScreen({ navigation, route }: any) {
                   >
                     <Ionicons name="time-outline" size={16} color="#2196f3" />
                     <Text style={styles.actionText}>Snooze 4h</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.actionButton} onPress={() => openTaskSettings(task)}>
+                    <Ionicons name="options-outline" size={16} color="#607d8b" />
+                    <Text style={styles.actionText}>Flags</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
                     style={styles.actionButton}
@@ -477,6 +545,35 @@ export default function TodayScreen({ navigation, route }: any) {
         </View>
       )}
 
+
+      <Modal
+        visible={showTaskSettingsModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowTaskSettingsModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Task Scheduling Flags</Text>
+            <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>Adjust for season</Text>
+              <Switch value={taskAdjustForSeason} onValueChange={setTaskAdjustForSeason} />
+            </View>
+            <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>Skip if raining</Text>
+              <Switch value={taskSkipIfRaining} onValueChange={setTaskSkipIfRaining} />
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setShowTaskSettingsModal(false)}>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmButton} onPress={saveTaskSettings}>
+                <Text style={styles.confirmButtonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       {/* Skip Task Modal */}
       <Modal
         visible={showSkipModal}
@@ -563,6 +660,19 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.textSecondary,
     marginTop: 4,
   },
+
+  rainToggleRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  rainToggleLabel: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    fontWeight: '600',
+  },
+
   statsContainer: {
     backgroundColor: theme.backgroundSecondary,
     padding: 16,
@@ -843,4 +953,45 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontWeight: '600',
     color: theme.textSecondary,
   },
+
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  settingLabel: {
+    fontSize: 15,
+    color: theme.text,
+    fontWeight: '500',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 8,
+  },
+  cancelButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.background,
+  },
+  confirmButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: theme.primary,
+  },
+  cancelButtonText: {
+    color: theme.textSecondary,
+    fontWeight: '600',
+  },
+  confirmButtonText: {
+    color: theme.textInverse,
+    fontWeight: '700',
+  },
+
 });
