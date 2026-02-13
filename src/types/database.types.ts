@@ -14,6 +14,12 @@ export interface LocationConfig {
   childLocations: string[];
 }
 
+export type SeasonRegionProfile = "tamil_nadu" | "legacy_south_asia";
+
+export interface UserPreferences {
+  seasonRegionProfile: SeasonRegionProfile;
+}
+
 export interface PlantCatalogCategory {
   plants: string[];
   varieties: Record<string, string[]>;

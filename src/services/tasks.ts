@@ -15,7 +15,10 @@ import {
 } from "firebase/firestore";
 import { getData, setData, KEYS } from "../lib/storage";
 import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
-import { logError } from "../utils/errorLogging";import { refreshAuthToken } from '../lib/firebase';import { getCurrentSeason } from "../utils/seasonHelpers";
+import { logError } from "../utils/errorLogging";
+import { refreshAuthToken } from "../lib/firebase";
+import { getCurrentSeason } from "../utils/seasonHelpers";
+import { getUserPreferences } from "./userPreferences";
 
 const TASKS_COLLECTION = "task_templates";
 const TASK_LOGS_COLLECTION = "task_logs";
@@ -613,11 +616,19 @@ export const calculateTaskPriority = (
  * Get seasonal care reminder for plant
  * (Simplified version - seasonal care profiles removed)
  */
-export const getSeasonalCareReminder = (plant: Plant): string | null => {
-  const season = getCurrentSeason();
+export const getSeasonalCareReminder = async (
+  plant: Plant
+): Promise<string | null> => {
+  const preferences = await getUserPreferences();
+  const season = getCurrentSeason({ profile: preferences.seasonRegionProfile });
 
   // Provide basic seasonal advice
-  if (season === "monsoon" && plant.space_type === "pot") {
+  if (
+    (season === "monsoon" ||
+      season === "southwest_monsoon" ||
+      season === "northeast_monsoon") &&
+    plant.space_type === "pot"
+  ) {
     return "Ensure proper drainage to prevent waterlogging";
   }
 

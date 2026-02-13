@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
   LOCATIONS: '@garden_locations',
   PLANT_CATALOG: '@garden_plant_catalog',
   PLANT_CARE_PROFILES: '@garden_plant_care_profiles',
+  USER_PREFERENCES: '@garden_user_preferences',
 };
 
 // Export as KEYS for backwards compatibility

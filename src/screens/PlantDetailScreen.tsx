@@ -23,6 +23,7 @@ export default function PlantDetailScreen({ route, navigation }: any) {
   const [plant, setPlant] = useState<Plant | null>(null);
   const [tasks, setTasks] = useState<TaskTemplate[]>([]);
   const [harvestEntries, setHarvestEntries] = useState<JournalEntry[]>([]);
+  const [seasonalReminder, setSeasonalReminder] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const isMountedRef = React.useRef(true);
 
@@ -49,8 +50,16 @@ export default function PlantDetailScreen({ route, navigation }: any) {
 
       if (!isMountedRef.current) return;
 
+      if (!plantData) {
+        setPlant(null);
+        setTasks([]);
+        setSeasonalReminder(null);
+        return;
+      }
+
       setPlant(plantData);
       setTasks(allTasks.filter((t) => t.plant_id === plantId));
+      setSeasonalReminder(await getSeasonalCareReminder(plantData));
       const plantHarvests = allJournalEntries
         .filter((e) => e.plant_id === plantId && e.entry_type === "harvest")
         .sort(
@@ -97,8 +106,6 @@ export default function PlantDetailScreen({ route, navigation }: any) {
       </View>
     );
   }
-
-  const seasonalReminder = getSeasonalCareReminder(plant);
 
   return (
     <ScrollView style={styles.container}>
