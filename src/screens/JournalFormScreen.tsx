@@ -313,7 +313,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
           >
             <Ionicons
               name="eye"
-              size={20}
+              size={18}
               color={
                 entryType === "observation" ? theme.textInverse : theme.primary
               }
@@ -324,7 +324,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
                 entryType === "observation" && styles.typeButtonTextActive,
               ]}
             >
-              Observation
+              Watch
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -336,7 +336,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
           >
             <Ionicons
               name="basket"
-              size={20}
+              size={18}
               color={
                 entryType === "harvest" ? theme.textInverse : theme.primary
               }
@@ -359,7 +359,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
           >
             <Ionicons
               name="alert-circle"
-              size={20}
+              size={18}
               color={entryType === "issue" ? theme.textInverse : theme.primary}
             />
             <Text
@@ -380,7 +380,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
           >
             <Ionicons
               name="flag"
-              size={20}
+              size={18}
               color={
                 entryType === "milestone" ? theme.textInverse : theme.primary
               }
@@ -476,6 +476,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
                 <TextInput
                   style={styles.input}
                   placeholder="0"
+                  placeholderTextColor={theme.inputPlaceholder}
                   value={harvestQuantity}
                   onChangeText={setHarvestQuantity}
                   keyboardType="decimal-pad"
@@ -543,6 +544,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
             <TextInput
               style={styles.harvestNotesInput}
               placeholder="Storage method, taste notes, etc. (optional)"
+              placeholderTextColor={theme.inputPlaceholder}
               value={harvestNotes}
               onChangeText={(text) => setHarvestNotes(sanitizeAlphaNumericSpaces(text))}
               multiline
@@ -705,9 +707,9 @@ const createStyles = (theme: any) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      padding: 12,
+      padding: 8,
       backgroundColor: theme.backgroundSecondary,
-      borderRadius: 12,
+      borderRadius: 10,
       borderWidth: 2,
       borderColor: theme.primaryLight,
       gap: 4,
@@ -717,7 +719,7 @@ const createStyles = (theme: any) =>
       borderColor: theme.primary,
     },
     typeButtonText: {
-      fontSize: 12,
+      fontSize: 11,
       color: theme.primary,
       fontWeight: "600",
     },
@@ -770,7 +772,7 @@ const createStyles = (theme: any) =>
     },
     unitButton: {
       flex: 1,
-      padding: 10,
+      padding: 8,
       backgroundColor: theme.background,
       borderRadius: 8,
       alignItems: "center",
@@ -782,7 +784,7 @@ const createStyles = (theme: any) =>
       borderColor: theme.primary,
     },
     unitButtonText: {
-      fontSize: 14,
+      fontSize: 12,
       color: theme.textSecondary,
       fontWeight: "600",
     },
@@ -795,7 +797,7 @@ const createStyles = (theme: any) =>
     },
     qualityButton: {
       flex: 1,
-      padding: 12,
+      padding: 8,
       backgroundColor: theme.background,
       borderRadius: 8,
       alignItems: "center",
@@ -807,11 +809,11 @@ const createStyles = (theme: any) =>
       borderColor: theme.primary,
     },
     qualityEmoji: {
-      fontSize: 20,
-      marginBottom: 4,
+      fontSize: 18,
+      marginBottom: 2,
     },
     qualityButtonText: {
-      fontSize: 12,
+      fontSize: 11,
       color: theme.textSecondary,
       fontWeight: "600",
     },

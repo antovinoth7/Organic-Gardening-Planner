@@ -34,6 +34,7 @@ export default function PlantsScreen({ navigation, route }: any) {
   const styles = createStyles(theme);
   const insets = useSafeAreaInsets();
   const flatListRef = useRef<FlatList>(null);
+  const loadMoreTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE);
@@ -98,6 +99,10 @@ export default function PlantsScreen({ navigation, route }: any) {
     return () => {
       isMounted = false;
       unsubscribe();
+      // Clear any pending loadMore timeout
+      if (loadMoreTimeoutRef.current) {
+        clearTimeout(loadMoreTimeoutRef.current);
+      }
     };
   }, [navigation]);
 
@@ -249,10 +254,16 @@ export default function PlantsScreen({ navigation, route }: any) {
   const loadMore = () => {
     if (loadingMore || !hasMore) return;
     
+    // Clear any existing timeout
+    if (loadMoreTimeoutRef.current) {
+      clearTimeout(loadMoreTimeoutRef.current);
+    }
+    
     setLoadingMore(true);
-    setTimeout(() => {
+    loadMoreTimeoutRef.current = setTimeout(() => {
       setDisplayCount(prev => Math.min(prev + ITEMS_PER_PAGE, filteredPlants.length));
       setLoadingMore(false);
+      loadMoreTimeoutRef.current = null;
     }, 300);
   };
 
@@ -745,11 +756,11 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 20,
-    bottom: 20,
+    bottom: 24,
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#2e7d32',
+    backgroundColor: theme.primary,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',

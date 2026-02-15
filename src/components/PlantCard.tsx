@@ -4,7 +4,6 @@ import { Image } from 'expo-image';
 import { Plant } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
-import { imageExists } from '../lib/imageStorage';
 import { getYearsOld } from '../utils/dateHelpers';
 
 interface PlantCardProps {
@@ -17,52 +16,15 @@ interface PlantCardProps {
 export default function PlantCard({ plant, onPress, onEdit, onDelete }: PlantCardProps) {
   const theme = useTheme();
   const styles = createStyles(theme);
-  const [imageAvailable, setImageAvailable] = useState(false);
   const [imageError, setImageError] = useState(false);
   const isMountedRef = useRef(true);
 
-  // Check if the local image file exists with proper cleanup
+  // Reset error state when photo_url changes
   useEffect(() => {
     isMountedRef.current = true;
-    let cancelled = false;
-
-    if (plant.photo_url) {
-      // Defensive check: ensure URI is valid
-      const uri = plant.photo_url.trim();
-      if (!uri || uri === 'null' || uri === 'undefined') {
-        setImageAvailable(false);
-        return;
-      }
-
-      // Quick pre-check: if it's a file:// URI and doesn't look like our image path, skip
-      if (uri.startsWith('file://') && !uri.includes('garden_images')) {
-        setImageAvailable(false);
-        return;
-      }
-
-      imageExists(uri)
-        .then(exists => {
-          if (!cancelled && isMountedRef.current) {
-            setImageAvailable(exists);
-            setImageError(!exists);
-          }
-        })
-        .catch(error => {
-          // Only log in development
-          if (__DEV__) {
-            console.warn('PlantCard: Error checking image existence:', error);
-          }
-          if (!cancelled && isMountedRef.current) {
-            setImageAvailable(false);
-            setImageError(true);
-          }
-        });
-    } else {
-      setImageAvailable(false);
-    }
+    setImageError(false);
 
     return () => {
-      cancelled = true;
       isMountedRef.current = false;
     };
   }, [plant.photo_url]);
@@ -118,14 +80,13 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete }: PlantCar
 
   const handleImageError = () => {
     if (isMountedRef.current) {
-      setImageAvailable(false);
       setImageError(true);
     }
   };
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress}>
-      {plant.photo_url && imageAvailable && !imageError ? (
+      {plant.photo_url && !imageError ? (
         <Image 
           source={{ uri: plant.photo_url }} 
           style={styles.image}
@@ -140,7 +101,7 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete }: PlantCar
       ) : (
         <View style={[styles.image, styles.placeholder]}>
           <Text style={styles.emoji}>{getPlantTypeIcon()}</Text>
-          {plant.photo_url && (imageError || !imageAvailable) && (
+          {plant.photo_url && imageError && (
             <Text style={styles.missingImageText}>📷</Text>
           )}
         </View>

@@ -199,9 +199,11 @@ export default function PlantFormScreen({ route, navigation }: any) {
       loadPlant();
     } else {
       // For new plants, mark as loaded after delay to allow auto-suggest
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         initialDataLoaded.current = true;
       }, 500);
+      
+      return () => clearTimeout(timeoutId);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plantId]);
