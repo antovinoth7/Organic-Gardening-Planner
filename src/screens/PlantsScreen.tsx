@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl, Alert, ActivityIndicator, ScrollView, TextInput } from 'react-native';
 import { getPlants, deletePlant } from '../services/plants';
 import {
@@ -9,6 +9,7 @@ import {
 import { Plant, PlantType, SpaceType, HealthStatus, SunlightLevel, WaterRequirement } from '../types/database.types';
 import PlantCard from '../components/PlantCard';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme';
 import { sanitizeAlphaNumericSpaces } from '../utils/textSanitizer';
 
@@ -31,6 +32,7 @@ const ITEMS_PER_PAGE = 20;
 export default function PlantsScreen({ navigation, route }: any) {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const insets = useSafeAreaInsets();
   const flatListRef = useRef<FlatList>(null);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,7 +109,7 @@ export default function PlantsScreen({ navigation, route }: any) {
       // Clear the param to prevent repeated refreshes
       navigation.setParams({ refresh: undefined });
     }
-  }, [route?.params?.refresh]);
+  }, [route?.params?.refresh, navigation]);
 
   const handleDelete = async (id: string) => {
     Alert.alert(
@@ -132,7 +134,7 @@ export default function PlantsScreen({ navigation, route }: any) {
     );
   };
 
-  const getFilteredPlants = () => {
+  const getFilteredPlants = useCallback(() => {
     if (!plants || plants.length === 0) return [];
     let filtered = [...plants];
 
@@ -178,9 +180,9 @@ export default function PlantsScreen({ navigation, route }: any) {
     }
 
     return filtered;
-  };
+  }, [filters, plants, searchQuery]);
 
-  const getSortedPlants = (plantsToSort: Plant[]) => {
+  const getSortedPlants = useCallback((plantsToSort: Plant[]) => {
     const sorted = [...plantsToSort];
     
     switch (sortBy) {
@@ -207,7 +209,7 @@ export default function PlantsScreen({ navigation, route }: any) {
       default:
         return sorted;
     }
-  };
+  }, [sortBy]);
 
   const updateFilter = <K extends keyof ActiveFilters>(category: K, value: ActiveFilters[K]) => {
     setFilters(prev => ({ ...prev, [category]: value }));
@@ -233,7 +235,10 @@ export default function PlantsScreen({ navigation, route }: any) {
     setDisplayCount(ITEMS_PER_PAGE);
   };
 
-  const filteredPlants = useMemo(() => getSortedPlants(getFilteredPlants()), [plants, filters, searchQuery, sortBy]);
+  const filteredPlants = useMemo(
+    () => getSortedPlants(getFilteredPlants()),
+    [getFilteredPlants, getSortedPlants]
+  );
   
   const displayedPlants = useMemo(() => {
     return filteredPlants.slice(0, displayCount);
@@ -257,7 +262,7 @@ export default function PlantsScreen({ navigation, route }: any) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.searchWrapper}>
           <Ionicons name="search" size={16} color={theme.textSecondary} />
           <TextInput
@@ -673,10 +678,15 @@ export default function PlantsScreen({ navigation, route }: any) {
             </TouchableOpacity>
           ) : null
         }
+        // Memory optimization settings
         initialNumToRender={10}
         maxToRenderPerBatch={10}
         windowSize={5}
         removeClippedSubviews={true}
+        // Critical: Prevent memory leaks from unmounting images
+        updateCellsBatchingPeriod={50}
+        // Improve scrolling performance
+        legacyImplementation={false}
       />
 
       {/* Floating Action Button */}
@@ -700,7 +710,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 48,
+    paddingTop: 12,
     paddingBottom: 16,
     backgroundColor: theme.backgroundSecondary,
     borderBottomWidth: 1,

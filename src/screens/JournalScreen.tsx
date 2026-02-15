@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,15 +7,16 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
-  Image,
   TextInput,
   Modal,
   Dimensions,
 } from "react-native";
+import { Image } from 'expo-image';
 import { getJournalEntries, deleteJournalEntry } from "../services/journal";
 import { getPlants } from "../services/plants";
 import { JournalEntry, Plant } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 
@@ -24,6 +25,7 @@ const { width } = Dimensions.get("window");
 export default function JournalScreen({ navigation, route }: any) {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [plants, setPlants] = useState<Plant[]>([]);
@@ -84,13 +86,13 @@ export default function JournalScreen({ navigation, route }: any) {
       loadData();
       navigation.setParams({ refresh: undefined });
     }
-  }, [route?.params?.refresh]);
+  }, [route?.params?.refresh, navigation]);
 
-  const getPlantName = (plantId: string | null) => {
+  const getPlantName = useCallback((plantId: string | null) => {
     if (!plantId) return null;
     const plant = plants.find((p) => p.id === plantId);
     return plant?.name;
-  };
+  }, [plants]);
 
   const getEntryTypeIcon = (type: string) => {
     const iconMap: Record<string, string> = {
@@ -148,7 +150,7 @@ export default function JournalScreen({ navigation, route }: any) {
       topPlant: topPlant ? topPlant[0] : null,
       topPlantCount: topPlant ? topPlant[1] : 0,
     };
-  }, [entries, plants]);
+  }, [entries, getPlantName]);
 
   // Filter and search entries
   const filteredEntries = useMemo(() => {
@@ -190,7 +192,7 @@ export default function JournalScreen({ navigation, route }: any) {
     filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
     return filtered;
-  }, [entries, searchQuery, selectedType, dateFilter, plants]);
+  }, [entries, searchQuery, selectedType, dateFilter, getPlantName]);
 
   // Get all photos for gallery view
   const allPhotos = useMemo(() => {
@@ -231,7 +233,7 @@ export default function JournalScreen({ navigation, route }: any) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.headerTop}>
           <View style={styles.searchContainer}>
             <Ionicons
@@ -515,6 +517,10 @@ export default function JournalScreen({ navigation, route }: any) {
                           <Image
                             source={{ uri: photoUrl }}
                             style={styles.photo}
+                            contentFit="cover"
+                            transition={200}
+                            cachePolicy="memory-disk"
+                            recyclingKey={`journal-${entry.id}-${idx}`}
                           />
                         </TouchableOpacity>
                       ))}
@@ -648,6 +654,10 @@ export default function JournalScreen({ navigation, route }: any) {
                 <Image
                   source={{ uri: photo.uri }}
                   style={styles.galleryImage}
+                  contentFit="cover"
+                  transition={200}
+                  cachePolicy="memory-disk"
+                  recyclingKey={`gallery-${idx}`}
                 />
               </TouchableOpacity>
             ))}
@@ -685,7 +695,7 @@ export default function JournalScreen({ navigation, route }: any) {
       >
         <View style={styles.modalContainer}>
           <TouchableOpacity
-            style={styles.modalClose}
+            style={[styles.modalClose, { top: insets.top + 12 }]}
             onPress={() => setSelectedImage(null)}
           >
             <Ionicons name="close" size={32} color="#fff" />
@@ -694,7 +704,11 @@ export default function JournalScreen({ navigation, route }: any) {
             <Image
               source={{ uri: selectedImage }}
               style={styles.modalImage}
-              resizeMode="contain"
+              contentFit="contain"
+              transition={200}
+              cachePolicy="memory-disk"
+              placeholder={null}
+              priority="high"
             />
           )}
         </View>
@@ -711,7 +725,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     header: {
       backgroundColor: theme.card,
-      paddingTop: 48,
+      paddingTop: 12,
       paddingHorizontal: 16,
       paddingBottom: 10,
       borderBottomWidth: 1,
@@ -1010,7 +1024,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     modalClose: {
       position: "absolute",
-      top: 48,
+      top: 12,
       right: 16,
       zIndex: 10,
     },

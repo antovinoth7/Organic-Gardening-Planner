@@ -1,24 +1,26 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Image,
   TouchableOpacity,
   Alert,
 } from "react-native";
+import { Image } from 'expo-image';
 import { getPlant } from "../services/plants";
 import { getTaskTemplates, getSeasonalCareReminder } from "../services/tasks";
 import { getJournalEntries } from "../services/journal";
 import { Plant, TaskTemplate, JournalEntry } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import { getYearsOld } from "../utils/dateHelpers";
 
 export default function PlantDetailScreen({ route, navigation }: any) {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const insets = useSafeAreaInsets();
   const { plantId } = route.params || {};
   const [plant, setPlant] = useState<Plant | null>(null);
   const [tasks, setTasks] = useState<TaskTemplate[]>([]);
@@ -26,17 +28,7 @@ export default function PlantDetailScreen({ route, navigation }: any) {
   const [loading, setLoading] = useState(true);
   const isMountedRef = React.useRef(true);
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    if (plantId) {
-      loadData();
-    }
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, [plantId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (isMountedRef.current) {
       setLoading(true);
     }
@@ -66,7 +58,27 @@ export default function PlantDetailScreen({ route, navigation }: any) {
         setLoading(false);
       }
     }
-  };
+  }, [plantId]);
+
+  const openHarvestForm = useCallback(() => {
+    navigation.navigate("Journal", {
+      screen: "JournalForm",
+      params: {
+        initialEntryType: "harvest",
+        initialPlantId: plantId,
+      },
+    });
+  }, [navigation, plantId]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    if (plantId) {
+      loadData();
+    }
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [plantId, loadData]);
 
   if (!plantId) {
     return (
@@ -102,7 +114,7 @@ export default function PlantDetailScreen({ route, navigation }: any) {
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { top: insets.top + 12 }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
@@ -118,7 +130,14 @@ export default function PlantDetailScreen({ route, navigation }: any) {
       </View>
 
       {plant.photo_url ? (
-        <Image source={{ uri: plant.photo_url }} style={styles.photo} />
+        <Image 
+          source={{ uri: plant.photo_url }} 
+          style={styles.photo}
+          contentFit="cover"
+          transition={200}
+          cachePolicy="memory-disk"
+          priority="high"
+        />
       ) : (
         <View style={[styles.photo, styles.photoPlaceholder]}>
           <Ionicons name="leaf" size={64} color={theme.primary} />
@@ -365,9 +384,7 @@ export default function PlantDetailScreen({ route, navigation }: any) {
             <View style={styles.harvestHeader}>
               <Text style={styles.sectionTitle}>🧺 Harvest History</Text>
               {harvestEntries.length > 0 && (
-                <TouchableOpacity
-                  onPress={() => navigation.navigate("JournalForm")}
-                >
+                <TouchableOpacity onPress={openHarvestForm}>
                   <Ionicons name="add-circle" size={24} color={theme.primary} />
                 </TouchableOpacity>
               )}
@@ -494,7 +511,7 @@ export default function PlantDetailScreen({ route, navigation }: any) {
                 </Text>
                 <TouchableOpacity
                   style={styles.addHarvestButton}
-                  onPress={() => navigation.navigate("JournalForm")}
+                  onPress={openHarvestForm}
                 >
                   <Text style={styles.addHarvestButtonText}>
                     Record First Harvest
@@ -542,7 +559,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     header: {
       position: "absolute",
-      top: 48,
+      top: 12,
       left: 0,
       right: 0,
       flexDirection: "row",

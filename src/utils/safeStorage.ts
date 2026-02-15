@@ -62,7 +62,7 @@ const storageQueue = new StorageQueue();
 /**
  * Get current storage queue size for monitoring
  */
-export const getStorageQueueSize = (): number => storageQueue.getQueueSize();
+const _getStorageQueueSize = (): number => storageQueue.getQueueSize();
 
 /**
  * Safe get with error handling and retry logic

@@ -34,9 +34,13 @@ const SOIL_TYPES: SoilType[] = [
 const FERTILISERS: FertiliserType[] = [
   "compost",
   "vermicompost",
+  "cow_dung_slurry",
+  "neem_cake",
+  "panchagavya",
+  "jeevamrutham",
+  "groundnut_cake",
   "fish_emulsion",
   "seaweed",
-  "neem_cake",
   "other",
 ];
 const GROWTH_STAGES: GrowthStage[] = [

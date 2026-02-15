@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -9,9 +9,11 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import {
   DEFAULT_CHILD_LOCATIONS,
@@ -63,6 +65,14 @@ const isDuplicate = (list: string[], value: string, ignore?: string) => {
 export default function ManageLocationsScreen({ navigation }: any) {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const insets = useSafeAreaInsets();
+  const androidPickerProps =
+    Platform.OS === "android"
+      ? {
+          mode: "dropdown" as const,
+          dropdownIconColor: theme.textSecondary,
+        }
+      : {};
   const [parentLocations, setParentLocations] = useState<string[]>(
     DEFAULT_PARENT_LOCATIONS,
   );
@@ -79,7 +89,7 @@ export default function ManageLocationsScreen({ navigation }: any) {
     null,
   );
 
-  const loadAllPlants = async () => {
+  const loadAllPlants = useCallback(async () => {
     const allPlants: Plant[] = [];
     let lastDoc: any = undefined;
     const pageSize = 100;
@@ -98,9 +108,9 @@ export default function ManageLocationsScreen({ navigation }: any) {
     }
 
     return allPlants;
-  };
+  }, []);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [config, allPlants] = await Promise.all([
@@ -118,11 +128,11 @@ export default function ManageLocationsScreen({ navigation }: any) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadAllPlants]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   // Note: Data reloads automatically after save operations
   // Users navigating back from other screens don't need fresh data
@@ -443,7 +453,7 @@ export default function ManageLocationsScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
@@ -703,6 +713,7 @@ export default function ManageLocationsScreen({ navigation }: any) {
 
             <View style={styles.pickerContainer}>
               <Picker
+                {...androidPickerProps}
                 selectedValue={reassignModal?.replacement}
                 onValueChange={(value) =>
                   setReassignModal((prev) =>
@@ -761,7 +772,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: 16,
-      paddingTop: 48,
+      paddingTop: 12,
       paddingBottom: 16,
       backgroundColor: theme.backgroundSecondary,
       borderBottomWidth: 1,
@@ -1019,3 +1030,4 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontWeight: "600",
     },
   });
+

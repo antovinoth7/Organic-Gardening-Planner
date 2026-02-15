@@ -6,17 +6,19 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Image,
   Alert,
   KeyboardAvoidingView,
   Platform,
   BackHandler,
   Modal,
+  useWindowDimensions,
 } from "react-native";
+import { Image } from 'expo-image';
 import * as ImagePicker from "expo-image-picker";
 import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useFocusEffect } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   getPlant,
   createPlant,
@@ -37,10 +39,12 @@ import {
   GrowthStage,
   PlantCatalog,
   PlantCareProfiles,
+  IssueSeverity,
 } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
 import {
   calculateExpectedHarvestDate,
+  getDefaultHarvestSeason,
   getCompanionSuggestions,
   getIncompatiblePlants,
   getCommonPests,
@@ -70,7 +74,7 @@ import {
 
 const NOTES_MAX_LENGTH = 500;
 type FormMode = "quick" | "advanced";
-type FormSectionKey = "basic" | "care" | "harvest";
+type FormSectionKey = "basic" | "care" | "harvest" | "history";
 const sanitizeNumberText = (value: string) => value.replace(/[^0-9]/g, "");
 const TAMIL_NADU_HARVEST_SEASONS = [
   "Year Round",
@@ -79,11 +83,30 @@ const TAMIL_NADU_HARVEST_SEASONS = [
   "Northeast Monsoon (Oct-Dec)",
   "Cool Dry (Jan-Feb)",
 ];
+const ISSUE_SEVERITY_OPTIONS: {
+  value: IssueSeverity;
+  label: string;
+}[] = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "severe", label: "Severe" },
+];
 
 export default function PlantFormScreen({ route, navigation }: any) {
   const { plantId } = route.params || {};
   const theme = useTheme();
   const styles = createStyles(theme);
+  const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const isCompactScreen = screenWidth <= 380;
+  const androidPickerProps =
+    Platform.OS === "android"
+      ? {
+          mode: "dropdown" as const,
+          dropdownIconColor: theme.textSecondary,
+        }
+      : {};
   const [name, setName] = useState("");
   const [plantType, setPlantType] = useState<PlantType>("vegetable");
   const [plantVariety, setPlantVariety] = useState("");
@@ -131,14 +154,13 @@ export default function PlantFormScreen({ route, navigation }: any) {
   const [healthStatus, setHealthStatus] = useState<HealthStatus>("healthy");
 
   // New features
-  const [companionPlants, setCompanionPlants] = useState<string[]>([]);
   const [expectedHarvestDate, setExpectedHarvestDate] = useState("");
   const [pestDiseaseHistory, setPestDiseaseHistory] = useState<
     PestDiseaseRecord[]
   >([]);
-  const [showCompanionSuggestions, setShowCompanionSuggestions] =
-    useState(false);
   const [showPestDiseaseModal, setShowPestDiseaseModal] = useState(false);
+  const [showPestOccurredDatePicker, setShowPestOccurredDatePicker] =
+    useState(false);
   const [showPhotoSourceModal, setShowPhotoSourceModal] = useState(false);
   const [customVarietyMode, setCustomVarietyMode] = useState(false);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
@@ -148,6 +170,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
     basic: true,
     care: true,
     harvest: false,
+    history: false,
   });
   const [autoApplyCareDefaults, setAutoApplyCareDefaults] = useState(true);
   const [currentPestDisease, setCurrentPestDisease] =
@@ -155,6 +178,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
       type: "pest",
       name: "",
       occurredAt: new Date().toISOString().split("T")[0],
+      severity: "medium",
       resolved: false,
     });
 
@@ -179,6 +203,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
         initialDataLoaded.current = true;
       }, 500);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plantId]);
 
   const loadLocations = async () => {
@@ -232,11 +257,12 @@ export default function PlantFormScreen({ route, navigation }: any) {
     setSectionExpanded((prev) => ({ ...prev, [section]: expanded }));
   };
 
-  const getValidationErrors = () => {
+  const getValidationErrors = React.useCallback(() => {
     const errors: Record<FormSectionKey, string[]> = {
       basic: [],
       care: [],
       harvest: [],
+      history: [],
     };
 
     if (!name.trim()) {
@@ -278,20 +304,19 @@ export default function PlantFormScreen({ route, navigation }: any) {
     }
 
     return errors;
-  };
+  }, [
+    name,
+    plantVariety,
+    parentLocation,
+    childLocation,
+    wateringFrequency,
+    fertilisingFrequency,
+    notes,
+  ]);
 
-  const validationErrors = React.useMemo(
-    () => getValidationErrors(),
-    [
-      name,
-      plantVariety,
-      parentLocation,
-      childLocation,
-      wateringFrequency,
-      fertilisingFrequency,
-      notes,
-    ]
-  );
+  const validationErrors = React.useMemo(() => getValidationErrors(), [
+    getValidationErrors,
+  ]);
 
   // Detect form changes
   useEffect(() => {
@@ -324,7 +349,6 @@ export default function PlantFormScreen({ route, navigation }: any) {
     preferredFertiliser,
     mulchingUsed,
     healthStatus,
-    companionPlants,
     expectedHarvestDate,
     pestDiseaseHistory,
     growthStage,
@@ -345,16 +369,6 @@ export default function PlantFormScreen({ route, navigation }: any) {
       }
     }
   }, [plantVariety, plantingDate, plantType]);
-
-  // Update companion plant suggestions when plant variety changes
-  useEffect(() => {
-    if (plantVariety) {
-      const suggestions = getCompanionSuggestions(plantVariety);
-      if (suggestions.length > 0 && companionPlants.length === 0) {
-        setShowCompanionSuggestions(true);
-      }
-    }
-  }, [plantVariety]);
 
   // Reset auto-suggest flag when plant variety changes
   useEffect(() => {
@@ -397,9 +411,17 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
         // Phase 1: Growth
         setGrowthStage(profile.initialGrowthStage);
+
+        const defaultHarvestSeason = getDefaultHarvestSeason(
+          plantVariety,
+          plantType
+        );
+        if (defaultHarvestSeason) {
+          setHarvestSeason(defaultHarvestSeason);
+        }
       }
     }
-  }, [plantVariety, plantId, plantType, autoApplyCareDefaults, careProfilesLoaded]);
+  }, [plantVariety, plantId, plantType, autoApplyCareDefaults, careProfilesLoaded, plantCareProfiles]);
 
   // Combine parent and child locations
   useEffect(() => {
@@ -417,6 +439,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
         basic: true,
         care: true,
         harvest: false,
+        history: false,
       }));
     }
   }, [formMode]);
@@ -450,6 +473,29 @@ export default function PlantFormScreen({ route, navigation }: any) {
     );
   }, [plantCatalog, plantType, plantVariety]);
 
+  const basicFieldCount = React.useMemo(() => {
+    // Always shown in Basic Information
+    // 1) Photo, 2) Plant Name, 3) Plant Category, 4) Specific Plant, 5) Main Location
+    let count = 5;
+
+    // Direction/section picker appears after main location is selected
+    if (parentLocation !== "") {
+      count += 1;
+    }
+
+    if (formMode === "advanced") {
+      // Variety control + Planting Date + Landmarks
+      count += 3;
+
+      // Extra custom variety input appears in advanced mode when "Other" is selected
+      if (varietySuggestions.length > 0 && customVarietyMode) {
+        count += 1;
+      }
+    }
+
+    return count;
+  }, [formMode, parentLocation, varietySuggestions.length, customVarietyMode]);
+
   const harvestSeasonOptions = React.useMemo(() => {
     if (!harvestSeason) return TAMIL_NADU_HARVEST_SEASONS;
     if (TAMIL_NADU_HARVEST_SEASONS.includes(harvestSeason)) {
@@ -457,6 +503,14 @@ export default function PlantFormScreen({ route, navigation }: any) {
     }
     return [harvestSeason, ...TAMIL_NADU_HARVEST_SEASONS];
   }, [harvestSeason]);
+
+  const harvestSectionFieldCount = React.useMemo(() => {
+    return plantType === "fruit_tree" ? 4 : 2;
+  }, [plantType]);
+
+  const pestHistorySectionFieldCount = React.useMemo(() => {
+    return Math.max(1, pestDiseaseHistory.length);
+  }, [pestDiseaseHistory.length]);
 
   // Handle back button press
   useEffect(() => {
@@ -487,6 +541,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
       backHandler.remove();
       unsubscribe();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasUnsavedChanges, navigation]);
 
   const handleBackPress = () => {
@@ -570,8 +625,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
         setMulchingUsed(plant.mulching_used || false);
         setHealthStatus(plant.health_status || "healthy");
 
-        // Load companion plants & pest history
-        setCompanionPlants(plant.companion_plants || []);
+        // Load expected harvest & pest history
         setExpectedHarvestDate(plant.expected_harvest_date || "");
         setPestDiseaseHistory(plant.pest_disease_history || []);
 
@@ -598,8 +652,8 @@ export default function PlantFormScreen({ route, navigation }: any) {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
+      mediaTypes: "images",
+      allowsEditing: Platform.OS === "ios",
       aspect: [1, 1],
       quality: 0.8,
     });
@@ -618,7 +672,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
     }
 
     const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: "images" as any, // Use 'images' for new API
+      mediaTypes: "images",
       allowsEditing: false,
       quality: 0.8,
       cameraType: ImagePicker.CameraType.back,
@@ -636,7 +690,12 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
   const handleSave = async () => {
     setShowValidationErrors(true);
-    const sectionOrder: FormSectionKey[] = ["basic", "care", "harvest"];
+    const sectionOrder: FormSectionKey[] = [
+      "basic",
+      "care",
+      "harvest",
+      "history",
+    ];
     const firstErrorSection = sectionOrder.find(
       (section) => validationErrors[section].length > 0
     );
@@ -678,7 +737,8 @@ export default function PlantFormScreen({ route, navigation }: any) {
         space_type: spaceType,
         location: combinedLocation,
         bed_name: spaceType === "bed" ? bedName.trim() || null : null,
-        pot_size: spaceType === "pot" ? potSize.trim() || null : null,
+        pot_size:
+          spaceType === "pot" ? sanitizeNumberText(potSize) || null : null,
         variety: variety.trim() || null,
         landmarks: landmarks.trim() || null,
         planting_date: plantingDate.trim() || null,
@@ -694,8 +754,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
         preferred_fertiliser: preferredFertiliser,
         mulching_used: mulchingUsed,
         health_status: healthStatus,
-        // Companion plants & pest history
-        companion_plants: companionPlants.length > 0 ? companionPlants : null,
+        // Pest history and expected harvest info
         expected_harvest_date: expectedHarvestDate || null,
         pest_disease_history:
           pestDiseaseHistory.length > 0 ? pestDiseaseHistory : null,
@@ -743,7 +802,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="close" size={28} color={theme.text} />
         </TouchableOpacity>
@@ -802,7 +861,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
         <CollapsibleSection
           title="Basic Information"
           icon="information-circle"
-          fieldCount={8}
+          fieldCount={basicFieldCount}
           defaultExpanded={true}
           expanded={sectionExpanded.basic}
           onExpandedChange={(expanded) =>
@@ -812,7 +871,13 @@ export default function PlantFormScreen({ route, navigation }: any) {
         >
           <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
             {photoUri ? (
-              <Image source={{ uri: photoUri }} style={styles.photo} />
+              <Image 
+                source={{ uri: photoUri }} 
+                style={styles.photo}
+                contentFit="cover"
+                transition={200}
+                cachePolicy="memory-disk"
+              />
             ) : (
               <View style={styles.photoPlaceholder}>
                 <Ionicons name="camera" size={32} color="#999" />
@@ -832,6 +897,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
           <Text style={styles.label}>Plant Category *</Text>
           <View style={styles.pickerContainer}>
             <Picker
+              {...androidPickerProps}
               selectedValue={plantType}
               onValueChange={(value) => {
                 setPlantType(value);
@@ -855,6 +921,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
           <Text style={styles.label}>Specific Plant *</Text>
           <View style={styles.pickerContainer}>
             <Picker
+              {...androidPickerProps}
               selectedValue={plantVariety}
               onValueChange={setPlantVariety}
               style={styles.picker}
@@ -882,6 +949,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
                 <Text style={styles.label}>Variety</Text>
                 <View style={styles.pickerContainer}>
                   <Picker
+                    {...androidPickerProps}
                     selectedValue={customVarietyMode ? "__custom__" : variety}
                     onValueChange={(value) => {
                       if (value === "__custom__") {
@@ -970,6 +1038,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
           <Text style={styles.label}>Location *</Text>
           <View style={styles.pickerContainer}>
             <Picker
+              {...androidPickerProps}
               selectedValue={parentLocation}
               onValueChange={(value) => {
                 setParentLocation(value);
@@ -990,6 +1059,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
               <Text style={styles.label}>Direction / Section *</Text>
               <View style={styles.pickerContainer}>
                 <Picker
+                  {...androidPickerProps}
                   selectedValue={childLocation}
                   onValueChange={setChildLocation}
                   style={styles.picker}
@@ -1027,7 +1097,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
         <CollapsibleSection
           title="Care & Growing Conditions"
           icon="leaf"
-          fieldCount={formMode === "quick" ? 2 : 13}
+          fieldCount={formMode === "quick" ? 2 : 14}
           defaultExpanded={false}
           expanded={sectionExpanded.care}
           onExpandedChange={(expanded) =>
@@ -1039,15 +1109,56 @@ export default function PlantFormScreen({ route, navigation }: any) {
             <>
               <Text style={styles.sectionHeader}>Smart Care Defaults</Text>
               <TouchableOpacity
-                style={styles.checkboxContainer}
+                style={[
+                  styles.smartDefaultsToggle,
+                  autoApplyCareDefaults && styles.smartDefaultsToggleActive,
+                ]}
                 onPress={() => setAutoApplyCareDefaults(!autoApplyCareDefaults)}
+                activeOpacity={0.85}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: autoApplyCareDefaults }}
               >
-                <Ionicons
-                  name={autoApplyCareDefaults ? "checkbox" : "square-outline"}
-                  size={24}
-                  color={autoApplyCareDefaults ? "#2e7d32" : "#999"}
-                />
-                <Text style={styles.checkboxLabel}>Apply smart care defaults</Text>
+                <View style={styles.smartDefaultsLeft}>
+                  <View
+                    style={[
+                      styles.smartDefaultsIconWrap,
+                      autoApplyCareDefaults && styles.smartDefaultsIconWrapActive,
+                    ]}
+                  >
+                    <Ionicons
+                      name={autoApplyCareDefaults ? "sparkles" : "leaf-outline"}
+                      size={18}
+                      color={
+                        autoApplyCareDefaults ? theme.primary : theme.textSecondary
+                      }
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.smartDefaultsLabel,
+                      isCompactScreen && styles.smartDefaultsLabelCompact,
+                      autoApplyCareDefaults && styles.smartDefaultsLabelActive,
+                    ]}
+                    numberOfLines={2}
+                  >
+                    Apply smart care defaults
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.smartDefaultsSwitchTrack,
+                    autoApplyCareDefaults &&
+                      styles.smartDefaultsSwitchTrackActive,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.smartDefaultsSwitchThumb,
+                      autoApplyCareDefaults &&
+                        styles.smartDefaultsSwitchThumbActive,
+                    ]}
+                  />
+                </View>
               </TouchableOpacity>
               <Text style={styles.helperText}>
                 Auto-fills watering, fertilising, pruning, and sunlight settings.
@@ -1058,22 +1169,30 @@ export default function PlantFormScreen({ route, navigation }: any) {
             <>
               <Text style={styles.sectionHeader}>🪴 Growing Space</Text>
 
-              <View style={styles.spaceTypeContainer}>
+              <View
+                style={[
+                  styles.spaceTypeContainer,
+                  isCompactScreen && styles.spaceTypeContainerCompact,
+                ]}
+              >
                 <TouchableOpacity
                   style={[
                     styles.spaceTypeButton,
+                    isCompactScreen && styles.spaceTypeButtonCompact,
                     spaceType === "ground" && styles.spaceTypeActive,
                   ]}
                   onPress={() => setSpaceType("ground")}
                 >
                   <Ionicons
                     name="earth"
-                    size={20}
+                    size={isCompactScreen ? 18 : 20}
                     color={spaceType === "ground" ? "#2e7d32" : "#999"}
                   />
                   <Text
+                    numberOfLines={1}
                     style={[
                       styles.spaceTypeText,
+                      isCompactScreen && styles.spaceTypeTextCompact,
                       spaceType === "ground" && styles.spaceTypeTextActive,
                     ]}
                   >
@@ -1083,18 +1202,21 @@ export default function PlantFormScreen({ route, navigation }: any) {
                 <TouchableOpacity
                   style={[
                     styles.spaceTypeButton,
+                    isCompactScreen && styles.spaceTypeButtonCompact,
                     spaceType === "bed" && styles.spaceTypeActive,
                   ]}
                   onPress={() => setSpaceType("bed")}
                 >
                   <Ionicons
                     name="apps"
-                    size={20}
+                    size={isCompactScreen ? 18 : 20}
                     color={spaceType === "bed" ? "#2e7d32" : "#999"}
                   />
                   <Text
+                    numberOfLines={1}
                     style={[
                       styles.spaceTypeText,
+                      isCompactScreen && styles.spaceTypeTextCompact,
                       spaceType === "bed" && styles.spaceTypeTextActive,
                     ]}
                   >
@@ -1104,18 +1226,21 @@ export default function PlantFormScreen({ route, navigation }: any) {
                 <TouchableOpacity
                   style={[
                     styles.spaceTypeButton,
+                    isCompactScreen && styles.spaceTypeButtonCompact,
                     spaceType === "pot" && styles.spaceTypeActive,
                   ]}
                   onPress={() => setSpaceType("pot")}
                 >
                   <Ionicons
                     name="cube-outline"
-                    size={20}
+                    size={isCompactScreen ? 18 : 20}
                     color={spaceType === "pot" ? "#2e7d32" : "#999"}
                   />
                   <Text
+                    numberOfLines={1}
                     style={[
                       styles.spaceTypeText,
+                      isCompactScreen && styles.spaceTypeTextCompact,
                       spaceType === "pot" && styles.spaceTypeTextActive,
                     ]}
                   >
@@ -1127,11 +1252,10 @@ export default function PlantFormScreen({ route, navigation }: any) {
               {spaceType === "pot" && (
                 <TextInput
                   style={styles.input}
-                  placeholder="Pot Size (e.g., 12 inch)"
+                  placeholder="Pot Size in inches (e.g., 12)"
                   value={potSize}
-                  onChangeText={(text) =>
-                    setPotSize(sanitizeAlphaNumericSpaces(text))
-                  }
+                  onChangeText={(text) => setPotSize(sanitizeNumberText(text))}
+                  keyboardType="numeric"
                   placeholderTextColor={theme.inputPlaceholder}
                 />
               )}
@@ -1152,6 +1276,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
               <Text style={styles.label}>Sunlight Level *</Text>
               <View style={styles.pickerContainer}>
                 <Picker
+                  {...androidPickerProps}
                   selectedValue={sunlight}
                   onValueChange={setSunlight}
                   style={styles.picker}
@@ -1169,6 +1294,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
               <Text style={styles.label}>Soil Type *</Text>
               <View style={styles.pickerContainer}>
                 <Picker
+                  {...androidPickerProps}
                   selectedValue={soilType}
                   onValueChange={setSoilType}
                   style={styles.picker}
@@ -1184,6 +1310,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
               <Text style={styles.label}>Water Requirement *</Text>
               <View style={styles.pickerContainer}>
                 <Picker
+                  {...androidPickerProps}
                   selectedValue={waterRequirement}
                   onValueChange={setWaterRequirement}
                   style={styles.picker}
@@ -1232,6 +1359,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
               <Text style={styles.label}>Preferred Organic Fertiliser</Text>
               <View style={styles.pickerContainer}>
                 <Picker
+                  {...androidPickerProps}
                   selectedValue={preferredFertiliser}
                   onValueChange={setPreferredFertiliser}
                   style={styles.picker}
@@ -1239,23 +1367,62 @@ export default function PlantFormScreen({ route, navigation }: any) {
                 >
                   <Picker.Item label="Compost" value="compost" />
                   <Picker.Item label="Vermicompost" value="vermicompost" />
+                  <Picker.Item label="Cow Dung Slurry" value="cow_dung_slurry" />
+                  <Picker.Item label="Neem Cake" value="neem_cake" />
+                  <Picker.Item label="Panchagavya" value="panchagavya" />
+                  <Picker.Item label="Jeevamrutham" value="jeevamrutham" />
+                  <Picker.Item label="Groundnut Cake" value="groundnut_cake" />
                   <Picker.Item label="Fish Emulsion" value="fish_emulsion" />
                   <Picker.Item label="Seaweed Extract" value="seaweed" />
-                  <Picker.Item label="Neem Cake" value="neem_cake" />
                   <Picker.Item label="Other" value="other" />
                 </Picker>
               </View>
 
               <TouchableOpacity
-                style={styles.checkboxContainer}
+                style={[
+                  styles.settingToggle,
+                  mulchingUsed && styles.settingToggleActive,
+                ]}
                 onPress={() => setMulchingUsed(!mulchingUsed)}
+                activeOpacity={0.85}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: mulchingUsed }}
               >
-                <Ionicons
-                  name={mulchingUsed ? "checkbox" : "square-outline"}
-                  size={24}
-                  color={mulchingUsed ? "#2e7d32" : "#999"}
-                />
-                <Text style={styles.checkboxLabel}>Mulching Used</Text>
+                <View style={styles.settingToggleLeft}>
+                  <View
+                    style={[
+                      styles.settingToggleIconWrap,
+                      mulchingUsed && styles.settingToggleIconWrapActive,
+                    ]}
+                  >
+                    <Ionicons
+                      name={mulchingUsed ? "leaf" : "leaf-outline"}
+                      size={18}
+                      color={mulchingUsed ? theme.primary : theme.textSecondary}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.settingToggleLabel,
+                      mulchingUsed && styles.settingToggleLabelActive,
+                    ]}
+                  >
+                    Mulching Used
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.settingSwitchTrack,
+                    mulchingUsed && styles.settingSwitchTrackActive,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.settingSwitchThumb,
+                      mulchingUsed && styles.settingSwitchThumbActive,
+                    ]}
+                  />
+                </View>
               </TouchableOpacity>
 
               <Text style={styles.sectionHeader}>🌿 Plant Status & Growth</Text>
@@ -1263,6 +1430,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
               <Text style={styles.label}>Plant Health Status</Text>
               <View style={styles.pickerContainer}>
                 <Picker
+                  {...androidPickerProps}
                   selectedValue={healthStatus}
                   onValueChange={setHealthStatus}
                   style={styles.picker}
@@ -1278,6 +1446,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
               <Text style={styles.label}>Growth Stage</Text>
               <View style={styles.pickerContainer}>
                 <Picker
+                  {...androidPickerProps}
                   selectedValue={growthStage}
                   onValueChange={setGrowthStage}
                   style={styles.picker}
@@ -1322,12 +1491,12 @@ export default function PlantFormScreen({ route, navigation }: any) {
           )}
         </CollapsibleSection>
 
-        {/* Harvest Information & Companions */}
+        {/* Harvest Information */}
         {formMode === "advanced" && (
           <CollapsibleSection
-            title="Harvest & Companions"
+            title="Harvest"
             icon="calendar"
-            fieldCount={plantType === "fruit_tree" ? 3 : 1}
+            fieldCount={harvestSectionFieldCount}
             defaultExpanded={false}
             expanded={sectionExpanded.harvest}
             onExpandedChange={(expanded) =>
@@ -1337,20 +1506,21 @@ export default function PlantFormScreen({ route, navigation }: any) {
               showValidationErrors && validationErrors.harvest.length > 0
             }
           >
-          <Text style={styles.label}>Harvest Season</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={harvestSeason}
-              onValueChange={setHarvestSeason}
-              style={styles.picker}
-              itemStyle={styles.pickerItem}
-            >
-              <Picker.Item label="Select season" value="" color="#999" />
-              {harvestSeasonOptions.map((season) => (
-                <Picker.Item key={season} label={season} value={season} />
-              ))}
-            </Picker>
-          </View>
+            <Text style={styles.label}>Harvest Season</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                {...androidPickerProps}
+                selectedValue={harvestSeason}
+                onValueChange={setHarvestSeason}
+                style={styles.picker}
+                itemStyle={styles.pickerItem}
+              >
+                <Picker.Item label="Select season" value="" color="#999" />
+                {harvestSeasonOptions.map((season) => (
+                  <Picker.Item key={season} label={season} value={season} />
+                ))}
+              </Picker>
+            </View>
 
           {plantType === "fruit_tree" && (
             <>
@@ -1431,108 +1601,26 @@ export default function PlantFormScreen({ route, navigation }: any) {
               </Text>
             </View>
           )}
+          </CollapsibleSection>
+        )}
 
-          {/* Companion Planting Suggestions */}
-          {plantVariety && getCompanionSuggestions(plantVariety).length > 0 && (
-            <View style={styles.infoCard}>
-              <View style={styles.infoCardHeader}>
-                <Ionicons name="leaf" size={20} color="#4CAF50" />
-                <Text style={styles.infoCardTitle}>Companion Plants</Text>
-                <TouchableOpacity
-                  onPress={() =>
-                    setShowCompanionSuggestions(!showCompanionSuggestions)
-                  }
-                >
-                  <Ionicons
-                    name={
-                      showCompanionSuggestions ? "chevron-up" : "chevron-down"
-                    }
-                    size={20}
-                    color="#666"
-                  />
-                </TouchableOpacity>
-              </View>
-              {showCompanionSuggestions && (
-                <>
-                  <Text style={styles.infoCardSubtext}>
-                    Plants that grow well with {plantVariety}:
-                  </Text>
-                  <View style={styles.chipContainer}>
-                    {getCompanionSuggestions(plantVariety).map(
-                      (companion, index) => (
-                        <TouchableOpacity
-                          key={index}
-                          style={[
-                            styles.companionChip,
-                            companionPlants.includes(companion) &&
-                              styles.companionChipSelected,
-                          ]}
-                          onPress={() => {
-                            if (companionPlants.includes(companion)) {
-                              setCompanionPlants(
-                                companionPlants.filter((c) => c !== companion)
-                              );
-                            } else {
-                              setCompanionPlants([
-                                ...companionPlants,
-                                companion,
-                              ]);
-                            }
-                          }}
-                        >
-                          <Text
-                            style={[
-                              styles.companionChipText,
-                              companionPlants.includes(companion) &&
-                                styles.companionChipTextSelected,
-                            ]}
-                          >
-                            {companion}
-                          </Text>
-                          {companionPlants.includes(companion) && (
-                            <Ionicons
-                              name="checkmark-circle"
-                              size={16}
-                              color="#2e7d32"
-                            />
-                          )}
-                        </TouchableOpacity>
-                      )
-                    )}
-                  </View>
-                </>
-              )}
-            </View>
-          )}
-
-          {plantVariety && getIncompatiblePlants(plantVariety).length > 0 && (
-            <View style={styles.infoCard}>
-              <View style={styles.infoCardHeader}>
-                <Ionicons name="warning" size={20} color="#f57c00" />
-                <Text style={styles.infoCardTitle}>Avoid Planting With</Text>
-              </View>
-              <Text style={styles.infoCardSubtext}>
-                These plants tend to compete with {plantVariety}:
-              </Text>
-              <View style={styles.chipContainer}>
-                {getIncompatiblePlants(plantVariety).map(
-                  (incompatible, index) => (
-                    <View key={index} style={styles.incompatibleChip}>
-                      <Text style={styles.incompatibleChipText}>
-                        {incompatible}
-                      </Text>
-                    </View>
-                  )
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* Pest & Disease History */}
+        {/* Pest & Disease History */}
+        {formMode === "advanced" && (
+          <CollapsibleSection
+            title="Pest & Disease History"
+            icon="bug"
+            fieldCount={pestHistorySectionFieldCount}
+            defaultExpanded={false}
+            expanded={sectionExpanded.history}
+            onExpandedChange={(expanded) =>
+              setSectionExpandedState("history", expanded)
+            }
+            hasError={
+              showValidationErrors && validationErrors.history.length > 0
+            }
+          >
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionHeaderText}>
-              🐛 Pest & Disease History
-            </Text>
+            <Text style={styles.sectionHeaderText}>Records</Text>
             <TouchableOpacity
               style={styles.addPestButton}
               onPress={() => {
@@ -1540,8 +1628,10 @@ export default function PlantFormScreen({ route, navigation }: any) {
                   type: "pest",
                   name: "",
                   occurredAt: new Date().toISOString().split("T")[0],
+                  severity: "medium",
                   resolved: false,
                 });
+                setShowPestOccurredDatePicker(false);
                 setShowPestDiseaseModal(true);
               }}
             >
@@ -1569,6 +1659,17 @@ export default function PlantFormScreen({ route, navigation }: any) {
                   <Text style={styles.pestDiseaseDate}>
                     Occurred: {new Date(record.occurredAt).toLocaleDateString()}
                   </Text>
+                  {(record.severity || record.affectedPart) && (
+                    <Text style={styles.pestDiseaseMetaText}>
+                      {record.severity
+                        ? `Severity: ${record.severity.toUpperCase()}`
+                        : ""}
+                      {record.severity && record.affectedPart ? "  |  " : ""}
+                      {record.affectedPart
+                        ? `Affected Part: ${record.affectedPart}`
+                        : ""}
+                    </Text>
+                  )}
                   {record.treatment && (
                     <Text style={styles.pestDiseaseTreatment}>
                       Treatment: {record.treatment}
@@ -1613,6 +1714,46 @@ export default function PlantFormScreen({ route, navigation }: any) {
             <Text style={styles.noteCounter}>
               {notes.length}/{NOTES_MAX_LENGTH}
             </Text>
+
+            {plantVariety && getCompanionSuggestions(plantVariety).length > 0 && (
+              <View style={styles.infoCard}>
+                <View style={styles.infoCardHeader}>
+                  <Ionicons name="leaf" size={20} color="#4CAF50" />
+                  <Text style={styles.infoCardTitle}>Companion Plants</Text>
+                </View>
+                <Text style={styles.infoCardSubtext}>
+                  Good companion plants for {plantVariety}:
+                </Text>
+                <View style={styles.chipContainer}>
+                  {getCompanionSuggestions(plantVariety).map((companion) => (
+                    <View key={companion} style={styles.companionChip}>
+                      <Text style={styles.companionChipText}>{companion}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {plantVariety && getIncompatiblePlants(plantVariety).length > 0 && (
+              <View style={styles.infoCard}>
+                <View style={styles.infoCardHeader}>
+                  <Ionicons name="warning" size={20} color="#f57c00" />
+                  <Text style={styles.infoCardTitle}>Avoid Planting With</Text>
+                </View>
+                <Text style={styles.infoCardSubtext}>
+                  These plants can compete with {plantVariety}:
+                </Text>
+                <View style={styles.chipContainer}>
+                  {getIncompatiblePlants(plantVariety).map((incompatible) => (
+                    <View key={incompatible} style={styles.incompatibleChip}>
+                      <Text style={styles.incompatibleChipText}>
+                        {incompatible}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
           </>
         )}
 
@@ -1621,14 +1762,20 @@ export default function PlantFormScreen({ route, navigation }: any) {
           visible={showPestDiseaseModal}
           animationType="slide"
           transparent={true}
-          onRequestClose={() => setShowPestDiseaseModal(false)}
+          onRequestClose={() => {
+            setShowPestOccurredDatePicker(false);
+            setShowPestDiseaseModal(false);
+          }}
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Add Pest/Disease Record</Text>
                 <TouchableOpacity
-                  onPress={() => setShowPestDiseaseModal(false)}
+                  onPress={() => {
+                    setShowPestOccurredDatePicker(false);
+                    setShowPestDiseaseModal(false);
+                  }}
                 >
                   <Ionicons name="close" size={24} color="#333" />
                 </TouchableOpacity>
@@ -1636,6 +1783,9 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
               <ScrollView
                 style={styles.modalScrollView}
+                contentContainerStyle={{
+                  paddingBottom: Math.max(insets.bottom, 12),
+                }}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
               >
@@ -1709,14 +1859,17 @@ export default function PlantFormScreen({ route, navigation }: any) {
                   Common{" "}
                   {currentPestDisease.type === "pest" ? "Pests" : "Diseases"}:
                 </Text>
+                <Text style={styles.helperText}>
+                  Suggestions are tuned for Tamil Nadu and Kanyakumari crops.
+                </Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   style={styles.suggestionsScroll}
                 >
                   {(currentPestDisease.type === "pest"
-                    ? getCommonPests(plantType)
-                    : getCommonDiseases(plantType)
+                    ? getCommonPests(plantType, plantVariety)
+                    : getCommonDiseases(plantType, plantVariety)
                   ).map((item, index) => (
                     <TouchableOpacity
                       key={index}
@@ -1733,6 +1886,78 @@ export default function PlantFormScreen({ route, navigation }: any) {
                   ))}
                 </ScrollView>
 
+                <TouchableOpacity
+                  style={styles.dateButton}
+                  onPress={() => setShowPestOccurredDatePicker(true)}
+                >
+                  <Text
+                    style={
+                      currentPestDisease.occurredAt
+                        ? styles.dateText
+                        : styles.datePlaceholder
+                    }
+                  >
+                    {currentPestDisease.occurredAt || "Occurred Date"}
+                  </Text>
+                  <Ionicons name="calendar-outline" size={20} color="#666" />
+                </TouchableOpacity>
+                {showPestOccurredDatePicker && (
+                  <DateTimePicker
+                    value={
+                      currentPestDisease.occurredAt
+                        ? new Date(currentPestDisease.occurredAt)
+                        : new Date()
+                    }
+                    mode="date"
+                    display="default"
+                    onChange={(_, selectedDate) => {
+                      setShowPestOccurredDatePicker(false);
+                      if (selectedDate) {
+                        setCurrentPestDisease({
+                          ...currentPestDisease,
+                          occurredAt: selectedDate.toISOString().split("T")[0],
+                        });
+                      }
+                    }}
+                  />
+                )}
+
+                <Text style={styles.label}>Severity</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    {...androidPickerProps}
+                    selectedValue={currentPestDisease.severity || "medium"}
+                    onValueChange={(value) =>
+                      setCurrentPestDisease({
+                        ...currentPestDisease,
+                        severity: value as IssueSeverity,
+                      })
+                    }
+                    style={styles.picker}
+                  >
+                    {ISSUE_SEVERITY_OPTIONS.map((option) => (
+                      <Picker.Item
+                        key={option.value}
+                        label={option.label}
+                        value={option.value}
+                      />
+                    ))}
+                  </Picker>
+                </View>
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Affected Part (Leaf/Stem/Fruit/Root)"
+                  value={currentPestDisease.affectedPart || ""}
+                  onChangeText={(text) =>
+                    setCurrentPestDisease({
+                      ...currentPestDisease,
+                      affectedPart: sanitizeAlphaNumericSpaces(text),
+                    })
+                  }
+                  placeholderTextColor={theme.inputPlaceholder}
+                />
+
                 <TextInput
                   style={styles.input}
                   placeholder={`${
@@ -1745,7 +1970,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
                       name: sanitizeAlphaNumericSpaces(text),
                     })
                   }
-                  placeholderTextColor="#999"
+                  placeholderTextColor={theme.inputPlaceholder}
                 />
 
                 <TextInput
@@ -1758,7 +1983,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
                       treatment: sanitizeAlphaNumericSpaces(text),
                     })
                   }
-                  placeholderTextColor="#999"
+                  placeholderTextColor={theme.inputPlaceholder}
                 />
 
                 <TextInput
@@ -1773,11 +1998,14 @@ export default function PlantFormScreen({ route, navigation }: any) {
                   }
                   multiline
                   numberOfLines={3}
-                  placeholderTextColor="#999"
+                  placeholderTextColor={theme.inputPlaceholder}
                 />
 
                 <TouchableOpacity
-                  style={styles.checkboxContainer}
+                  style={[
+                    styles.settingToggle,
+                    currentPestDisease.resolved && styles.settingToggleActive,
+                  ]}
                   onPress={() =>
                     setCurrentPestDisease({
                       ...currentPestDisease,
@@ -1787,17 +2015,57 @@ export default function PlantFormScreen({ route, navigation }: any) {
                         : undefined,
                     })
                   }
+                  activeOpacity={0.85}
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: currentPestDisease.resolved }}
                 >
-                  <Ionicons
-                    name={
-                      currentPestDisease.resolved
-                        ? "checkbox"
-                        : "square-outline"
-                    }
-                    size={24}
-                    color={currentPestDisease.resolved ? "#2e7d32" : "#999"}
-                  />
-                  <Text style={styles.checkboxLabel}>Resolved</Text>
+                  <View style={styles.settingToggleLeft}>
+                    <View
+                      style={[
+                        styles.settingToggleIconWrap,
+                        currentPestDisease.resolved &&
+                          styles.settingToggleIconWrapActive,
+                      ]}
+                    >
+                      <Ionicons
+                        name={
+                          currentPestDisease.resolved
+                            ? "checkmark-done-circle"
+                            : "time-outline"
+                        }
+                        size={18}
+                        color={
+                          currentPestDisease.resolved
+                            ? theme.primary
+                            : theme.textSecondary
+                        }
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        styles.settingToggleLabel,
+                        currentPestDisease.resolved &&
+                          styles.settingToggleLabelActive,
+                      ]}
+                    >
+                      Resolved
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.settingSwitchTrack,
+                      currentPestDisease.resolved &&
+                        styles.settingSwitchTrackActive,
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.settingSwitchThumb,
+                        currentPestDisease.resolved &&
+                          styles.settingSwitchThumbActive,
+                      ]}
+                    />
+                  </View>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1808,6 +2076,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
                         ...pestDiseaseHistory,
                         { ...currentPestDisease, id: Date.now().toString() },
                       ]);
+                      setShowPestOccurredDatePicker(false);
                       setShowPestDiseaseModal(false);
                     } else {
                       Alert.alert("Validation Error", "Please enter a name");
@@ -1843,7 +2112,7 @@ const createStyles = (theme: any) =>
       justifyContent: "space-between",
       alignItems: "center",
       padding: 16,
-      paddingTop: 48,
+      paddingTop: 12,
       backgroundColor: theme.backgroundSecondary,
       borderBottomWidth: 1,
       borderBottomColor: theme.borderLight,
@@ -1974,6 +2243,9 @@ const createStyles = (theme: any) =>
       marginBottom: 12,
       gap: 12,
     },
+    spaceTypeContainerCompact: {
+      gap: 8,
+    },
     spaceTypeButton: {
       flex: 1,
       flexDirection: "row",
@@ -1984,6 +2256,11 @@ const createStyles = (theme: any) =>
       borderRadius: 12,
       borderWidth: 1,
       borderColor: theme.border,
+      minWidth: 0,
+    },
+    spaceTypeButtonCompact: {
+      paddingVertical: 12,
+      paddingHorizontal: 8,
     },
     spaceTypeActive: {
       borderColor: theme.primary,
@@ -1993,6 +2270,11 @@ const createStyles = (theme: any) =>
       fontSize: 16,
       color: theme.textTertiary,
       marginLeft: 8,
+      flexShrink: 1,
+    },
+    spaceTypeTextCompact: {
+      fontSize: 14,
+      marginLeft: 6,
     },
     spaceTypeTextActive: {
       color: theme.primary,
@@ -2061,12 +2343,149 @@ const createStyles = (theme: any) =>
       color: theme.text,
       marginLeft: 12,
     },
+    settingToggle: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: theme.backgroundSecondary,
+      padding: 14,
+      borderRadius: 14,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    settingToggleActive: {
+      borderColor: theme.primary,
+      backgroundColor: theme.primaryLight,
+    },
+    settingToggleLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      flex: 1,
+      minWidth: 0,
+    },
+    settingToggleIconWrap: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.background,
+      borderWidth: 1,
+      borderColor: theme.border,
+      marginRight: 10,
+    },
+    settingToggleIconWrapActive: {
+      borderColor: theme.primary,
+      backgroundColor: theme.backgroundSecondary,
+    },
+    settingToggleLabel: {
+      fontSize: 16,
+      color: theme.text,
+      fontWeight: "600",
+      flexShrink: 1,
+    },
+    settingToggleLabelActive: {
+      color: theme.primary,
+    },
+    settingSwitchTrack: {
+      width: 44,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: theme.border,
+      justifyContent: "center",
+      paddingHorizontal: 3,
+      marginLeft: 12,
+    },
+    settingSwitchTrackActive: {
+      backgroundColor: theme.primary,
+    },
+    settingSwitchThumb: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: theme.backgroundSecondary,
+      alignSelf: "flex-start",
+    },
+    settingSwitchThumbActive: {
+      alignSelf: "flex-end",
+    },
+    smartDefaultsToggle: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: theme.backgroundSecondary,
+      padding: 14,
+      borderRadius: 14,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    smartDefaultsToggleActive: {
+      borderColor: theme.primary,
+      backgroundColor: theme.primaryLight,
+    },
+    smartDefaultsLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      flex: 1,
+      minWidth: 0,
+    },
+    smartDefaultsIconWrap: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.background,
+      borderWidth: 1,
+      borderColor: theme.border,
+      marginRight: 10,
+    },
+    smartDefaultsIconWrapActive: {
+      borderColor: theme.primary,
+      backgroundColor: theme.backgroundSecondary,
+    },
+    smartDefaultsLabel: {
+      fontSize: 16,
+      color: theme.text,
+      fontWeight: "600",
+      flexShrink: 1,
+    },
+    smartDefaultsLabelCompact: {
+      fontSize: 15,
+    },
+    smartDefaultsLabelActive: {
+      color: theme.primary,
+    },
+    smartDefaultsSwitchTrack: {
+      width: 44,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: theme.border,
+      justifyContent: "center",
+      paddingHorizontal: 3,
+      marginLeft: 12,
+    },
+    smartDefaultsSwitchTrackActive: {
+      backgroundColor: theme.primary,
+    },
+    smartDefaultsSwitchThumb: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: theme.backgroundSecondary,
+      alignSelf: "flex-start",
+    },
+    smartDefaultsSwitchThumbActive: {
+      alignSelf: "flex-end",
+    },
     helperText: {
       fontSize: 12,
       color: theme.textTertiary,
-      marginTop: -4,
+      marginTop: -2,
       marginBottom: 12,
-      marginLeft: 44,
+      marginLeft: 4,
     },
     infoCard: {
       backgroundColor: theme.backgroundSecondary,
@@ -2226,6 +2645,12 @@ const createStyles = (theme: any) =>
       color: theme.textSecondary,
       marginBottom: 4,
     },
+    pestDiseaseMetaText: {
+      fontSize: 12,
+      color: theme.textTertiary,
+      marginBottom: 4,
+      fontWeight: "500",
+    },
     pestDiseaseTreatment: {
       fontSize: 13,
       color: theme.textSecondary,
@@ -2334,4 +2759,5 @@ const createStyles = (theme: any) =>
       color: theme.textInverse,
     },
   });
+
 

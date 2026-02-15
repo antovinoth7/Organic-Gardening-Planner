@@ -3,6 +3,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
+import { StatusBar } from "expo-status-bar";
 import { auth } from "./src/lib/firebase";
 import { onAuthStateChanged, User } from "@firebase/auth";
 import { ThemeProvider, useTheme, useThemeMode } from "./src/theme";
@@ -14,6 +15,7 @@ import Constants from "expo-constants";
 import * as Sentry from "@sentry/react-native";
 import { migrateImagesToMediaLibrary } from "./src/lib/imageStorage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 // Screens
 import AuthScreen from "./src/screens/AuthScreen";
@@ -84,6 +86,23 @@ Sentry.init({
       event.user.email = event.user.email.replace(/(.{2}).*@/, "$1***@");
     }
 
+    // Add image-related context for debugging native crashes
+    if (event.exception?.values?.[0]) {
+      const errorValue = event.exception.values[0].value?.toLowerCase() || '';
+      const errorType = event.exception.values[0].type?.toLowerCase() || '';
+      
+      if (errorValue.includes('abort') || errorValue.includes('shadownode') || 
+          errorType.includes('scudo') || errorValue.includes('image')) {
+        event.tags = event.tags || {};
+        event.tags['likely_image_related'] = 'true';
+        event.contexts = event.contexts || {};
+        event.contexts['image_info'] = {
+          note: 'Native crash likely related to image memory management',
+          mitigation: 'Using expo-image and stale URI detection',
+        };
+      }
+    }
+
     // Log in development only
     if (isDev) {
       console.log("📤 Sentry event:", {
@@ -111,6 +130,10 @@ Sentry.init({
     "Network request failed",
     "cancelled",
     /timeout of \d+ms exceeded/,
+    // Known Android native memory issues that expo-image should prevent
+    "Abort abort", // Native memory corruption
+    /ShadowNode/i, // React Native shadow node issues
+    /Scudo/i, // Android memory allocator errors
   ],
 });
 
@@ -141,6 +164,7 @@ if (typeof ErrorUtils !== 'undefined') {
 }
 
 // Handle unhandled promise rejections
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const rejectionTracking = require('promise/setimmediate/rejection-tracking');
 rejectionTracking.enable({
   allRejections: true,
@@ -419,24 +443,33 @@ const AppRoot = () => {
   if (loading) return null; // Show splash screen
 
   return (
-    <NavigationContainer theme={navigationTheme}>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {user ? (
-          <Stack.Screen name="AppTabs" component={AppTabs} />
-        ) : (
-          <Stack.Screen name="Auth" component={AuthScreen} />
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <>
+      <StatusBar
+        style={resolvedMode === "dark" ? "light" : "dark"}
+        backgroundColor={theme.backgroundSecondary}
+        translucent={false}
+      />
+      <NavigationContainer theme={navigationTheme}>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {user ? (
+            <Stack.Screen name="AppTabs" component={AppTabs} />
+          ) : (
+            <Stack.Screen name="Auth" component={AuthScreen} />
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </>
   );
 };
 
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider>
-        <AppRoot />
-      </ThemeProvider>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <AppRoot />
+        </ThemeProvider>
+      </SafeAreaProvider>
     </ErrorBoundary>
   );
 }

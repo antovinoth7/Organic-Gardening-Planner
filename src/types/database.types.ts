@@ -6,7 +6,18 @@ export type SunlightLevel = 'full_sun' | 'partial_sun' | 'shade';
 export type SoilType = 'garden_soil' | 'potting_mix' | 'coco_peat' | 'custom';
 export type WaterRequirement = 'low' | 'medium' | 'high';
 export type HealthStatus = 'healthy' | 'stressed' | 'recovering' | 'sick';
-export type FertiliserType = 'compost' | 'vermicompost' | 'fish_emulsion' | 'seaweed' | 'neem_cake' | 'other';
+export type IssueSeverity = 'low' | 'medium' | 'high' | 'severe';
+export type FertiliserType =
+  | 'compost'
+  | 'vermicompost'
+  | 'cow_dung_slurry'
+  | 'fish_emulsion'
+  | 'groundnut_cake'
+  | 'seaweed'
+  | 'neem_cake'
+  | 'panchagavya'
+  | 'jeevamrutham'
+  | 'other';
 export type GrowthStage = 'seedling' | 'vegetative' | 'flowering' | 'fruiting' | 'dormant' | 'mature';
 
 export interface LocationConfig {
@@ -46,6 +57,8 @@ export interface PestDiseaseRecord {
   type: 'pest' | 'disease';
   name: string;
   occurredAt: string;
+  severity?: IssueSeverity;
+  affectedPart?: string;
   treatment?: string;
   resolved: boolean;
   resolvedAt?: string;
@@ -91,8 +104,6 @@ export interface Plant {
   health_status?: HealthStatus | null;
   // Pest & Disease History
   pest_disease_history?: PestDiseaseRecord[] | null;
-  // Companion Plants
-  companion_plants?: string[] | null;
   // Expected Harvest Date
   expected_harvest_date?: string | null;
   // PHASE 1: Growth Stage & Pruning

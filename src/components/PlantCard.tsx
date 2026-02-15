@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { Plant } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
@@ -17,17 +18,53 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete }: PlantCar
   const theme = useTheme();
   const styles = createStyles(theme);
   const [imageAvailable, setImageAvailable] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const isMountedRef = useRef(true);
 
-  // Check if the local image file exists
+  // Check if the local image file exists with proper cleanup
   useEffect(() => {
+    isMountedRef.current = true;
+    let cancelled = false;
+
     if (plant.photo_url) {
-      imageExists(plant.photo_url)
-        .then(setImageAvailable)
+      // Defensive check: ensure URI is valid
+      const uri = plant.photo_url.trim();
+      if (!uri || uri === 'null' || uri === 'undefined') {
+        setImageAvailable(false);
+        return;
+      }
+
+      // Quick pre-check: if it's a file:// URI and doesn't look like our image path, skip
+      if (uri.startsWith('file://') && !uri.includes('garden_images')) {
+        setImageAvailable(false);
+        return;
+      }
+
+      imageExists(uri)
+        .then(exists => {
+          if (!cancelled && isMountedRef.current) {
+            setImageAvailable(exists);
+            setImageError(!exists);
+          }
+        })
         .catch(error => {
-          console.warn('PlantCard: Error checking image existence:', error);
-          setImageAvailable(false);
+          // Only log in development
+          if (__DEV__) {
+            console.warn('PlantCard: Error checking image existence:', error);
+          }
+          if (!cancelled && isMountedRef.current) {
+            setImageAvailable(false);
+            setImageError(true);
+          }
         });
+    } else {
+      setImageAvailable(false);
     }
+
+    return () => {
+      cancelled = true;
+      isMountedRef.current = false;
+    };
   }, [plant.photo_url]);
 
   const getPlantTypeIcon = () => {
@@ -79,18 +116,31 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete }: PlantCar
     return plant.health_status ? colors[plant.health_status] : '#666';
   };
 
+  const handleImageError = () => {
+    if (isMountedRef.current) {
+      setImageAvailable(false);
+      setImageError(true);
+    }
+  };
+
   return (
     <TouchableOpacity style={styles.card} onPress={onPress}>
-      {plant.photo_url && imageAvailable ? (
+      {plant.photo_url && imageAvailable && !imageError ? (
         <Image 
           source={{ uri: plant.photo_url }} 
           style={styles.image}
-          onError={() => setImageAvailable(false)}
+          contentFit="cover"
+          transition={200}
+          onError={handleImageError}
+          // Critical: Enable memory optimization and recycling
+          recyclingKey={plant.id}
+          cachePolicy="memory-disk"
+          priority="normal"
         />
       ) : (
         <View style={[styles.image, styles.placeholder]}>
           <Text style={styles.emoji}>{getPlantTypeIcon()}</Text>
-          {plant.photo_url && !imageAvailable && (
+          {plant.photo_url && (imageError || !imageAvailable) && (
             <Text style={styles.missingImageText}>📷</Text>
           )}
         </View>

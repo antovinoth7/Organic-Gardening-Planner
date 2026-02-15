@@ -18,7 +18,7 @@ import * as Sentry from '@sentry/react-native';
  *   }, 'fetchData');
  * }, []);
  */
-export const safeAsync = async <T>(
+const _safeAsync = async <T>(
   fn: () => Promise<T>,
   context: string,
   options?: {
@@ -68,7 +68,7 @@ export const safeAsync = async <T>(
  *   fetchComments()
  * ], 'loadDashboardData');
  */
-export const safePromiseAll = async <T>(
+const _safePromiseAll = async <T>(
   promises: Promise<T>[],
   context: string
 ): Promise<(T | null)[]> => {
@@ -105,7 +105,7 @@ export const safePromiseAll = async <T>(
  *   300
  * );
  */
-export const createDebouncedAsync = <Args extends any[]>(
+const _createDebouncedAsync = <Args extends any[]>(
   fn: (...args: Args) => Promise<void>,
   delayMs: number
 ): ((...args: Args) => void) => {
@@ -148,7 +148,7 @@ export const createDebouncedAsync = <Args extends any[]>(
  *   'fetchData'
  * );
  */
-export const withTimeout = async <T>(
+const _withTimeout = async <T>(
   promise: Promise<T>,
   timeoutMs: number,
   context: string

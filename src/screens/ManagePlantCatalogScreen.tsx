@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import {
   DEFAULT_PLANT_CATALOG,
@@ -101,9 +102,13 @@ const SOIL_LABELS: Record<SoilType, string> = {
 const FERTILISER_LABELS: Record<FertiliserType, string> = {
   compost: "Compost",
   vermicompost: "Vermicompost",
+  cow_dung_slurry: "Cow Dung Slurry",
+  neem_cake: "Neem Cake",
+  panchagavya: "Panchagavya",
+  jeevamrutham: "Jeevamrutham",
+  groundnut_cake: "Groundnut Cake",
   fish_emulsion: "Fish Emulsion",
   seaweed: "Seaweed",
-  neem_cake: "Neem Cake",
   other: "Other",
 };
 
@@ -132,6 +137,14 @@ const isDuplicate = (list: string[], value: string, ignore?: string) => {
 export default function ManagePlantCatalogScreen({ navigation }: any) {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const insets = useSafeAreaInsets();
+  const androidPickerProps =
+    Platform.OS === "android"
+      ? {
+          mode: "dropdown" as const,
+          dropdownIconColor: theme.textSecondary,
+        }
+      : {};
   const [catalog, setCatalog] = useState<PlantCatalog>(DEFAULT_PLANT_CATALOG);
   const [careProfiles, setCareProfiles] = useState<PlantCareProfiles>(
     {} as PlantCareProfiles
@@ -151,7 +164,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
   const [careModal, setCareModal] = useState<CareModalState | null>(null);
   const [careForm, setCareForm] = useState<CareFormState | null>(null);
 
-  const loadAllPlants = async () => {
+  const loadAllPlants = useCallback(async () => {
     const allPlants: Plant[] = [];
     let lastDoc: any = undefined;
     const pageSize = 100;
@@ -170,9 +183,9 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
     }
 
     return allPlants;
-  };
+  }, []);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [catalogData, allPlants, careProfileData] = await Promise.all([
@@ -191,11 +204,11 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadAllPlants]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   // Note: Data reloads automatically after save operations
   // Users navigating back from other screens don't need fresh data
@@ -717,7 +730,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
@@ -1168,6 +1181,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                   <Text style={styles.fieldLabel}>Water requirement</Text>
                   <View style={styles.pickerContainer}>
                     <Picker
+                      {...androidPickerProps}
                       selectedValue={careForm?.waterRequirement}
                       onValueChange={(value) =>
                         setCareForm((prev) =>
@@ -1267,6 +1281,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                   <Text style={styles.fieldLabel}>Sunlight</Text>
                   <View style={styles.pickerContainer}>
                     <Picker
+                      {...androidPickerProps}
                       selectedValue={careForm?.sunlight}
                       onValueChange={(value) =>
                         setCareForm((prev) =>
@@ -1288,6 +1303,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                   <Text style={styles.fieldLabel}>Soil type</Text>
                   <View style={styles.pickerContainer}>
                     <Picker
+                      {...androidPickerProps}
                       selectedValue={careForm?.soilType}
                       onValueChange={(value) =>
                         setCareForm((prev) =>
@@ -1307,6 +1323,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                   <Text style={styles.fieldLabel}>Preferred fertiliser</Text>
                   <View style={styles.pickerContainer}>
                     <Picker
+                      {...androidPickerProps}
                       selectedValue={careForm?.preferredFertiliser}
                       onValueChange={(value) =>
                         setCareForm((prev) =>
@@ -1331,6 +1348,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                   <Text style={styles.fieldLabel}>Initial growth stage</Text>
                   <View style={styles.pickerContainer}>
                     <Picker
+                      {...androidPickerProps}
                       selectedValue={careForm?.initialGrowthStage}
                       onValueChange={(value) =>
                         setCareForm((prev) =>
@@ -1408,7 +1426,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: 16,
-      paddingTop: 48,
+      paddingTop: 12,
       paddingBottom: 16,
       backgroundColor: theme.backgroundSecondary,
       borderBottomWidth: 1,
@@ -1815,3 +1833,4 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontWeight: "600",
     },
   });
+

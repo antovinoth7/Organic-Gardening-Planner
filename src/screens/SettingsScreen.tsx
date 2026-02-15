@@ -13,12 +13,14 @@ import { exportImagesOnly, importImagesOnly } from "../services/backup";
 import { getImageStorageSize } from "../lib/imageStorage";
 import { useTheme, useThemeMode } from "../theme";
 import { useFocusEffect } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { clearAllData } from "../lib/storage";
 
 export default function SettingsScreen({ navigation }: any) {
   const theme = useTheme();
   const { mode, setMode } = useThemeMode();
   const styles = createStyles(theme);
+  const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   const [loading, setLoading] = useState(false);
   const [imageStorageSize, setImageStorageSize] = useState(0);
@@ -137,7 +139,7 @@ export default function SettingsScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
@@ -246,7 +248,7 @@ export default function SettingsScreen({ navigation }: any) {
 
           <Text style={styles.backupNote}>
             📸 Note: Images are stored with their original filenames. When
-            imported, they'll automatically match with your existing plants and
+            imported, they&apos;ll automatically match with your existing plants and
             journal entries.
           </Text>
         </View>
@@ -299,7 +301,7 @@ const createStyles = (theme: any) =>
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: 16,
-      paddingTop: 48,
+      paddingTop: 12,
       paddingBottom: 16,
       backgroundColor: theme.backgroundSecondary,
       borderBottomWidth: 1,

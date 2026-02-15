@@ -6,11 +6,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Image,
   Alert,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { Image } from 'expo-image';
 import * as ImagePicker from "expo-image-picker";
 import PhotoSourceModal from "../components/PhotoSourceModal";
 import {
@@ -21,6 +21,7 @@ import {
 import { getPlants } from "../services/plants";
 import { Plant, JournalEntry, JournalEntryType } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 import {
@@ -36,11 +37,16 @@ type PhotoItem = {
 
 export default function JournalFormScreen({ navigation, route }: any) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const editEntry = route.params?.entry as JournalEntry | undefined;
+  const initialEntryType = route.params?.initialEntryType as
+    | JournalEntryType
+    | undefined;
+  const initialPlantId = route.params?.initialPlantId as string | undefined;
   const isEditing = !!editEntry;
 
   const [entryType, setEntryType] = useState<JournalEntryType>(
-    editEntry?.entry_type || "observation"
+    editEntry?.entry_type || initialEntryType || "observation"
   );
   const [content, setContent] = useState(editEntry?.content || "");
   const buildInitialPhotoItems = (): PhotoItem[] => {
@@ -62,7 +68,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
     buildInitialPhotoItems
   );
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(
-    editEntry?.plant_id || null
+    editEntry?.plant_id || initialPlantId || null
   );
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(false);
@@ -87,6 +93,16 @@ export default function JournalFormScreen({ navigation, route }: any) {
     loadPlants();
   }, []);
 
+  useEffect(() => {
+    if (isEditing) return;
+    if (initialEntryType) {
+      setEntryType(initialEntryType);
+    }
+    if (initialPlantId) {
+      setSelectedPlantId(initialPlantId);
+    }
+  }, [isEditing, initialEntryType, initialPlantId]);
+
   const loadPlants = async () => {
     try {
       const { plants: data } = await getPlants();
@@ -104,7 +120,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: "images" as any, // Use 'images' for new API
+      mediaTypes: "images",
       allowsEditing: false,
       quality: 0.8,
       allowsMultipleSelection: true,
@@ -127,7 +143,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
     }
 
     const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: "images" as any, // Use 'images' for new API
+      mediaTypes: "images",
       allowsEditing: false,
       quality: 0.8,
       cameraType: ImagePicker.CameraType.back,
@@ -271,7 +287,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="close" size={28} color={theme.text} />
         </TouchableOpacity>
@@ -385,7 +401,14 @@ export default function JournalFormScreen({ navigation, route }: any) {
             {photoItems.map((item, index) =>
               item.uri ? (
                 <View key={index} style={styles.photoContainer}>
-                  <Image source={{ uri: item.uri }} style={styles.photoThumbnail} />
+                  <Image 
+                    source={{ uri: item.uri }} 
+                    style={styles.photoThumbnail}
+                    contentFit="cover"
+                    transition={200}
+                    cachePolicy="memory-disk"
+                    recyclingKey={`journal-photo-${index}`}
+                  />
                   <TouchableOpacity
                     style={styles.removePhotoButton}
                     onPress={() => removeImage(index)}
@@ -564,7 +587,7 @@ const createStyles = (theme: any) =>
       justifyContent: "space-between",
       alignItems: "center",
       padding: 16,
-      paddingTop: 48,
+      paddingTop: 12,
       backgroundColor: theme.backgroundSecondary,
       borderBottomWidth: 1,
       borderBottomColor: theme.borderLight,

@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme';
 import { getArchivedPlants, restorePlant } from '../services/plants';
 import { Plant } from '../types/database.types';
@@ -9,6 +10,7 @@ import { Plant } from '../types/database.types';
 export default function ArchivedPlantsScreen({ navigation }: any) {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const insets = useSafeAreaInsets();
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [restoringId, setRestoringId] = useState<string | null>(null);
@@ -96,7 +98,7 @@ export default function ArchivedPlantsScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
@@ -140,7 +142,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 16,
-      paddingTop: 48,
+      paddingTop: 12,
       paddingBottom: 16,
       backgroundColor: theme.backgroundSecondary,
       borderBottomWidth: 1,

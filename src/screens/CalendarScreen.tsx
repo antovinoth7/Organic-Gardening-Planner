@@ -9,6 +9,7 @@ import { TaskTemplate, Plant, TaskType, JournalEntry } from '../types/database.t
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme';
 import { isNetworkAvailable } from '../utils/networkState';
 import { sanitizeAlphaNumericSpaces } from '../utils/textSanitizer';
@@ -22,11 +23,11 @@ const TASK_COLORS: Record<TaskType, string> = {
   mulch: '#795548',
 };
 
-const GROUP_OPTIONS: Array<{
+const GROUP_OPTIONS: {
   value: 'none' | 'location' | 'type';
   label: string;
   icon: string;
-}> = [
+}[] = [
   { value: 'none', label: 'All Tasks', icon: 'list' },
   { value: 'location', label: 'Location', icon: 'location' },
   { value: 'type', label: 'Type', icon: 'apps' },
@@ -35,6 +36,14 @@ const GROUP_OPTIONS: Array<{
 export default function CalendarScreen() {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const insets = useSafeAreaInsets();
+  const androidPickerProps =
+    Platform.OS === "android"
+      ? {
+          mode: "dropdown" as const,
+          dropdownIconColor: theme.textSecondary,
+        }
+      : {};
   const scrollViewRef = useRef<ScrollView>(null);
   const weekScrollRef = useRef<ScrollView>(null);
   const [tasks, setTasks] = useState<TaskTemplate[]>([]);
@@ -66,7 +75,18 @@ export default function CalendarScreen() {
     sanitizeAlphaNumericSpaces(value).trim().toLowerCase();
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
 
-  const setTodayView = () => {
+  const scrollToToday = React.useCallback(() => {
+    if (selectedView === 'week' && weekScrollRef.current) {
+      const today = new Date();
+      const weekStart = getStartOfWeek(today);
+      const daysDiff = Math.floor((today.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24));
+      const dayWidth = 100; // Approximate width of each day card
+      const scrollX = daysDiff * dayWidth;
+      weekScrollRef.current.scrollTo({ x: scrollX, animated: true });
+    }
+  }, [selectedView]);
+
+  const setTodayView = React.useCallback(() => {
     const today = new Date();
     // Don't auto-select today, just set the week/month view to show today
     // This way users see "Today's Tasks" section instead of "Selected Date Tasks"
@@ -78,18 +98,7 @@ export default function CalendarScreen() {
     setTimeout(() => {
       scrollToToday();
     }, 100);
-  };
-
-  const scrollToToday = () => {
-    if (selectedView === 'week' && weekScrollRef.current) {
-      const today = new Date();
-      const weekStart = getStartOfWeek(today);
-      const daysDiff = Math.floor((today.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24));
-      const dayWidth = 100; // Approximate width of each day card
-      const scrollX = daysDiff * dayWidth;
-      weekScrollRef.current.scrollTo({ x: scrollX, animated: true });
-    }
-  };
+  }, [scrollToToday]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -98,7 +107,7 @@ export default function CalendarScreen() {
     return () => {
       isMountedRef.current = false;
     };
-  }, []);
+  }, [setTodayView]);
 
   // Only reset view when screen comes into focus, don't reload data
   useFocusEffect(
@@ -106,7 +115,7 @@ export default function CalendarScreen() {
       // Reset scroll to top
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
       setTodayView();
-    }, [])
+    }, [setTodayView])
   );
 
   // Scroll to today when switching to week view or when week changes
@@ -116,7 +125,7 @@ export default function CalendarScreen() {
         scrollToToday();
       }, 100);
     }
-  }, [selectedView, currentWeekStart]);
+  }, [selectedView, currentWeekStart, scrollToToday]);
 
   const loadData = async () => {
     try {
@@ -680,7 +689,7 @@ export default function CalendarScreen() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={styles.container}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
           <View style={styles.headerTop}>
             <View style={styles.searchWrapper}>
               <Ionicons name="search" size={16} color={theme.textSecondary} />
@@ -926,11 +935,17 @@ export default function CalendarScreen() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={false}>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingBottom: Math.max(insets.bottom, 12),
+                }}
+              >
                 <View style={styles.modalBody}>
                   <Text style={styles.label}>Task Type *</Text>
                 <View style={styles.pickerContainer}>
                   <Picker
+                    {...androidPickerProps}
                     selectedValue={taskType}
                     onValueChange={setTaskType}
                     style={styles.picker}
@@ -948,6 +963,7 @@ export default function CalendarScreen() {
                 <Text style={styles.label}>Plant (Optional)</Text>
                 <View style={styles.pickerContainer}>
                   <Picker
+                    {...androidPickerProps}
                     selectedValue={selectedPlant}
                     onValueChange={setSelectedPlant}
                     style={styles.picker}
@@ -1163,7 +1179,12 @@ export default function CalendarScreen() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={false}>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingBottom: Math.max(insets.bottom, 12),
+                }}
+              >
                 <View style={styles.modalBody}>
                 {selectedTask && (
                   <View style={styles.selectedTaskInfo}>
@@ -1237,7 +1258,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
   },
   header: {
     paddingHorizontal: 16,
-    paddingTop: 48,
+    paddingTop: 12,
     paddingBottom: 16,
     backgroundColor: theme.backgroundSecondary,
     borderBottomWidth: 1,
@@ -2033,3 +2054,4 @@ const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
     fontWeight: '600',
   },
 });
+

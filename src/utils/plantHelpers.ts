@@ -158,6 +158,70 @@ const YEARS_TO_FIRST_HARVEST: Record<string, number> = {
   "King Coconut": 4,
 };
 
+const DEFAULT_HARVEST_SEASON_BY_TYPE: Record<PlantType, string> = {
+  vegetable: "Year Round",
+  herb: "Year Round",
+  flower: "Year Round",
+  fruit_tree: "Summer (Mar-May)",
+  timber_tree: "Year Round",
+  coconut_tree: "Year Round",
+  shrub: "Year Round",
+};
+
+const HARVEST_SEASON_BY_VARIETY: Record<string, string> = {
+  // Fruit trees
+  Mango: "Summer (Mar-May)",
+  Banana: "Year Round",
+  Guava: "Year Round",
+  Papaya: "Year Round",
+  Lemon: "Year Round",
+  Pomegranate: "Year Round",
+  Jackfruit: "Southwest Monsoon (Jun-Sep)",
+  Chikoo: "Year Round",
+  "Water Apple": "Summer (Mar-May)",
+  "Custard Apple": "Northeast Monsoon (Oct-Dec)",
+  Amla: "Cool Dry (Jan-Feb)",
+  Orange: "Cool Dry (Jan-Feb)",
+  Fig: "Summer (Mar-May)",
+  Avocado: "Southwest Monsoon (Jun-Sep)",
+  Soursop: "Year Round",
+  Mangosteen: "Southwest Monsoon (Jun-Sep)",
+  Rambutan: "Southwest Monsoon (Jun-Sep)",
+
+  // Coconut
+  "Dwarf Coconut": "Year Round",
+  "Tall Coconut": "Year Round",
+  "Hybrid Coconut": "Year Round",
+  "King Coconut": "Year Round",
+
+  // Common vegetables/herbs
+  Tomato: "Year Round",
+  Brinjal: "Year Round",
+  "Long Brinjal": "Year Round",
+  Chilli: "Year Round",
+  "Ladies Finger": "Summer (Mar-May)",
+  Cucumber: "Summer (Mar-May)",
+  "Bitter Gourd": "Southwest Monsoon (Jun-Sep)",
+  "Snake Gourd": "Southwest Monsoon (Jun-Sep)",
+  "Ridge Gourd": "Southwest Monsoon (Jun-Sep)",
+  "Bottle Gourd": "Southwest Monsoon (Jun-Sep)",
+  Pumpkin: "Southwest Monsoon (Jun-Sep)",
+  "Ash Gourd": "Southwest Monsoon (Jun-Sep)",
+  Cabbage: "Cool Dry (Jan-Feb)",
+  Cauliflower: "Cool Dry (Jan-Feb)",
+  Carrot: "Cool Dry (Jan-Feb)",
+  Radish: "Cool Dry (Jan-Feb)",
+  Onion: "Cool Dry (Jan-Feb)",
+  Garlic: "Cool Dry (Jan-Feb)",
+  Potato: "Cool Dry (Jan-Feb)",
+  Spinach: "Year Round",
+  Amaranthus: "Year Round",
+  Methi: "Year Round",
+  Coriander: "Year Round",
+  Mint: "Year Round",
+  Basil: "Year Round",
+};
+
 /**
  * Calculate expected harvest date based on plant variety and planting date
  */
@@ -224,84 +288,315 @@ export function getIncompatiblePlants(
   return INCOMPATIBLE_PLANTS[plantVariety] || [];
 }
 
+const toLookupKey = (value: string): string =>
+  value.toLowerCase().replace(/\s+/g, " ").trim();
+
+const PLANT_VARIETY_ALIASES: Record<string, string> = {
+  okra: "ladies finger",
+  bhindi: "ladies finger",
+  bhendi: "ladies finger",
+  vendakkai: "ladies finger",
+  eggplant: "brinjal",
+  aubergine: "brinjal",
+  kathirikai: "brinjal",
+  cassava: "tapioca",
+  maravalli: "tapioca",
+  murungai: "drumstick",
+  moringa: "drumstick",
+  chili: "chilli",
+  "chilli pepper": "chilli",
+  "dwarf coconut": "coconut",
+  "tall coconut": "coconut",
+  "hybrid coconut": "coconut",
+  "king coconut": "coconut",
+};
+
+const getCanonicalPlantKey = (
+  plantVariety: string | null | undefined
+): string | null => {
+  if (!plantVariety) return null;
+  const key = toLookupKey(plantVariety);
+  return PLANT_VARIETY_ALIASES[key] ?? key;
+};
+
+const mergeUnique = (items: string[]): string[] => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  items.forEach((item) => {
+    const trimmed = item.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    result.push(trimmed);
+  });
+  return result;
+};
+
 /**
- * Common pests and diseases for different plant types
+ * Tamil Nadu-oriented baseline pests and diseases by plant type.
  */
-const COMMON_PESTS_DISEASES: Record<
+const TAMIL_NADU_COMMON_PESTS_DISEASES: Record<
   PlantType,
   { pests: string[]; diseases: string[] }
 > = {
   vegetable: {
     pests: [
-      "Aphids",
       "Whiteflies",
-      "Caterpillars",
-      "Slugs",
-      "Spider Mites",
-      "Leaf Miners",
+      "Thrips",
+      "Aphids",
+      "Fruit Borer",
+      "Leaf Miner",
+      "Mites",
+      "Mealybugs",
     ],
     diseases: [
-      "Powdery Mildew",
-      "Blight",
-      "Root Rot",
+      "Damping Off",
+      "Bacterial Wilt",
       "Leaf Spot",
-      "Wilt",
+      "Early Blight",
+      "Powdery Mildew",
       "Mosaic Virus",
     ],
   },
   herb: {
-    pests: ["Aphids", "Spider Mites", "Whiteflies", "Thrips"],
-    diseases: ["Powdery Mildew", "Root Rot", "Leaf Spot", "Rust"],
+    pests: ["Aphids", "Whiteflies", "Thrips", "Leaf Miner", "Mites"],
+    diseases: [
+      "Leaf Spot",
+      "Powdery Mildew",
+      "Damping Off",
+      "Root Rot",
+      "Mosaic Virus",
+    ],
   },
   flower: {
-    pests: ["Aphids", "Thrips", "Japanese Beetles", "Spider Mites", "Slugs"],
+    pests: ["Thrips", "Aphids", "Mites", "Bud Borer", "Mealybugs"],
     diseases: [
-      "Powdery Mildew",
-      "Botrytis Blight",
-      "Root Rot",
-      "Rust",
+      "Wilt",
       "Leaf Spot",
+      "Powdery Mildew",
+      "Root Rot",
+      "Anthracnose",
     ],
   },
   fruit_tree: {
-    pests: ["Fruit Flies", "Scale Insects", "Mealybugs", "Aphids", "Borers"],
-    diseases: ["Anthracnose", "Sooty Mold", "Leaf Spot", "Crown Rot", "Canker"],
+    pests: [
+      "Fruit Fly",
+      "Scale Insects",
+      "Mealybugs",
+      "Aphids",
+      "Stem Borer",
+    ],
+    diseases: ["Anthracnose", "Leaf Spot", "Wilt", "Canker", "Sooty Mold"],
   },
   timber_tree: {
-    pests: ["Borers", "Termites", "Scale Insects", "Bark Beetles"],
-    diseases: ["Root Rot", "Canker", "Heart Rot", "Leaf Blight"],
+    pests: ["Termites", "Bark Borer", "Scale Insects", "Leaf Defoliators"],
+    diseases: ["Root Rot", "Leaf Blight", "Canker", "Stem Rot"],
   },
   coconut_tree: {
     pests: [
       "Rhinoceros Beetle",
       "Red Palm Weevil",
+      "Black-Headed Caterpillar",
       "Coconut Mite",
       "Scale Insects",
     ],
     diseases: ["Bud Rot", "Stem Bleeding", "Root Wilt", "Leaf Blight"],
   },
   shrub: {
-    pests: ["Aphids", "Scale Insects", "Whiteflies", "Spider Mites"],
-    diseases: ["Powdery Mildew", "Leaf Spot", "Root Rot", "Rust"],
+    pests: ["Aphids", "Whiteflies", "Thrips", "Scale Insects", "Mites"],
+    diseases: ["Leaf Spot", "Powdery Mildew", "Root Rot", "Wilt"],
   },
+};
+
+/**
+ * Crop-level issues frequently seen across Tamil Nadu, including Kanyakumari.
+ */
+const TAMIL_NADU_CROP_SPECIFIC_ISSUES: Record<
+  string,
+  { pests: string[]; diseases: string[] }
+> = {
+  tomato: {
+    pests: ["Fruit Borer", "Whiteflies", "Thrips", "Aphids", "Leaf Miner"],
+    diseases: [
+      "Early Blight",
+      "Late Blight",
+      "Bacterial Wilt",
+      "Leaf Curl Virus",
+      "Damping Off",
+    ],
+  },
+  chilli: {
+    pests: ["Thrips", "Mites", "Aphids", "Fruit Borer", "Whiteflies"],
+    diseases: [
+      "Leaf Curl Virus",
+      "Anthracnose",
+      "Dieback",
+      "Powdery Mildew",
+      "Damping Off",
+    ],
+  },
+  brinjal: {
+    pests: [
+      "Shoot and Fruit Borer",
+      "Epilachna Beetle",
+      "Aphids",
+      "Whiteflies",
+      "Mites",
+    ],
+    diseases: [
+      "Bacterial Wilt",
+      "Phomopsis Blight",
+      "Little Leaf Disease",
+      "Damping Off",
+    ],
+  },
+  "ladies finger": {
+    pests: [
+      "Fruit and Shoot Borer",
+      "Aphids",
+      "Jassids",
+      "Whiteflies",
+      "Mites",
+    ],
+    diseases: [
+      "Yellow Vein Mosaic Virus",
+      "Powdery Mildew",
+      "Wilt",
+      "Cercospora Leaf Spot",
+    ],
+  },
+  tapioca: {
+    pests: [
+      "Spiralling Whitefly",
+      "Mealybugs",
+      "Red Spider Mite",
+      "Scale Insects",
+    ],
+    diseases: [
+      "Cassava Mosaic Disease",
+      "Bacterial Blight",
+      "Cercospora Leaf Spot",
+      "Root Rot",
+    ],
+  },
+  drumstick: {
+    pests: ["Hairy Caterpillar", "Pod Fly", "Aphids", "Thrips"],
+    diseases: ["Leaf Spot", "Powdery Mildew", "Root Rot"],
+  },
+  banana: {
+    pests: [
+      "Rhizome Weevil",
+      "Pseudostem Borer",
+      "Aphids",
+      "Thrips",
+      "Nematodes",
+    ],
+    diseases: [
+      "Sigatoka Leaf Spot",
+      "Panama Wilt",
+      "Bunchy Top Virus",
+      "Anthracnose",
+      "Rhizome Rot",
+    ],
+  },
+  mango: {
+    pests: ["Fruit Fly", "Mango Hopper", "Mealybugs", "Stem Borer"],
+    diseases: ["Anthracnose", "Powdery Mildew", "Dieback", "Sooty Mold"],
+  },
+  guava: {
+    pests: ["Fruit Fly", "Mealybugs", "Scale Insects", "Bark Eating Caterpillar"],
+    diseases: ["Wilt", "Anthracnose", "Canker", "Leaf Spot"],
+  },
+  papaya: {
+    pests: ["Papaya Mealybug", "Aphids", "Whiteflies", "Mites"],
+    diseases: [
+      "Papaya Ringspot Virus",
+      "Damping Off",
+      "Anthracnose",
+      "Root Rot",
+    ],
+  },
+  lemon: {
+    pests: ["Citrus Psylla", "Leaf Miner", "Aphids", "Scale Insects"],
+    diseases: ["Citrus Canker", "Gummosis", "Greening Disease", "Sooty Mold"],
+  },
+  coconut: {
+    pests: [
+      "Rhinoceros Beetle",
+      "Red Palm Weevil",
+      "Black-Headed Caterpillar",
+      "Coconut Mite",
+    ],
+    diseases: ["Bud Rot", "Stem Bleeding", "Root Wilt", "Leaf Blight"],
+  },
+  jasmine: {
+    pests: ["Bud Worm", "Thrips", "Mites", "Aphids"],
+    diseases: ["Wilt", "Leaf Blight", "Root Rot", "Rust"],
+  },
+};
+
+const getTamilNaduPestDiseaseSet = (
+  plantType: PlantType | null | undefined,
+  plantVariety: string | null | undefined
+): { pests: string[]; diseases: string[] } => {
+  if (!plantType) return { pests: [], diseases: [] };
+
+  const base = TAMIL_NADU_COMMON_PESTS_DISEASES[plantType] || {
+    pests: [],
+    diseases: [],
+  };
+
+  const canonicalPlantKey = getCanonicalPlantKey(plantVariety);
+  const cropSpecific = canonicalPlantKey
+    ? TAMIL_NADU_CROP_SPECIFIC_ISSUES[canonicalPlantKey]
+    : null;
+
+  if (!cropSpecific) {
+    return base;
+  }
+
+  return {
+    pests: mergeUnique([...cropSpecific.pests, ...base.pests]),
+    diseases: mergeUnique([...cropSpecific.diseases, ...base.diseases]),
+  };
 };
 
 /**
  * Get common pests for a plant type
  */
 export function getCommonPests(
-  plantType: PlantType | null | undefined
+  plantType: PlantType | null | undefined,
+  plantVariety?: string | null
 ): string[] {
-  if (!plantType) return [];
-  return COMMON_PESTS_DISEASES[plantType]?.pests || [];
+  return getTamilNaduPestDiseaseSet(plantType, plantVariety).pests;
 }
 
 /**
  * Get common diseases for a plant type
  */
 export function getCommonDiseases(
-  plantType: PlantType | null | undefined
+  plantType: PlantType | null | undefined,
+  plantVariety?: string | null
 ): string[] {
-  if (!plantType) return [];
-  return COMMON_PESTS_DISEASES[plantType]?.diseases || [];
+  return getTamilNaduPestDiseaseSet(plantType, plantVariety).diseases;
+}
+
+/**
+ * Get default harvest season for a plant (Tamil Nadu-oriented defaults).
+ */
+export function getDefaultHarvestSeason(
+  plantVariety: string | null | undefined,
+  plantType: PlantType | null | undefined
+): string | null {
+  if (!plantType) return null;
+
+  if (plantVariety) {
+    const season = HARVEST_SEASON_BY_VARIETY[plantVariety];
+    if (season) {
+      return season;
+    }
+  }
+
+  return DEFAULT_HARVEST_SEASON_BY_TYPE[plantType] ?? null;
 }

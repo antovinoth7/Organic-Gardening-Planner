@@ -336,40 +336,75 @@ export const deleteImageLocally = async (imageUri: string | null): Promise<void>
 };
 
 /**
- * Check if an image file exists
+ * Check if an image file exists with timeout protection
+ * Prevents hanging on stale MediaLibrary URIs that can cause native crashes
  * @param imageUri - The local file URI to check
  * @returns True if the file exists, false otherwise
  */
 export const imageExists = async (imageUri: string | null): Promise<boolean> => {
   if (!imageUri) return false;
   
+  // Defensive: check for invalid URI strings
+  const trimmedUri = imageUri.trim();
+  if (!trimmedUri || trimmedUri === 'null' || trimmedUri === 'undefined') {
+    return false;
+  }
+  
   // On web, assume blob URLs exist
   if (Platform.OS === 'web') return true;
   
   try {
-    // On Android with MediaLibrary URIs (content://), check via MediaLibrary
-    if (Platform.OS === 'android' && imageUri.startsWith('content://')) {
-      try {
-        const asset = await MediaLibrary.getAssetInfoAsync(imageUri);
-        return !!asset;
-      } catch {
-        const contentId = imageUri.split('?')[0].split('#')[0].split('/').pop();
-        if (contentId) {
-          try {
-            const asset = await MediaLibrary.getAssetInfoAsync(contentId);
-            return !!asset;
-          } catch {
-            return false;
-          }
-        }
-        return false;
-      }
-    }
+    // Shorter timeout for file system operations (2s instead of 5s)
+    // File system checks should be near-instant; if they're slow, the file is likely missing
+    const timeoutMs = 2000;
     
-    // Fallback to FileSystem check
-    const fileInfo = await FileSystem.getInfoAsync(imageUri);
-    return fileInfo.exists;
-  } catch {
+    const checkPromise = (async () => {
+      // On Android with MediaLibrary URIs (content://), check via MediaLibrary
+      if (Platform.OS === 'android' && trimmedUri.startsWith('content://')) {
+        try {
+          const asset = await MediaLibrary.getAssetInfoAsync(trimmedUri);
+          return !!asset;
+        } catch (firstError) {
+          // Try extracting content ID as fallback
+          const contentId = trimmedUri.split('?')[0].split('#')[0].split('/').pop();
+          if (contentId && contentId.length > 0) {
+            try {
+              const asset = await MediaLibrary.getAssetInfoAsync(contentId);
+              return !!asset;
+            } catch (secondError) {
+              // URI is stale or invalid - this is common after device restarts
+              if (__DEV__) {
+                console.warn('MediaLibrary asset not found (stale URI)');
+              }
+              return false;
+            }
+          }
+          return false;
+        }
+      }
+      
+      // Fallback to FileSystem check
+      const fileInfo = await FileSystem.getInfoAsync(trimmedUri);
+      return fileInfo.exists;
+    })();
+
+    // Race against timeout to prevent indefinite hangs
+    const timeoutPromise = new Promise<boolean>((resolve) => {
+      setTimeout(() => {
+        // Only log in development to reduce noise
+        if (__DEV__) {
+          console.warn('imageExists timeout (file likely missing)');
+        }
+        resolve(false);
+      }, timeoutMs);
+    });
+
+    return await Promise.race([checkPromise, timeoutPromise]);
+  } catch (error) {
+    // Only log errors in development
+    if (__DEV__) {
+      console.warn('imageExists error:', error);
+    }
     return false;
   }
 };
@@ -574,12 +609,6 @@ export const resolveLocalImageUris = async (
   );
   return resolved.filter((uri): uri is string => !!uri);
 };
-
-/**
- * Export the permission request function for use in settings or onboarding
- * Also export isExpoGo flag for conditional UI messaging
- */
-export { requestMediaLibraryPermissions, isExpoGo };
 
 /**
  * Migrate existing images from documentDirectory to MediaLibrary on Android

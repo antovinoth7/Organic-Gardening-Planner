@@ -425,7 +425,7 @@ const computeNextDueAt = (
  * Generate recurring tasks from plant care schedules
  * This will create task templates for plants that have care schedules configured
  */
-export const generateRecurringTasksFromPlants = async (
+const _generateRecurringTasksFromPlants = async (
   plants: Plant[]
 ): Promise<void> => {
   const user = auth.currentUser;
@@ -523,7 +523,7 @@ export const syncCareTasksForPlant = async (plant: Plant): Promise<void> => {
       typeof item.frequency === "number" &&
       Number.isFinite(item.frequency) &&
       item.frequency > 0
-  ) as Array<{ taskType: TaskType; frequency: number }>;
+  ) as { taskType: TaskType; frequency: number }[];
 
   if (desiredFrequencies.length === 0) return;
 

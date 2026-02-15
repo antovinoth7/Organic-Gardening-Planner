@@ -11,14 +11,18 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../theme";
 
-// Enable LayoutAnimation on Android (suppress warning for New Architecture)
-if (Platform.OS === "android") {
+// Enable LayoutAnimation on Android only for the old architecture.
+const isNewArchitectureEnabled =
+  (global as { nativeFabricUIManager?: unknown }).nativeFabricUIManager !=
+  null;
+
+if (Platform.OS === "android" && !isNewArchitectureEnabled) {
   try {
     if (UIManager.setLayoutAnimationEnabledExperimental) {
       UIManager.setLayoutAnimationEnabledExperimental(true);
     }
   } catch {
-    // Silently ignore - not needed in New Architecture
+    // Silently ignore if unavailable.
   }
 }
 

@@ -11,7 +11,7 @@ import { cleanupNetworkMonitoring } from './networkState';
  * NOTE: Removed Firestore cache clearing - it was terminating the client and causing errors
  * Firebase SDK manages memory cache automatically
  */
-export const handleAppStateChange = async (nextAppState: AppStateStatus): Promise<void> => {
+const handleAppStateChange = async (nextAppState: AppStateStatus): Promise<void> => {
   if (nextAppState === 'background') {
     console.log('App backgrounded');
     // Firestore cache is managed automatically by Firebase SDK

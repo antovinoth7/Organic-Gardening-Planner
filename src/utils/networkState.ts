@@ -12,7 +12,7 @@ let unsubscribe: (() => void) | null = null;
  * Initialize network state monitoring
  * Safe to call multiple times - will only subscribe once
  */
-export const initNetworkMonitoring = (): void => {
+const initNetworkMonitoring = (): void => {
   if (unsubscribe) return; // Already initialized
 
   // Initialize network state monitoring

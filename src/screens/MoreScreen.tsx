@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import { auth } from "../lib/firebase";
 import { signOut } from "@firebase/auth";
@@ -8,6 +9,7 @@ import { signOut } from "@firebase/auth";
 export default function MoreScreen({ navigation }: any) {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const insets = useSafeAreaInsets();
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -18,7 +20,7 @@ export default function MoreScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.accountHeader}>
           <View style={styles.accountIcon}>
             <Ionicons name="person-circle" size={26} color={theme.primary} />
@@ -98,7 +100,7 @@ const createStyles = (theme: any) =>
     },
     header: {
       padding: 24,
-      paddingTop: 48,
+      paddingTop: 12,
       backgroundColor: theme.backgroundSecondary,
       borderBottomWidth: 1,
       borderBottomColor: theme.border,

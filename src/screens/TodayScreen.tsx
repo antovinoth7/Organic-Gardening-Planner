@@ -7,12 +7,14 @@ import TaskCard from '../components/TaskCard';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme';
 import { sanitizeAlphaNumericSpaces } from '../utils/textSanitizer';
 
 export default function TodayScreen({ navigation, route }: any) {
   const theme = useTheme();
   const styles = createStyles(theme);
+  const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   const [tasks, setTasks] = useState<TaskTemplate[]>([]);
   const [plants, setPlants] = useState<Plant[]>([]);
@@ -83,7 +85,7 @@ export default function TodayScreen({ navigation, route }: any) {
       loadData();
       navigation.setParams({ refresh: undefined });
     }
-  }, [route?.params?.refresh]);
+  }, [route?.params?.refresh, navigation]);
 
   // Only reset scroll position when screen comes into focus, don't reload data
   // User can pull-to-refresh if they want fresh data
@@ -216,7 +218,7 @@ export default function TodayScreen({ navigation, route }: any) {
       needsAttentionCount: needsAttention.length,
       needsAttention
     };
-  }, [tasks, plants, completedTemplateIds]);
+  }, [tasks, plants, completedTemplateIds, getDaysSince]);
 
   const overdueTasks = useMemo(() => {
     const today = new Date();
@@ -247,7 +249,7 @@ export default function TodayScreen({ navigation, route }: any) {
         <RefreshControl refreshing={loading} onRefresh={loadData} />
       }
     >
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Text style={styles.title}>My Garden</Text>
         <Text style={styles.date}>{new Date().toLocaleDateString('en-US', { 
           weekday: 'long', 
@@ -547,7 +549,7 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   header: {
     paddingHorizontal: 16,
-    paddingTop: 48,
+    paddingTop: 12,
     paddingBottom: 16,
     backgroundColor: theme.backgroundSecondary,
     borderBottomWidth: 1,
