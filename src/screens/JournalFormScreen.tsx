@@ -46,7 +46,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
   const isEditing = !!editEntry;
 
   const [entryType, setEntryType] = useState<JournalEntryType>(
-    editEntry?.entry_type || initialEntryType || "observation"
+    editEntry?.entry_type || initialEntryType || JournalEntryType.Observation
   );
   const [content, setContent] = useState(editEntry?.content || "");
   const buildInitialPhotoItems = (): PhotoItem[] => {
@@ -191,7 +191,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
       return;
     }
 
-    if (entryType === "harvest") {
+    if (entryType === JournalEntryType.Harvest) {
       if (!harvestQuantity || harvestQuantity.trim() === "") {
         Alert.alert("Validation Error", "Please enter harvest quantity");
         return;
@@ -254,10 +254,10 @@ export default function JournalFormScreen({ navigation, route }: any) {
         photo_urls: photoUrls,
         plant_id: selectedPlantId,
         harvest_quantity:
-          entryType === "harvest" ? parseFloat(harvestQuantity) : null,
-        harvest_unit: entryType === "harvest" ? harvestUnit : null,
-        harvest_quality: entryType === "harvest" ? harvestQuality : null,
-        harvest_notes: entryType === "harvest" ? harvestNotes : null,
+          entryType === JournalEntryType.Harvest ? parseFloat(harvestQuantity) : null,
+        harvest_unit: entryType === JournalEntryType.Harvest ? harvestUnit : null,
+        harvest_quality: entryType === JournalEntryType.Harvest ? harvestQuality : null,
+        harvest_notes: entryType === JournalEntryType.Harvest ? harvestNotes : null,
       };
 
       if (isEditing && editEntry) {
@@ -307,44 +307,51 @@ export default function JournalFormScreen({ navigation, route }: any) {
           <TouchableOpacity
             style={[
               styles.typeButton,
-              entryType === "observation" && styles.typeButtonActive,
+              entryType === JournalEntryType.Observation &&
+                styles.typeButtonActive,
             ]}
-            onPress={() => setEntryType("observation")}
+            onPress={() => setEntryType(JournalEntryType.Observation)}
           >
             <Ionicons
               name="eye"
               size={18}
               color={
-                entryType === "observation" ? theme.textInverse : theme.primary
+                entryType === JournalEntryType.Observation
+                  ? theme.textInverse
+                  : theme.primary
               }
             />
             <Text
               style={[
                 styles.typeButtonText,
-                entryType === "observation" && styles.typeButtonTextActive,
+                entryType === JournalEntryType.Observation &&
+                  styles.typeButtonTextActive,
               ]}
             >
-              Watch
+              Observation
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[
               styles.typeButton,
-              entryType === "harvest" && styles.typeButtonActive,
+              entryType === JournalEntryType.Harvest && styles.typeButtonActive,
             ]}
-            onPress={() => setEntryType("harvest")}
+            onPress={() => setEntryType(JournalEntryType.Harvest)}
           >
             <Ionicons
               name="basket"
               size={18}
               color={
-                entryType === "harvest" ? theme.textInverse : theme.primary
+                entryType === JournalEntryType.Harvest
+                  ? theme.textInverse
+                  : theme.primary
               }
             />
             <Text
               style={[
                 styles.typeButtonText,
-                entryType === "harvest" && styles.typeButtonTextActive,
+                entryType === JournalEntryType.Harvest &&
+                  styles.typeButtonTextActive,
               ]}
             >
               Harvest
@@ -353,19 +360,24 @@ export default function JournalFormScreen({ navigation, route }: any) {
           <TouchableOpacity
             style={[
               styles.typeButton,
-              entryType === "issue" && styles.typeButtonActive,
+              entryType === JournalEntryType.Issue && styles.typeButtonActive,
             ]}
-            onPress={() => setEntryType("issue")}
+            onPress={() => setEntryType(JournalEntryType.Issue)}
           >
             <Ionicons
               name="alert-circle"
               size={18}
-              color={entryType === "issue" ? theme.textInverse : theme.primary}
+              color={
+                entryType === JournalEntryType.Issue
+                  ? theme.textInverse
+                  : theme.primary
+              }
             />
             <Text
               style={[
                 styles.typeButtonText,
-                entryType === "issue" && styles.typeButtonTextActive,
+                entryType === JournalEntryType.Issue &&
+                  styles.typeButtonTextActive,
               ]}
             >
               Issue
@@ -374,21 +386,25 @@ export default function JournalFormScreen({ navigation, route }: any) {
           <TouchableOpacity
             style={[
               styles.typeButton,
-              entryType === "milestone" && styles.typeButtonActive,
+              entryType === JournalEntryType.Milestone &&
+                styles.typeButtonActive,
             ]}
-            onPress={() => setEntryType("milestone")}
+            onPress={() => setEntryType(JournalEntryType.Milestone)}
           >
             <Ionicons
               name="flag"
               size={18}
               color={
-                entryType === "milestone" ? theme.textInverse : theme.primary
+                entryType === JournalEntryType.Milestone
+                  ? theme.textInverse
+                  : theme.primary
               }
             />
             <Text
               style={[
                 styles.typeButtonText,
-                entryType === "milestone" && styles.typeButtonTextActive,
+                entryType === JournalEntryType.Milestone &&
+                  styles.typeButtonTextActive,
               ]}
             >
               Milestone
@@ -466,7 +482,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
         )}
 
         {/* Harvest-specific fields */}
-        {entryType === "harvest" && (
+        {entryType === JournalEntryType.Harvest && (
           <View style={styles.harvestSection}>
             <Text style={styles.sectionTitle}>Harvest Details</Text>
 
@@ -486,7 +502,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
               <View style={styles.unitInput}>
                 <Text style={styles.label}>Unit</Text>
                 <View style={styles.unitButtons}>
-                  {["pieces", "kg", "lbs"].map((unit) => (
+                  {["pcs", "kg"].map((unit) => (
                     <TouchableOpacity
                       key={unit}
                       style={[

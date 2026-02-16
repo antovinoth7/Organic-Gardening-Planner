@@ -1,11 +1,17 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Animated, Platform, RefreshControl } from 'react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { getTaskTemplates, createTaskTemplate, markTaskDone, deleteTasksForPlantIds } from '../services/tasks';
 import { getPlants, plantExists } from '../services/plants';
 import { getJournalEntries } from '../services/journal';
-import { TaskTemplate, Plant, TaskType, JournalEntry } from '../types/database.types';
+import {
+  TaskTemplate,
+  Plant,
+  TaskType,
+  JournalEntry,
+  JournalEntryType,
+} from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect } from '@react-navigation/native';
@@ -67,6 +73,7 @@ export default function CalendarScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [groupBy, setGroupBy] = useState<'none' | 'location' | 'type'>('none');
   const [showGroupMenu, setShowGroupMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -100,34 +107,7 @@ export default function CalendarScreen() {
     }, 100);
   }, [scrollToToday]);
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    loadData();
-    setTodayView();
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, [setTodayView]);
-
-  // Only reset view when screen comes into focus, don't reload data
-  useFocusEffect(
-    React.useCallback(() => {
-      // Reset scroll to top
-      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-      setTodayView();
-    }, [setTodayView])
-  );
-
-  // Scroll to today when switching to week view or when week changes
-  useEffect(() => {
-    if (selectedView === 'week') {
-      setTimeout(() => {
-        scrollToToday();
-      }, 100);
-    }
-  }, [selectedView, currentWeekStart, scrollToToday]);
-
-  const loadData = async () => {
+  const loadData = React.useCallback(async () => {
     try {
       const [tasksData, { plants: plantsData }, journalData] = await Promise.all([
         getTaskTemplates(),
@@ -151,7 +131,9 @@ export default function CalendarScreen() {
 
       setTasks(filteredTasks);
       setPlants(plantsData);
-      setHarvestEntries(journalData.filter(e => e.entry_type === 'harvest'));
+      setHarvestEntries(
+        journalData.filter((e) => e.entry_type === JournalEntryType.Harvest)
+      );
 
       if (orphanPlantIds.length > 0 && isNetworkAvailable()) {
         const confirmedOrphans = (
@@ -179,7 +161,45 @@ export default function CalendarScreen() {
       if (!isMountedRef.current) return;
       console.error(error);
     }
-  };
+  }, []);
+
+  const handleRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadData();
+    } finally {
+      if (isMountedRef.current) {
+        setRefreshing(false);
+      }
+    }
+  }, [loadData]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    loadData();
+    setTodayView();
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [setTodayView, loadData]);
+
+  // Reset view and refresh data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+      setTodayView();
+      void loadData();
+    }, [setTodayView, loadData])
+  );
+
+  // Scroll to today when switching to week view or when week changes
+  useEffect(() => {
+    if (selectedView === 'week') {
+      setTimeout(() => {
+        scrollToToday();
+      }, 100);
+    }
+  }, [selectedView, currentWeekStart, scrollToToday]);
 
   const handleTaskComplete = async (task: TaskTemplate) => {
     setSelectedTask(task);
@@ -779,7 +799,13 @@ export default function CalendarScreen() {
         {/* Week or Month View */}
         {selectedView === 'week' ? renderWeekView() : renderMonthView()}
 
-        <ScrollView ref={scrollViewRef} style={styles.content}>
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.content}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
+        >
           {/* Selected Date Tasks */}
           {!isSearching && selectedDate && (
             <View style={styles.section}>

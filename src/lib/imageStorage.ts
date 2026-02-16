@@ -55,6 +55,121 @@ const clearMediaLookupCache = () => {
   mediaLookupPromise = null;
 };
 
+const getFileSize = async (uri: string | null): Promise<number> => {
+  if (!uri) return 0;
+  try {
+    const fileInfo = await FileSystem.getInfoAsync(uri);
+    if (fileInfo.exists && typeof fileInfo.size === 'number') {
+      return fileInfo.size;
+    }
+  } catch {
+    // Ignore unsupported URI schemes or inaccessible paths.
+  }
+  return 0;
+};
+
+const getDirectorySize = async (directoryUri: string | null): Promise<number> => {
+  if (!directoryUri) return 0;
+
+  const dirInfo = await FileSystem.getInfoAsync(directoryUri);
+  if (!dirInfo.exists) return 0;
+
+  const files = await FileSystem.readDirectoryAsync(directoryUri);
+  let totalSize = 0;
+
+  for (const file of files) {
+    totalSize += await getFileSize(`${directoryUri}${file}`);
+  }
+
+  return totalSize;
+};
+
+const hasAndroidMediaLibraryAccess = async (): Promise<boolean> => {
+  if (Platform.OS !== 'android' || isExpoGo) {
+    return false;
+  }
+
+  try {
+    const { status } = await MediaLibrary.getPermissionsAsync(false, ['photo']);
+    return status === 'granted';
+  } catch {
+    return false;
+  }
+};
+
+const getAndroidMediaLibrarySize = async (): Promise<number> => {
+  if (Platform.OS !== 'android' || isExpoGo) {
+    return 0;
+  }
+
+  const hasPermission = await hasAndroidMediaLibraryAccess();
+  if (!hasPermission) {
+    return 0;
+  }
+
+  let totalSize = 0;
+  let after: string | undefined;
+  let pageCount = 0;
+  const seenAssetIds = new Set<string>();
+  const album = await MediaLibrary.getAlbumAsync(ALBUM_NAME);
+  if (!album) {
+    return 0;
+  }
+
+  while (pageCount < MEDIA_LOOKUP_MAX_PAGES) {
+    const page = await MediaLibrary.getAssetsAsync({
+      album,
+      first: MEDIA_LOOKUP_PAGE_SIZE,
+      mediaType: ['photo'],
+      ...(after ? { after } : {}),
+    });
+
+    for (const asset of page.assets) {
+      const assetKey = String(asset.id);
+      if (seenAssetIds.has(assetKey)) {
+        continue;
+      }
+
+      seenAssetIds.add(assetKey);
+
+      const assetInlineSize = (asset as any).fileSize;
+      if (typeof assetInlineSize === 'number' && assetInlineSize > 0) {
+        totalSize += assetInlineSize;
+        continue;
+      }
+
+      const directUriSize = await getFileSize(asset.uri);
+      if (directUriSize > 0) {
+        totalSize += directUriSize;
+        continue;
+      }
+
+      try {
+        const info = await MediaLibrary.getAssetInfoAsync(asset.id);
+        const infoInlineSize = (info as any).fileSize;
+        if (typeof infoInlineSize === 'number' && infoInlineSize > 0) {
+          totalSize += infoInlineSize;
+          continue;
+        }
+
+        const fallbackUri = (info as any).localUri ?? info.uri ?? null;
+        totalSize += await getFileSize(fallbackUri);
+      } catch {
+        // Ignore malformed or stale assets and continue.
+      }
+    }
+
+    if (!page.hasNextPage || !page.endCursor) {
+      break;
+    }
+
+    after = page.endCursor;
+    pageCount += 1;
+  }
+
+  return totalSize;
+};
+
 /**
  * Request media library permissions on Android
  * Note: In Expo Go, this will fail due to Android permission restrictions.
@@ -246,20 +361,21 @@ const saveImageLocally = async (
       }
 
       // Save to MediaLibrary (persists across reinstalls)
-      const asset = await MediaLibrary.createAssetAsync(assetSourceUri);
-      clearMediaLookupCache();
-      
-      // Try to organize into an album
+      // Prefer direct creation into the target album to avoid per-asset move prompts.
+      let asset: MediaLibrary.Asset;
       try {
-        let album = await MediaLibrary.getAlbumAsync(ALBUM_NAME);
-        if (!album) {
-          album = await MediaLibrary.createAlbumAsync(ALBUM_NAME, asset, false);
+        const album = await MediaLibrary.getAlbumAsync(ALBUM_NAME);
+        if (album) {
+          asset = await MediaLibrary.createAssetAsync(assetSourceUri, album);
         } else {
-          await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+          asset = await MediaLibrary.createAssetAsync(assetSourceUri);
+          await MediaLibrary.createAlbumAsync(ALBUM_NAME, asset, false);
         }
       } catch (albumError) {
-        console.warn('Could not create/add to album, but image is saved:', albumError);
+        console.warn('Could not save directly to album, falling back to default media library:', albumError);
+        asset = await MediaLibrary.createAssetAsync(assetSourceUri);
       }
+      clearMediaLookupCache();
 
       // Clean up temp file if we created one
       if (assetSourceUri !== sourceUri && assetSourceUri.startsWith('file://')) {
@@ -418,22 +534,11 @@ export const getImageStorageSize = async (): Promise<number> => {
   if (Platform.OS === 'web') return 0;
   
   try {
-    if (!IMAGES_DIR) return 0;
-    
-    const dirInfo = await FileSystem.getInfoAsync(IMAGES_DIR);
-    if (!dirInfo.exists) return 0;
-    
-    const files = await FileSystem.readDirectoryAsync(IMAGES_DIR);
-    let totalSize = 0;
-    
-    for (const file of files) {
-      const fileInfo = await FileSystem.getInfoAsync(`${IMAGES_DIR}${file}`);
-      if (fileInfo.exists && fileInfo.size) {
-        totalSize += fileInfo.size;
-      }
-    }
-    
-    return totalSize;
+    const [directorySize, mediaLibrarySize] = await Promise.all([
+      getDirectorySize(IMAGES_DIR),
+      getAndroidMediaLibrarySize(),
+    ]);
+    return directorySize + mediaLibrarySize;
   } catch (error) {
     console.error('Error calculating storage size:', error);
     return 0;
@@ -694,7 +799,10 @@ export const migrateImagesToMediaLibrary = async (): Promise<{
     console.log(`Found ${files.length} images to migrate to MediaLibrary`);
 
     let migratedCount = 0;
+    let duplicateCount = 0;
     let errorCount = 0;
+    const existingLookup = await getAndroidMediaLookup();
+    let album = await MediaLibrary.getAlbumAsync(ALBUM_NAME);
 
     // Migrate each file
     for (const file of files) {
@@ -708,26 +816,35 @@ export const migrateImagesToMediaLibrary = async (): Promise<{
           continue;
         }
 
-        // Save to MediaLibrary
-        const asset = await MediaLibrary.createAssetAsync(oldUri);
-        
-        // Try to add to album
-        try {
-          let album = await MediaLibrary.getAlbumAsync(ALBUM_NAME);
-          if (!album) {
-            album = await MediaLibrary.createAlbumAsync(ALBUM_NAME, asset, false);
-          } else {
-            await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
-          }
-        } catch (albumError) {
-          console.warn('Could not add to album, but image is saved:', albumError);
+        const normalizedFilename = file.toLowerCase();
+        if (existingLookup.has(normalizedFilename)) {
+          duplicateCount++;
+          await FileSystem.deleteAsync(oldUri, { idempotent: true });
+          continue;
         }
+
+        let migratedUri: string | null = null;
+
+        if (album) {
+          const asset = await MediaLibrary.createAssetAsync(oldUri, album);
+          migratedUri = asset.uri;
+        } else {
+          // Create album with a local file URI so we can avoid asset move/copy prompts.
+          album = await MediaLibrary.createAlbumAsync(
+            ALBUM_NAME,
+            undefined,
+            undefined,
+            oldUri
+          );
+        }
+
+        existingLookup.set(normalizedFilename, migratedUri ?? oldUri);
 
         // Delete old file
         await FileSystem.deleteAsync(oldUri, { idempotent: true });
         
         migratedCount++;
-        console.log(`Migrated: ${file} -> ${asset.uri}`);
+        console.log(`Migrated: ${file}${migratedUri ? ` -> ${migratedUri}` : ''}`);
       } catch (error) {
         console.error(`Error migrating ${file}:`, error);
         errorCount++;
@@ -743,7 +860,7 @@ export const migrateImagesToMediaLibrary = async (): Promise<{
       success: errorCount === 0,
       migratedCount,
       errorCount,
-      message: `Migrated ${migratedCount} images to persistent storage. ${errorCount} errors.`,
+      message: `Migrated ${migratedCount} images to persistent storage. Skipped ${duplicateCount} duplicates. ${errorCount} errors.`,
     };
   } catch (error) {
     console.error('Error during migration:', error);

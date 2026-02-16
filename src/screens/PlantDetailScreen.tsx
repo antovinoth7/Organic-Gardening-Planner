@@ -11,7 +11,12 @@ import { Image } from 'expo-image';
 import { getPlant } from "../services/plants";
 import { getTaskTemplates, getSeasonalCareReminder } from "../services/tasks";
 import { getJournalEntries } from "../services/journal";
-import { Plant, TaskTemplate, JournalEntry } from "../types/database.types";
+import {
+  Plant,
+  TaskTemplate,
+  JournalEntry,
+  JournalEntryType,
+} from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
@@ -28,8 +33,8 @@ export default function PlantDetailScreen({ route, navigation }: any) {
   const [loading, setLoading] = useState(true);
   const isMountedRef = React.useRef(true);
 
-  const loadData = useCallback(async () => {
-    if (isMountedRef.current) {
+  const loadData = useCallback(async (options?: { silent?: boolean }) => {
+    if (isMountedRef.current && !options?.silent) {
       setLoading(true);
     }
     try {
@@ -44,7 +49,11 @@ export default function PlantDetailScreen({ route, navigation }: any) {
       setPlant(plantData);
       setTasks(allTasks.filter((t) => t.plant_id === plantId));
       const plantHarvests = allJournalEntries
-        .filter((e) => e.plant_id === plantId && e.entry_type === "harvest")
+        .filter(
+          (e) =>
+            e.plant_id === plantId &&
+            e.entry_type === JournalEntryType.Harvest
+        )
         .sort(
           (a, b) =>
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -52,9 +61,11 @@ export default function PlantDetailScreen({ route, navigation }: any) {
       setHarvestEntries(plantHarvests);
     } catch (error: any) {
       if (!isMountedRef.current) return;
-      Alert.alert("Error", error.message);
+      if (!options?.silent) {
+        Alert.alert("Error", error.message);
+      }
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && !options?.silent) {
         setLoading(false);
       }
     }
@@ -64,7 +75,7 @@ export default function PlantDetailScreen({ route, navigation }: any) {
     navigation.navigate("Journal", {
       screen: "JournalForm",
       params: {
-        initialEntryType: "harvest",
+        initialEntryType: JournalEntryType.Harvest,
         initialPlantId: plantId,
       },
     });
@@ -79,6 +90,16 @@ export default function PlantDetailScreen({ route, navigation }: any) {
       isMountedRef.current = false;
     };
   }, [plantId, loadData]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      if (isMountedRef.current && plantId) {
+        void loadData({ silent: true });
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, plantId, loadData]);
 
   if (!plantId) {
     return (

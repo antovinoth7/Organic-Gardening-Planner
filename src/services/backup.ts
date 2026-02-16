@@ -102,6 +102,129 @@ const resolveImportedImageUri = async (
   return resolveLocalImageUri(filename ?? null);
 };
 
+const collectReferencedImageFilenames = (
+  plants: Plant[],
+  journal: JournalEntry[]
+): Set<string> => {
+  const imageFilenames = new Set<string>();
+
+  plants.forEach((plant) => {
+    const photoFilename =
+      plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "");
+    if (photoFilename) {
+      imageFilenames.add(photoFilename);
+    }
+  });
+
+  journal.forEach((entry) => {
+    const legacyUrls =
+      entry.photo_urls && entry.photo_urls.length > 0
+        ? entry.photo_urls
+        : entry.photo_url
+        ? [entry.photo_url]
+        : [];
+    const photoFilenames =
+      entry.photo_filenames && entry.photo_filenames.length > 0
+        ? entry.photo_filenames
+        : legacyUrls
+            .map((uri) => getFilenameFromUri(uri))
+            .filter((filename): filename is string => !!filename);
+    photoFilenames.forEach((filename) => imageFilenames.add(filename));
+  });
+
+  return imageFilenames;
+};
+
+const resolveImageFilesFromFilenames = async (
+  imageFilenames: Set<string>
+): Promise<ZipImageFile[]> => {
+  const imageFiles: ZipImageFile[] = [];
+  const resolvedImages = await Promise.all(
+    Array.from(imageFilenames).map(async (filename) => ({
+      filename,
+      uri: await resolveLocalImageUri(filename),
+    }))
+  );
+
+  resolvedImages.forEach((image) => {
+    if (image.uri) {
+      imageFiles.push({
+        filename: image.filename,
+        uri: image.uri,
+      });
+    }
+  });
+
+  return imageFiles;
+};
+
+const getBase64SizeInBytes = (base64: string): number => {
+  const trimmed = base64.trim();
+  const padding = trimmed.endsWith("==") ? 2 : trimmed.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((trimmed.length * 3) / 4) - padding);
+};
+
+const getImageUriSize = async (uri: string): Promise<number> => {
+  if (!uri || Platform.OS === "web") return 0;
+
+  try {
+    const info = await FileSystem.getInfoAsync(uri);
+    if (info.exists && typeof info.size === "number") {
+      return info.size;
+    }
+  } catch {
+    // Ignore and use fallback.
+  }
+
+  try {
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return getBase64SizeInBytes(base64);
+  } catch {
+    return 0;
+  }
+};
+
+const withImportVersion = (uri: string, version: string): string => {
+  if (!uri) return uri;
+
+  const [withoutHash, hashPart] = uri.split("#", 2);
+  const hash = hashPart ? `#${hashPart}` : "";
+  const [base, query = ""] = withoutHash.split("?", 2);
+  const queryParts = query
+    ? query.split("&").filter((part) => part && !part.startsWith("imgv="))
+    : [];
+  queryParts.push(`imgv=${version}`);
+  const nextQuery = queryParts.join("&");
+  return `${base}?${nextQuery}${hash}`;
+};
+
+export const getImagesOnlyStorageSize = async (): Promise<number> => {
+  try {
+    const [plants, journal] = await Promise.all([
+      getData<Plant>(KEYS.PLANTS),
+      getData<JournalEntry>(KEYS.JOURNAL),
+    ]);
+    const imageFilenames = collectReferencedImageFilenames(plants, journal);
+    if (imageFilenames.size === 0) {
+      return 0;
+    }
+
+    const imageFiles = await resolveImageFilesFromFilenames(imageFilenames);
+    let totalSize = 0;
+
+    for (const imageFile of imageFiles) {
+      totalSize += await getImageUriSize(imageFile.uri);
+    }
+
+    return totalSize;
+  } catch (error) {
+    console.error("Error calculating images-only size:", error);
+    return 0;
+  }
+};
+
 /**
  * Export ONLY images as a ZIP file (no data)
  * This creates an images-only archive for backup or transfer
@@ -116,47 +239,8 @@ export const exportImagesOnly = async (): Promise<string> => {
       { timeoutMs: 30000 }
     );
 
-    const imageFiles: ZipImageFile[] = [];
-    const imageFilenames = new Set<string>();
-
-    plants.forEach((plant) => {
-      const photoFilename =
-        plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "");
-      if (photoFilename) {
-        imageFilenames.add(photoFilename);
-      }
-    });
-
-    journal.forEach((entry) => {
-      const legacyUrls =
-        entry.photo_urls && entry.photo_urls.length > 0
-          ? entry.photo_urls
-          : entry.photo_url
-          ? [entry.photo_url]
-          : [];
-      const photoFilenames =
-        entry.photo_filenames && entry.photo_filenames.length > 0
-          ? entry.photo_filenames
-          : legacyUrls
-              .map((uri) => getFilenameFromUri(uri))
-              .filter((filename): filename is string => !!filename);
-      photoFilenames.forEach((filename) => imageFilenames.add(filename));
-    });
-
-    const resolvedImages = await Promise.all(
-      Array.from(imageFilenames).map(async (filename) => ({
-        filename,
-        uri: await resolveLocalImageUri(filename),
-      }))
-    );
-    resolvedImages.forEach((image) => {
-      if (image.uri) {
-        imageFiles.push({
-          filename: image.filename,
-          uri: image.uri,
-        });
-      }
-    });
+    const imageFilenames = collectReferencedImageFilenames(plants, journal);
+    const imageFiles = await resolveImageFilesFromFilenames(imageFilenames);
 
     console.log(`Found ${imageFiles.length} images to export`);
 
@@ -221,6 +305,7 @@ export const importImagesOnly = async (): Promise<number> => {
       IMAGES_DIR
     );
     const getImportedImageUri = buildImageUriLookup(imageUris);
+    const importVersion = Date.now().toString();
 
     if (Platform.OS === "android") {
       try {
@@ -246,17 +331,23 @@ export const importImagesOnly = async (): Promise<number> => {
           plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "");
         if (!photoFilename) return plant;
 
+        const hasImportedFile = !!getImportedImageUri(photoFilename);
         const newUri =
           (await resolveImportedImageUri(getImportedImageUri, photoFilename)) ??
           null;
+        const nextPhotoUri = newUri ?? plant.photo_url ?? null;
+        const finalPhotoUri =
+          nextPhotoUri && hasImportedFile
+            ? withImportVersion(nextPhotoUri, importVersion)
+            : nextPhotoUri;
 
         const nextPlant = {
           ...plant,
           photo_filename: photoFilename,
-          photo_url: newUri ?? plant.photo_url ?? null,
+          photo_url: finalPhotoUri,
         };
         const changed =
-          (newUri && newUri !== plant.photo_url) ||
+          (plant.photo_url ?? null) !== (finalPhotoUri ?? null) ||
           (plant.photo_filename ?? null) !== (photoFilename ?? null);
         if (changed) {
           plantsUpdated++;
@@ -285,11 +376,16 @@ export const importImagesOnly = async (): Promise<number> => {
         const updatedPhotos = (
           await Promise.all(
             photoFilenames.map(async (filename, index) => {
+              const hasImportedFile = !!getImportedImageUri(filename);
               const matched = await resolveImportedImageUri(
                 getImportedImageUri,
                 filename
               );
-              return matched ?? currentUrls[index] ?? null;
+              const nextUri = matched ?? currentUrls[index] ?? null;
+              if (!nextUri) return null;
+              return hasImportedFile
+                ? withImportVersion(nextUri, importVersion)
+                : nextUri;
             })
           )
         ).filter((uri): uri is string => !!uri);

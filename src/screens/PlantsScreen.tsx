@@ -59,16 +59,22 @@ export default function PlantsScreen({ navigation, route }: any) {
     DEFAULT_CHILD_LOCATIONS
   );
 
-  const loadPlants = async () => {
-    setLoading(true);
+  const loadPlants = async (options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setLoading(true);
+    }
     try {
       const { plants: data } = await getPlants();
       setPlants(data);
       setDisplayCount(ITEMS_PER_PAGE);
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      if (!options?.silent) {
+        Alert.alert('Error', error.message);
+      }
     } finally {
-      setLoading(false);
+      if (!options?.silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -91,8 +97,9 @@ export default function PlantsScreen({ navigation, route }: any) {
     
     const unsubscribe = navigation.addListener('focus', () => {
       if (isMounted) {
-        // Only reset scroll position, don't reload data
+        // Reset scroll and refresh so imported image updates are reflected.
         flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+        void loadPlants({ silent: true });
       }
     });
     

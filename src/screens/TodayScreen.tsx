@@ -11,6 +11,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme';
 import { sanitizeAlphaNumericSpaces } from '../utils/textSanitizer';
 
+type AttentionSeverity = 'critical' | 'high' | 'medium';
+
+type PlantAttentionItem = {
+  plant: Plant;
+  severity: AttentionSeverity;
+  icon: 'medical' | 'warning' | 'water';
+  reasons: string[];
+  daysOverdue: number;
+};
+
+const ATTENTION_SEVERITY_RANK: Record<AttentionSeverity, number> = {
+  critical: 3,
+  high: 2,
+  medium: 1,
+};
+
 export default function TodayScreen({ navigation, route }: any) {
   const theme = useTheme();
   const styles = createStyles(theme);
@@ -24,15 +40,19 @@ export default function TodayScreen({ navigation, route }: any) {
   const [selectedTask, setSelectedTask] = useState<TaskTemplate | null>(null);
   const [skipReason, setSkipReason] = useState('');
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  const [optimisticCompletedTaskIds, setOptimisticCompletedTaskIds] = useState<string[]>([]);
   const [skippingTask, setSkippingTask] = useState(false);
   const isMountedRef = React.useRef(true);
   const completedTemplateIds = useMemo(
-    () => new Set(taskLogs.map(log => log.template_id)),
-    [taskLogs]
+    () => new Set([
+      ...taskLogs.map(log => log.template_id),
+      ...optimisticCompletedTaskIds,
+    ]),
+    [taskLogs, optimisticCompletedTaskIds]
   );
 
-  const loadData = async () => {
-    if (isMountedRef.current) {
+  const loadData = useCallback(async (options?: { silent?: boolean }) => {
+    if (isMountedRef.current && !options?.silent) {
       setLoading(true);
     }
     try {
@@ -60,15 +80,22 @@ export default function TodayScreen({ navigation, route }: any) {
       setTasks(filteredTasks);
       setPlants(plantsData);
       setTaskLogs(todayLogs);
+      setOptimisticCompletedTaskIds((prev) =>
+        prev.filter(
+          (id) => !todayLogs.some((log) => log.template_id === id)
+        )
+      );
     } catch (error: any) {
       if (!isMountedRef.current) return;
-      Alert.alert('Error', error.message);
+      if (!options?.silent) {
+        Alert.alert('Error', error.message);
+      }
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && !options?.silent) {
         setLoading(false);
       }
     }
-  };
+  }, []);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -76,7 +103,7 @@ export default function TodayScreen({ navigation, route }: any) {
     return () => {
       isMountedRef.current = false;
     };
-  }, []);
+  }, [loadData]);
 
   // Listen for refresh param (e.g., after completing tasks)
   useEffect(() => {
@@ -85,36 +112,42 @@ export default function TodayScreen({ navigation, route }: any) {
       loadData();
       navigation.setParams({ refresh: undefined });
     }
-  }, [route?.params?.refresh, navigation]);
+  }, [route?.params?.refresh, navigation, loadData]);
 
-  // Only reset scroll position when screen comes into focus, don't reload data
-  // User can pull-to-refresh if they want fresh data
+  // Reset scroll and do a silent refresh whenever the screen regains focus.
   useFocusEffect(
     React.useCallback(() => {
       // Reset scroll to top
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-    }, [])
+      void loadData({ silent: true });
+    }, [loadData])
   );
 
   const handleMarkDone = async (task: TaskTemplate) => {
     if (completingTaskId) return; // Prevent multiple clicks
     if (completedTemplateIds.has(task.id)) {
       Alert.alert('Already Completed', 'This task is already marked as done for today.');
-      loadData();
       return;
     }
 
     setCompletingTaskId(task.id);
+    setOptimisticCompletedTaskIds((prev) =>
+      prev.includes(task.id) ? prev : [...prev, task.id]
+    );
     try {
-      const didMark = await markTaskDone(task);
+      const didMark = await markTaskDone(task, undefined, undefined, {
+        skipAlreadyDoneCheck: true,
+      });
       if (!didMark) {
         Alert.alert('Already Completed', 'This task is already marked as done for today.');
-        loadData();
+        void loadData({ silent: true });
         return;
       }
-      Alert.alert('Success', 'Task marked as done!');
-      loadData();
+      void loadData({ silent: true });
     } catch (error: any) {
+      setOptimisticCompletedTaskIds((prev) =>
+        prev.filter((id) => id !== task.id)
+      );
       Alert.alert('Error', error.message);
     } finally {
       setCompletingTaskId(null);
@@ -193,30 +226,109 @@ export default function TodayScreen({ navigation, route }: any) {
     const totalTasks = taskIds.size;
     const completed = completedTemplateIds.size;
     const completionRate = totalTasks > 0 ? Math.round((completed / totalTasks) * 100) : 0;
-    
-    const unhealthyPlants = (plants || []).filter(p => 
-      p.health_status === 'sick' || p.health_status === 'stressed'
-    );
-    
-    const needsAttention = (plants || []).filter(p => {
-      const frequency = Number(p.watering_frequency_days);
-      if (!Number.isFinite(frequency) || frequency <= 0) return false;
+    const unhealthyCount = (plants || []).filter(
+      (plant) => plant.health_status === 'sick' || plant.health_status === 'stressed'
+    ).length;
+    const attentionByPlant = new Map<string, PlantAttentionItem>();
 
-      const referenceDate = p.last_watered_date || p.planting_date || p.created_at;
-      const daysSince = getDaysSince(referenceDate);
-      if (daysSince === null || daysSince < 0) return false;
+    const addPlantAttention = (
+      plant: Plant,
+      alert: Omit<PlantAttentionItem, 'plant' | 'reasons'> & { reason: string }
+    ) => {
+      const existing = attentionByPlant.get(plant.id);
+      if (!existing) {
+        attentionByPlant.set(plant.id, {
+          plant,
+          severity: alert.severity,
+          icon: alert.icon,
+          reasons: [alert.reason],
+          daysOverdue: alert.daysOverdue,
+        });
+        return;
+      }
 
-      return daysSince >= frequency;
+      if (!existing.reasons.includes(alert.reason)) {
+        existing.reasons.push(alert.reason);
+      }
+      existing.daysOverdue = Math.max(existing.daysOverdue, alert.daysOverdue);
+
+      const incomingRank = ATTENTION_SEVERITY_RANK[alert.severity];
+      const existingRank = ATTENTION_SEVERITY_RANK[existing.severity];
+      if (incomingRank > existingRank) {
+        existing.severity = alert.severity;
+        existing.icon = alert.icon;
+      }
+    };
+
+    (plants || []).forEach((plant) => {
+      if (plant.health_status === 'sick') {
+        addPlantAttention(plant, {
+          severity: 'critical',
+          icon: 'medical',
+          reason: 'Status: Sick',
+          daysOverdue: 0,
+        });
+      } else if (plant.health_status === 'stressed') {
+        addPlantAttention(plant, {
+          severity: 'high',
+          icon: 'warning',
+          reason: 'Status: Stressed',
+          daysOverdue: 0,
+        });
+      }
+
+      const frequency = Number(plant.watering_frequency_days);
+      if (!Number.isFinite(frequency) || frequency <= 0) return;
+
+      const daysSinceLastWatered = getDaysSince(plant.last_watered_date);
+      if (daysSinceLastWatered !== null && daysSinceLastWatered >= frequency) {
+        const daysOverdue = Math.max(0, daysSinceLastWatered - frequency);
+        addPlantAttention(plant, {
+          severity:
+            daysOverdue >= Math.max(2, Math.ceil(frequency / 2))
+              ? 'high'
+              : 'medium',
+          icon: 'water',
+          reason:
+            daysOverdue > 0
+              ? `Watering overdue by ${daysOverdue} day${daysOverdue === 1 ? '' : 's'}`
+              : 'Watering due today',
+          daysOverdue,
+        });
+        return;
+      }
+
+      if (plant.last_watered_date) return;
+
+      const plantAgeDays = getDaysSince(plant.planting_date || plant.created_at);
+      if (plantAgeDays === null || plantAgeDays < frequency) return;
+
+      addPlantAttention(plant, {
+        severity: 'medium',
+        icon: 'water',
+        reason: 'No watering history logged',
+        daysOverdue: Math.max(0, plantAgeDays - frequency),
+      });
+    });
+
+    const plantAttention = Array.from(attentionByPlant.values()).sort((a, b) => {
+      const bySeverity =
+        ATTENTION_SEVERITY_RANK[b.severity] - ATTENTION_SEVERITY_RANK[a.severity];
+      if (bySeverity !== 0) return bySeverity;
+
+      const byOverdue = b.daysOverdue - a.daysOverdue;
+      if (byOverdue !== 0) return byOverdue;
+
+      return a.plant.name.localeCompare(b.plant.name);
     });
 
     return {
       totalTasks,
       completed,
       completionRate,
-      unhealthyCount: unhealthyPlants.length,
-      unhealthyPlants,
-      needsAttentionCount: needsAttention.length,
-      needsAttention
+      unhealthyCount,
+      needsAttentionCount: plantAttention.length,
+      plantAttention,
     };
   }, [tasks, plants, completedTemplateIds, getDaysSince]);
 
@@ -320,51 +432,41 @@ export default function TodayScreen({ navigation, route }: any) {
       </View>
 
       {/* Plant Health Alerts */}
-      {(stats.unhealthyPlants.length > 0 || stats.needsAttention.length > 0) && (
+      {stats.plantAttention.length > 0 && (
         <View style={styles.alertsSection}>
-          <Text style={styles.sectionTitle}>⚠️ Plants Need Attention</Text>
-          
-          {stats.unhealthyPlants.map(plant => (
+          <Text style={styles.sectionTitle}>
+            ⚠️ Plants Need Attention ({stats.needsAttentionCount})
+          </Text>
+
+          {stats.plantAttention.map((attention) => (
             <TouchableOpacity
-              key={plant.id}
-              style={styles.alertCard}
-              onPress={() => navigation.navigate('Plants', { 
-                screen: 'PlantDetail', 
-                params: { plantId: plant.id } 
+              key={attention.plant.id}
+              style={[
+                styles.alertCard,
+                attention.severity === 'high' && styles.alertCardWarning,
+                attention.severity === 'medium' && styles.alertCardInfo,
+              ]}
+              onPress={() => navigation.navigate('Plants', {
+                screen: 'PlantDetail',
+                params: { plantId: attention.plant.id }
               })}
             >
-              <View style={styles.alertIcon}>
-                <Ionicons 
-                  name={plant.health_status === 'sick' ? 'medical' : 'warning'} 
-                  size={20} 
-                  color="#fff" 
+              <View
+                style={[
+                  styles.alertIcon,
+                  attention.severity === 'high' && styles.alertIconWarning,
+                  attention.severity === 'medium' && styles.alertIconInfo,
+                ]}
+              >
+                <Ionicons
+                  name={attention.icon}
+                  size={20}
+                  color="#fff"
                 />
               </View>
               <View style={styles.alertContent}>
-                <Text style={styles.alertPlantName}>{plant.name}</Text>
-                <Text style={styles.alertText}>
-                  Status: {plant.health_status === 'sick' ? '❌ Sick' : '⚠️ Stressed'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#999" />
-            </TouchableOpacity>
-          ))}
-
-          {stats.needsAttention.slice(0, 3).map(plant => (
-            <TouchableOpacity
-              key={plant.id}
-              style={[styles.alertCard, styles.alertCardWarning]}
-              onPress={() => navigation.navigate('Plants', { 
-                screen: 'PlantDetail', 
-                params: { plantId: plant.id } 
-              })}
-            >
-              <View style={[styles.alertIcon, styles.alertIconWarning]}>
-                <Ionicons name="water" size={20} color="#fff" />
-              </View>
-              <View style={styles.alertContent}>
-                <Text style={styles.alertPlantName}>{plant.name}</Text>
-                <Text style={styles.alertText}>Needs watering</Text>
+                <Text style={styles.alertPlantName}>{attention.plant.name}</Text>
+                <Text style={styles.alertText}>{attention.reasons.join(' • ')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#999" />
             </TouchableOpacity>
@@ -648,6 +750,10 @@ const createStyles = (theme: any) => StyleSheet.create({
     backgroundColor: theme.warningLight,
     borderColor: theme.warning + '40',
   },
+  alertCardInfo: {
+    backgroundColor: theme.primaryLight,
+    borderColor: theme.primary + '40',
+  },
   alertIcon: {
     width: 36,
     height: 36,
@@ -659,6 +765,9 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   alertIconWarning: {
     backgroundColor: theme.warning,
+  },
+  alertIconInfo: {
+    backgroundColor: theme.primary,
   },
   alertContent: {
     flex: 1,

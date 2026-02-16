@@ -1,7 +1,13 @@
 export type SpaceType = 'pot' | 'bed' | 'ground';
 export type TaskType = 'water' | 'fertilise' | 'prune' | 'repot' | 'spray' | 'mulch';
 export type PlantType = 'vegetable' | 'herb' | 'flower' | 'fruit_tree' | 'timber_tree' | 'coconut_tree' | 'shrub';
-export type JournalEntryType = 'observation' | 'harvest' | 'issue' | 'milestone' | 'other';
+export enum JournalEntryType {
+  Observation = 'observation',
+  Harvest = 'harvest',
+  Issue = 'issue',
+  Milestone = 'milestone',
+  Other = 'other',
+}
 export type SunlightLevel = 'full_sun' | 'partial_sun' | 'shade';
 export type SoilType = 'garden_soil' | 'potting_mix' | 'coco_peat' | 'custom';
 export type WaterRequirement = 'low' | 'medium' | 'high';

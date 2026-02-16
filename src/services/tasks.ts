@@ -20,6 +20,21 @@ import { getCurrentSeason } from "../utils/seasonHelpers";
 
 const TASKS_COLLECTION = "task_templates";
 const TASK_LOGS_COLLECTION = "task_logs";
+const PLANTS_COLLECTION = "plants";
+type PlantLastCareField =
+  | "last_watered_date"
+  | "last_fertilised_date"
+  | "last_pruned_date";
+const TASK_TYPE_TO_PLANT_LAST_CARE_FIELD: Partial<
+  Record<TaskType, PlantLastCareField>
+> = {
+  water: "last_watered_date",
+  fertilise: "last_fertilised_date",
+  prune: "last_pruned_date",
+};
+type MarkTaskDoneOptions = {
+  skipAlreadyDoneCheck?: boolean;
+};
 
 /**
  * Get all task templates with offline-first approach
@@ -272,7 +287,8 @@ export const deleteTasksForPlantIds = async (
 export const markTaskDone = async (
   template: TaskTemplate,
   notes?: string,
-  productUsed?: string
+  productUsed?: string,
+  options?: MarkTaskDoneOptions
 ): Promise<boolean> => {
   const user = auth.currentUser;
   if (!user) throw new Error("Not authenticated");
@@ -292,23 +308,25 @@ export const markTaskDone = async (
   const endOfDay = new Date(doneAt);
   endOfDay.setHours(23, 59, 59, 999);
 
-  const existingLogs = await getTaskLogs(template.id);
-  const alreadyDoneToday = existingLogs.some((log) => {
-    const logDate = new Date(log.done_at);
-    return logDate >= startOfDay && logDate <= endOfDay;
-  });
+  if (!options?.skipAlreadyDoneCheck) {
+    const existingLogs = await getTaskLogs(template.id);
+    const alreadyDoneToday = existingLogs.some((log) => {
+      const logDate = new Date(log.done_at);
+      return logDate >= startOfDay && logDate <= endOfDay;
+    });
 
-  if (alreadyDoneToday) {
-    if (frequencyDays <= 0) {
-      await updateDoc(doc(db, TASKS_COLLECTION, template.id), {
-        enabled: false,
-      });
+    if (alreadyDoneToday) {
+      if (frequencyDays <= 0) {
+        await updateDoc(doc(db, TASKS_COLLECTION, template.id), {
+          enabled: false,
+        });
+      }
+      return false;
     }
-    return false;
   }
 
   // Insert task log with optional notes
-  await addDoc(collection(db, TASK_LOGS_COLLECTION), {
+  const logDocRef = await addDoc(collection(db, TASK_LOGS_COLLECTION), {
     user_id: user.uid,
     template_id: template.id,
     plant_id: template.plant_id,
@@ -319,18 +337,79 @@ export const markTaskDone = async (
     created_at: Timestamp.now(),
   });
 
+  const doneAtIso = doneAt.toISOString();
+  const newTaskLog: TaskLog = {
+    id: logDocRef.id,
+    user_id: user.uid,
+    template_id: template.id,
+    plant_id: template.plant_id,
+    task_type: template.task_type,
+    done_at: doneAtIso,
+    notes: notes || null,
+    product_used: productUsed || null,
+    created_at: doneAtIso,
+  };
+  const cachedLogs = await getData<TaskLog>(KEYS.TASK_LOGS);
+  cachedLogs.unshift(newTaskLog);
+  await setData(KEYS.TASK_LOGS, cachedLogs);
+
   // Update next due date
   const docRef = doc(db, TASKS_COLLECTION, template.id);
   const updates: { next_due_at?: Timestamp; enabled?: boolean } = {};
+  let nextDueAtIso: string | undefined;
   if (frequencyDays <= 0) {
     updates.enabled = false;
     updates.next_due_at = Timestamp.fromDate(doneAt);
+    nextDueAtIso = doneAtIso;
   } else if (!Number.isNaN(nextDueAt.getTime())) {
     updates.next_due_at = Timestamp.fromDate(nextDueAt);
+    nextDueAtIso = nextDueAt.toISOString();
   }
 
   if (Object.keys(updates).length > 0) {
     await updateDoc(docRef, updates);
+  }
+
+  if (Object.keys(updates).length > 0) {
+    const cachedTasks = await getData<TaskTemplate>(KEYS.TASKS);
+    const taskIndex = cachedTasks.findIndex((task) => task.id === template.id);
+    if (taskIndex !== -1) {
+      cachedTasks[taskIndex] = {
+        ...cachedTasks[taskIndex],
+        ...(typeof updates.enabled === "boolean"
+          ? { enabled: updates.enabled }
+          : {}),
+        ...(nextDueAtIso ? { next_due_at: nextDueAtIso } : {}),
+      };
+      await setData(KEYS.TASKS, cachedTasks);
+    }
+  }
+
+  const plantLastCareField =
+    TASK_TYPE_TO_PLANT_LAST_CARE_FIELD[template.task_type];
+  if (template.plant_id && plantLastCareField) {
+    try {
+      await updateDoc(doc(db, PLANTS_COLLECTION, template.plant_id), {
+        [plantLastCareField]: doneAtIso,
+      });
+
+      const cachedPlants = await getData<Plant>(KEYS.PLANTS);
+      const plantIndex = cachedPlants.findIndex(
+        (plant) => plant.id === template.plant_id
+      );
+      if (plantIndex !== -1) {
+        cachedPlants[plantIndex] = {
+          ...cachedPlants[plantIndex],
+          [plantLastCareField]: doneAtIso,
+        };
+        await setData(KEYS.PLANTS, cachedPlants);
+      }
+    } catch (error) {
+      console.warn(
+        `Failed to update ${plantLastCareField} for plant ${template.plant_id}:`,
+        error
+      );
+    }
   }
 
   return true;

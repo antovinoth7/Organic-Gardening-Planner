@@ -36,6 +36,17 @@ const sanitizeZipImageFilename = (filename: string): string => {
   return safeDecodeURIComponent(clean).replace(/\0/g, '');
 };
 
+const formatBackupTimestamp = (date: Date): string => {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  const seconds = pad(date.getSeconds());
+  return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
+};
+
 /**
  * Create a ZIP file containing JSON data and images
  * @param jsonData - The backup JSON data object
@@ -102,7 +113,7 @@ export const createZipWithImages = async (
     const zipData = zipSync(files, { level: 6 });
     
     // Save ZIP file to device
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+    const timestamp = formatBackupTimestamp(new Date());
     const filename = `garden-backup-${timestamp}.zip`;
     
     if (Platform.OS === 'web') {

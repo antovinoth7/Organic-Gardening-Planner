@@ -9,8 +9,11 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { exportImagesOnly, importImagesOnly } from "../services/backup";
-import { getImageStorageSize } from "../lib/imageStorage";
+import {
+  exportImagesOnly,
+  importImagesOnly,
+  getImagesOnlyStorageSize,
+} from "../services/backup";
 import { useTheme, useThemeMode } from "../theme";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -22,28 +25,32 @@ export default function SettingsScreen({ navigation }: any) {
   const styles = createStyles(theme);
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState<
+    "export" | "import" | "cache" | null
+  >(null);
   const [imageStorageSize, setImageStorageSize] = useState(0);
+  const loading = loadingAction !== null;
+
+  const loadStats = React.useCallback(async () => {
+    try {
+      const imageSize = await getImagesOnlyStorageSize();
+      setImageStorageSize(imageSize);
+    } catch (error) {
+      console.error("Error loading stats:", error);
+    }
+  }, []);
 
   useEffect(() => {
     loadStats();
-  }, []);
+  }, [loadStats]);
 
   // Reset scroll to top when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-    }, []),
+      void loadStats();
+    }, [loadStats]),
   );
-
-  const loadStats = async () => {
-    try {
-      const imageSize = await getImageStorageSize();
-      setImageStorageSize(imageSize);
-    } catch (error) {
-      console.error("Error loading stats:", error);
-    }
-  };
 
   const formatBytes = (bytes: number): string => {
     if (bytes === 0) return "0 MB";
@@ -61,7 +68,7 @@ export default function SettingsScreen({ navigation }: any) {
           text: "Export",
           onPress: async () => {
             try {
-              setLoading(true);
+              setLoadingAction("export");
               await exportImagesOnly();
               Alert.alert(
                 "Images Exported",
@@ -71,7 +78,7 @@ export default function SettingsScreen({ navigation }: any) {
             } catch (error: any) {
               Alert.alert("Export Failed", error.message);
             } finally {
-              setLoading(false);
+              setLoadingAction(null);
             }
           },
         },
@@ -89,7 +96,7 @@ export default function SettingsScreen({ navigation }: any) {
           text: "Import",
           onPress: async () => {
             try {
-              setLoading(true);
+              setLoadingAction("import");
               const count = await importImagesOnly();
               Alert.alert(
                 "Images Imported",
@@ -101,7 +108,7 @@ export default function SettingsScreen({ navigation }: any) {
                 Alert.alert("Import Failed", error.message);
               }
             } finally {
-              setLoading(false);
+              setLoadingAction(null);
             }
           },
         },
@@ -119,9 +126,10 @@ export default function SettingsScreen({ navigation }: any) {
           text: "Clear Cache",
           onPress: async () => {
             try {
-              setLoading(true);
+              setLoadingAction("cache");
               // Clear AsyncStorage cache (safe - doesn't terminate Firebase)
               await clearAllData();
+              await loadStats();
               Alert.alert(
                 "Success",
                 "Local cache cleared. Data will be re-synced from Firebase.",
@@ -129,7 +137,7 @@ export default function SettingsScreen({ navigation }: any) {
             } catch (error: any) {
               Alert.alert("Error", error?.message || "Failed to clear cache");
             } finally {
-              setLoading(false);
+              setLoadingAction(null);
             }
           },
         },
@@ -223,7 +231,7 @@ export default function SettingsScreen({ navigation }: any) {
             onPress={handleExportImagesOnly}
             disabled={loading}
           >
-            {loading ? (
+            {loadingAction === "export" ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <>
@@ -240,10 +248,16 @@ export default function SettingsScreen({ navigation }: any) {
             onPress={handleImportImagesOnly}
             disabled={loading}
           >
-            <Ionicons name="image-outline" size={20} color="#2e7d32" />
-            <Text style={[styles.backupButtonText, { color: "#2e7d32" }]}>
-              Import Images Only
-            </Text>
+            {loadingAction === "import" ? (
+              <ActivityIndicator color="#2e7d32" />
+            ) : (
+              <>
+                <Ionicons name="image-outline" size={20} color="#2e7d32" />
+                <Text style={[styles.backupButtonText, { color: "#2e7d32" }]}>
+                  Import Images Only
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
 
           <Text style={styles.backupNote}>

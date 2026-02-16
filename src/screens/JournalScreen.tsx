@@ -14,7 +14,11 @@ import {
 import { Image } from 'expo-image';
 import { getJournalEntries, deleteJournalEntry } from "../services/journal";
 import { getPlants } from "../services/plants";
-import { JournalEntry, Plant } from "../types/database.types";
+import {
+  JournalEntry,
+  JournalEntryType,
+  Plant,
+} from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
@@ -33,7 +37,9 @@ export default function JournalScreen({ navigation, route }: any) {
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [selectedType, setSelectedType] = useState<JournalEntryType | null>(
+    null
+  );
   const [dateFilter, setDateFilter] = useState<
     "all" | "week" | "month" | "year"
   >("month");
@@ -44,8 +50,10 @@ export default function JournalScreen({ navigation, route }: any) {
   // Gallery modal state
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setLoading(true);
+    }
     try {
       const [entriesData, { plants: plantsData }] = await Promise.all([
         getJournalEntries(),
@@ -54,9 +62,13 @@ export default function JournalScreen({ navigation, route }: any) {
       setEntries(entriesData);
       setPlants(plantsData);
     } catch (error: any) {
-      Alert.alert("Error", error.message);
+      if (!options?.silent) {
+        Alert.alert("Error", error.message);
+      }
     } finally {
-      setLoading(false);
+      if (!options?.silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -68,8 +80,9 @@ export default function JournalScreen({ navigation, route }: any) {
 
     const unsubscribe = navigation.addListener("focus", () => {
       if (isMounted) {
-        // Only reset scroll position, don't reload data
+        // Reset scroll and refresh data so imported image URIs render immediately.
         scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+        void loadData({ silent: true });
       }
     });
 
@@ -94,18 +107,19 @@ export default function JournalScreen({ navigation, route }: any) {
     return plant?.name;
   }, [plants]);
 
-  const getEntryTypeIcon = (type: string) => {
-    const iconMap: Record<string, string> = {
-      observation: "eye",
-      harvest: "basket",
-      issue: "alert-circle",
-      milestone: "flag",
-      other: "document-text",
+  const getEntryTypeIcon = (type: JournalEntryType) => {
+    const iconMap: Record<JournalEntryType, string> = {
+      [JournalEntryType.Observation]: "eye",
+      [JournalEntryType.Harvest]: "basket",
+      [JournalEntryType.Issue]: "alert-circle",
+      [JournalEntryType.Milestone]: "flag",
+      [JournalEntryType.Other]: "document-text",
     };
+    const iconName = iconMap[type] || iconMap[JournalEntryType.Other];
     return (
       <View style={styles.typeIconBadge}>
         <Ionicons
-          name={(iconMap[type] as any) || "document-text"}
+          name={iconName as any}
           size={12}
           color={theme.primary}
         />
@@ -116,15 +130,17 @@ export default function JournalScreen({ navigation, route }: any) {
   // Calculate statistics
   const stats = useMemo(() => {
     const totalHarvests = entries.filter(
-      (e) => e.entry_type === "harvest"
+      (e) => e.entry_type === JournalEntryType.Harvest
     ).length;
-    const totalIssues = entries.filter((e) => e.entry_type === "issue").length;
+    const totalIssues = entries.filter(
+      (e) => e.entry_type === JournalEntryType.Issue
+    ).length;
 
     const harvestsByPlant: Record<string, number> = {};
     let totalWeight = 0;
 
     entries.forEach((entry) => {
-      if (entry.entry_type === "harvest") {
+      if (entry.entry_type === JournalEntryType.Harvest) {
         const plantName = getPlantName(entry.plant_id) || "Unknown";
         harvestsByPlant[plantName] = (harvestsByPlant[plantName] || 0) + 1;
 
@@ -304,33 +320,44 @@ export default function JournalScreen({ navigation, route }: any) {
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.statsScroll}
+          contentContainerStyle={styles.statsScrollContent}
         >
           <View style={styles.statCard}>
             <Ionicons name="document-text" size={20} color={theme.primary} />
             <Text style={styles.statNumber}>{stats.totalEntries}</Text>
-            <Text style={styles.statLabel}>Entries</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>
+              Entries
+            </Text>
           </View>
           <View style={styles.statCard}>
             <Ionicons name="basket" size={20} color={theme.warning} />
             <Text style={styles.statNumber}>{stats.totalHarvests}</Text>
-            <Text style={styles.statLabel}>Harvests</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>
+              Harvests
+            </Text>
           </View>
           <View style={styles.statCard}>
             <Ionicons name="scale" size={20} color={theme.success} />
             <Text style={styles.statNumber}>{stats.totalWeight}</Text>
-            <Text style={styles.statLabel}>kg Total</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>
+              kg Total
+            </Text>
           </View>
           {stats.topPlant && (
             <View style={styles.statCard}>
               <Ionicons name="trophy" size={20} color={theme.warning} />
               <Text style={styles.statNumber}>{stats.topPlantCount}</Text>
-              <Text style={styles.statLabel}>{stats.topPlant}</Text>
+              <Text style={styles.statLabel} numberOfLines={1}>
+                {stats.topPlant}
+              </Text>
             </View>
           )}
           <View style={styles.statCard}>
             <Ionicons name="alert-circle" size={20} color={theme.error} />
             <Text style={styles.statNumber}>{stats.totalIssues}</Text>
-            <Text style={styles.statLabel}>Issues</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>
+              Issues
+            </Text>
           </View>
         </ScrollView>
 
@@ -381,23 +408,31 @@ export default function JournalScreen({ navigation, route }: any) {
             <TouchableOpacity
               style={[
                 styles.filterChip,
-                selectedType === "harvest" && styles.filterChipActive,
+                selectedType === JournalEntryType.Harvest &&
+                  styles.filterChipActive,
               ]}
               onPress={() =>
-                setSelectedType(selectedType === "harvest" ? null : "harvest")
+                setSelectedType(
+                  selectedType === JournalEntryType.Harvest
+                    ? null
+                    : JournalEntryType.Harvest
+                )
               }
             >
               <Ionicons
                 name="basket"
                 size={14}
                 color={
-                  selectedType === "harvest" ? theme.primary : theme.textSecondary
+                  selectedType === JournalEntryType.Harvest
+                    ? theme.primary
+                    : theme.textSecondary
                 }
               />
               <Text
                 style={[
                   styles.filterChipText,
-                  selectedType === "harvest" && styles.filterChipTextActive,
+                  selectedType === JournalEntryType.Harvest &&
+                    styles.filterChipTextActive,
                 ]}
               >
                 Harvest
@@ -406,11 +441,14 @@ export default function JournalScreen({ navigation, route }: any) {
             <TouchableOpacity
               style={[
                 styles.filterChip,
-                selectedType === "observation" && styles.filterChipActive,
+                selectedType === JournalEntryType.Observation &&
+                  styles.filterChipActive,
               ]}
               onPress={() =>
                 setSelectedType(
-                  selectedType === "observation" ? null : "observation"
+                  selectedType === JournalEntryType.Observation
+                    ? null
+                    : JournalEntryType.Observation
                 )
               }
             >
@@ -418,13 +456,16 @@ export default function JournalScreen({ navigation, route }: any) {
                 name="eye"
                 size={14}
                 color={
-                  selectedType === "observation" ? theme.primary : theme.textSecondary
+                  selectedType === JournalEntryType.Observation
+                    ? theme.primary
+                    : theme.textSecondary
                 }
               />
               <Text
                 style={[
                   styles.filterChipText,
-                  selectedType === "observation" && styles.filterChipTextActive,
+                  selectedType === JournalEntryType.Observation &&
+                    styles.filterChipTextActive,
                 ]}
               >
                 Observation
@@ -433,21 +474,31 @@ export default function JournalScreen({ navigation, route }: any) {
             <TouchableOpacity
               style={[
                 styles.filterChip,
-                selectedType === "issue" && styles.filterChipActive,
+                selectedType === JournalEntryType.Issue &&
+                  styles.filterChipActive,
               ]}
               onPress={() =>
-                setSelectedType(selectedType === "issue" ? null : "issue")
+                setSelectedType(
+                  selectedType === JournalEntryType.Issue
+                    ? null
+                    : JournalEntryType.Issue
+                )
               }
             >
               <Ionicons
                 name="alert-circle"
                 size={14}
-                color={selectedType === "issue" ? theme.primary : theme.textSecondary}
+                color={
+                  selectedType === JournalEntryType.Issue
+                    ? theme.primary
+                    : theme.textSecondary
+                }
               />
               <Text
                 style={[
                   styles.filterChipText,
-                  selectedType === "issue" && styles.filterChipTextActive,
+                  selectedType === JournalEntryType.Issue &&
+                    styles.filterChipTextActive,
                 ]}
               >
                 Issue
@@ -456,11 +507,14 @@ export default function JournalScreen({ navigation, route }: any) {
             <TouchableOpacity
               style={[
                 styles.filterChip,
-                selectedType === "milestone" && styles.filterChipActive,
+                selectedType === JournalEntryType.Milestone &&
+                  styles.filterChipActive,
               ]}
               onPress={() =>
                 setSelectedType(
-                  selectedType === "milestone" ? null : "milestone"
+                  selectedType === JournalEntryType.Milestone
+                    ? null
+                    : JournalEntryType.Milestone
                 )
               }
             >
@@ -468,13 +522,16 @@ export default function JournalScreen({ navigation, route }: any) {
                 name="flag"
                 size={14}
                 color={
-                  selectedType === "milestone" ? theme.primary : theme.textSecondary
+                  selectedType === JournalEntryType.Milestone
+                    ? theme.primary
+                    : theme.textSecondary
                 }
               />
               <Text
                 style={[
                   styles.filterChipText,
-                  selectedType === "milestone" && styles.filterChipTextActive,
+                  selectedType === JournalEntryType.Milestone &&
+                    styles.filterChipTextActive,
                 ]}
               >
                 Milestone
@@ -569,7 +626,7 @@ export default function JournalScreen({ navigation, route }: any) {
                     )}
 
                     {/* Harvest Details */}
-                    {entry.entry_type === "harvest" &&
+                    {entry.entry_type === JournalEntryType.Harvest &&
                       entry.harvest_quantity && (
                         <View style={styles.harvestDetails}>
                           <View style={styles.harvestBadge}>
@@ -775,13 +832,20 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       marginTop: 12,
       marginBottom: 10,
     },
+    statsScrollContent: {
+      paddingHorizontal: 12,
+      gap: 3,
+      alignItems: "stretch",
+    },
     statCard: {
       backgroundColor: theme.backgroundSecondary,
       borderRadius: 10,
-      padding: 8,
-      marginRight: 8,
+      width: 88,
+      minHeight: 88,
+      paddingVertical: 8,
+      paddingHorizontal: 6,
       alignItems: "center",
-      minWidth: 70,
+      justifyContent: "center",
     },
     statNumber: {
       fontSize: 16,
@@ -793,6 +857,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontSize: 10,
       color: theme.textSecondary,
       marginTop: 1,
+      lineHeight: 12,
       textAlign: "center",
     },
     searchFilterRow: {
