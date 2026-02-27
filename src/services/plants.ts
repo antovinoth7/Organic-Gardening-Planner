@@ -28,6 +28,7 @@ import { logError } from '../utils/errorLogging';
 
 const PLANTS_COLLECTION = 'plants';
 const DEFAULT_PAGE_SIZE = 50;
+const FETCH_ALL_PAGE_SIZE = 100;
 
 /**
  * Get all plants with offline-first approach and pagination support
@@ -141,6 +142,28 @@ export const getPlants = async (
     }));
     return { plants: resolvedCached.filter((plant) => !plant.is_deleted) };
   }
+};
+
+export const getAllPlants = async (
+  pageSize: number = FETCH_ALL_PAGE_SIZE
+): Promise<Plant[]> => {
+  const allPlants: Plant[] = [];
+  let lastDoc: QueryDocumentSnapshot | undefined = undefined;
+  let hasMore = true;
+
+  while (hasMore) {
+    const response = await getPlants(pageSize, lastDoc);
+    allPlants.push(...(response.plants ?? []));
+
+    if (!response.lastDoc || response.plants.length < pageSize) {
+      hasMore = false;
+      continue;
+    }
+
+    lastDoc = response.lastDoc;
+  }
+
+  return allPlants;
 };
 
 export const getPlant = async (id: string): Promise<Plant | null> => {

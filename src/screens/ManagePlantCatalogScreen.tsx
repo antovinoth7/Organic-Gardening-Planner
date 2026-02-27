@@ -26,7 +26,7 @@ import {
   getPlantCareProfiles,
   savePlantCareProfiles,
 } from "../services/plantCareProfiles";
-import { getPlants, updatePlantVariety } from "../services/plants";
+import { getAllPlants, updatePlantVariety } from "../services/plants";
 import {
   FertiliserType,
   GrowthStage,
@@ -164,33 +164,12 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
   const [careModal, setCareModal] = useState<CareModalState | null>(null);
   const [careForm, setCareForm] = useState<CareFormState | null>(null);
 
-  const loadAllPlants = useCallback(async () => {
-    const allPlants: Plant[] = [];
-    let lastDoc: any = undefined;
-    const pageSize = 100;
-    let hasMore = true;
-
-    while (hasMore) {
-      const response = await getPlants(pageSize, lastDoc);
-      allPlants.push(...(response.plants ?? []));
-
-      if (!response.lastDoc || response.plants.length < pageSize) {
-        hasMore = false;
-        continue;
-      }
-
-      lastDoc = response.lastDoc;
-    }
-
-    return allPlants;
-  }, []);
-
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [catalogData, allPlants, careProfileData] = await Promise.all([
         getPlantCatalog(),
-        loadAllPlants(),
+        getAllPlants(),
         getPlantCareProfiles(),
       ]);
       setCatalog(catalogData);
@@ -204,7 +183,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
     } finally {
       setLoading(false);
     }
-  }, [loadAllPlants]);
+  }, []);
 
   useEffect(() => {
     loadData();

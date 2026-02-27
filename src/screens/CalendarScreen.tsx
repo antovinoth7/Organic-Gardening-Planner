@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput,
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { getTaskTemplates, createTaskTemplate, markTaskDone, deleteTasksForPlantIds } from '../services/tasks';
-import { getPlants, plantExists } from '../services/plants';
+import { getAllPlants, plantExists } from '../services/plants';
 import { getJournalEntries } from '../services/journal';
 import {
   TaskTemplate,
@@ -109,9 +109,9 @@ export default function CalendarScreen() {
 
   const loadData = React.useCallback(async () => {
     try {
-      const [tasksData, { plants: plantsData }, journalData] = await Promise.all([
+      const [tasksData, plantsData, journalData] = await Promise.all([
         getTaskTemplates(),
-        getPlants(),
+        getAllPlants(),
         getJournalEntries(),
       ]);
       

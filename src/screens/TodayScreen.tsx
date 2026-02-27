@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, Alert, Modal, TextInput } from 'react-native';
 import { getTodayTasks, markTaskDone, updateTaskTemplate, getTaskLogs, calculateTaskPriority } from '../services/tasks';
-import { getPlants } from '../services/plants';
+import { getAllPlants } from '../services/plants';
 import { TaskTemplate, Plant, TaskLog } from '../types/database.types';
 import TaskCard from '../components/TaskCard';
 import { Ionicons } from '@expo/vector-icons';
@@ -56,9 +56,9 @@ export default function TodayScreen({ navigation, route }: any) {
       setLoading(true);
     }
     try {
-      const [tasksData, { plants: plantsData }, logs] = await Promise.all([
+      const [tasksData, plantsData, logs] = await Promise.all([
         getTodayTasks(),
-        getPlants(),
+        getAllPlants(),
         getTaskLogs(),
       ]);
       

@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { Image } from 'expo-image';
 import { getJournalEntries, deleteJournalEntry } from "../services/journal";
-import { getPlants } from "../services/plants";
+import { getAllPlants } from "../services/plants";
 import {
   JournalEntry,
   JournalEntryType,
@@ -55,9 +55,9 @@ export default function JournalScreen({ navigation, route }: any) {
       setLoading(true);
     }
     try {
-      const [entriesData, { plants: plantsData }] = await Promise.all([
+      const [entriesData, plantsData] = await Promise.all([
         getJournalEntries(),
-        getPlants(),
+        getAllPlants(),
       ]);
       setEntries(entriesData);
       setPlants(plantsData);

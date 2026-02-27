@@ -18,7 +18,7 @@ import {
   updateJournalEntry,
   saveJournalImage,
 } from "../services/journal";
-import { getPlants } from "../services/plants";
+import { getAllPlants } from "../services/plants";
 import { Plant, JournalEntry, JournalEntryType } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -105,7 +105,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
 
   const loadPlants = async () => {
     try {
-      const { plants: data } = await getPlants();
+      const data = await getAllPlants();
       setPlants(data);
     } catch (error: any) {
       Alert.alert("Error", error.message);

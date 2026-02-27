@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl, Alert, ActivityIndicator, ScrollView, TextInput } from 'react-native';
-import { getPlants, deletePlant } from '../services/plants';
+import { getAllPlants, deletePlant } from '../services/plants';
 import {
   DEFAULT_CHILD_LOCATIONS,
   DEFAULT_PARENT_LOCATIONS,
@@ -64,7 +64,7 @@ export default function PlantsScreen({ navigation, route }: any) {
       setLoading(true);
     }
     try {
-      const { plants: data } = await getPlants();
+      const data = await getAllPlants();
       setPlants(data);
       setDisplayCount(ITEMS_PER_PAGE);
     } catch (error: any) {

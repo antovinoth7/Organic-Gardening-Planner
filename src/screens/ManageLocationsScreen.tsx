@@ -21,7 +21,7 @@ import {
   getLocationConfig,
   saveLocationConfig,
 } from "../services/locations";
-import { getPlants, updatePlantLocation } from "../services/plants";
+import { getAllPlants, updatePlantLocation } from "../services/plants";
 import { Plant } from "../types/database.types";
 import { sanitizeLandmarkText } from "../utils/textSanitizer";
 
@@ -89,33 +89,12 @@ export default function ManageLocationsScreen({ navigation }: any) {
     null,
   );
 
-  const loadAllPlants = useCallback(async () => {
-    const allPlants: Plant[] = [];
-    let lastDoc: any = undefined;
-    const pageSize = 100;
-    let hasMore = true;
-
-    while (hasMore) {
-      const response = await getPlants(pageSize, lastDoc);
-      allPlants.push(...(response.plants ?? []));
-
-      if (!response.lastDoc || response.plants.length < pageSize) {
-        hasMore = false;
-        continue;
-      }
-
-      lastDoc = response.lastDoc;
-    }
-
-    return allPlants;
-  }, []);
-
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [config, allPlants] = await Promise.all([
         getLocationConfig(),
-        loadAllPlants(),
+        getAllPlants(),
       ]);
       setParentLocations(config.parentLocations);
       setChildLocations(config.childLocations);
@@ -128,7 +107,7 @@ export default function ManageLocationsScreen({ navigation }: any) {
     } finally {
       setLoading(false);
     }
-  }, [loadAllPlants]);
+  }, []);
 
   useEffect(() => {
     loadData();
