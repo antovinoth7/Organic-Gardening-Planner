@@ -1,110 +1,149 @@
 # Organic Gardening Planner - Copilot Instructions
 
-Concise guidance for AI contributors working on this Expo React Native gardening planner.
+Use this file as the working source of guidance for AI contributors. If any markdown docs conflict with the TypeScript code, prefer the live code in `App.tsx`, `src/services/*`, `src/lib/*`, and `src/types/database.types.ts`.
 
-## Core Architecture Principles
-- **Free-forever design**: Firestore stores text/metadata ONLY (Auth + Firestore, NO Storage).
-- **Images are device-local & persistent**:
-  - Android: Photos stored in MediaLibrary (Pictures/GardenPlanner) - survives reinstalls
-  - iOS: Photos in `FileSystem.documentDirectory/garden_images/` - backed up to iCloud
-  - Web: Blob URLs (session-based)
-  - Images NEVER uploaded to cloud
-- **Offline-first**: All services fetch from Firestore → cache to AsyncStorage → fall back to cache on error.
-- **Manual backups**: User-controlled JSON or ZIP exports (data-only, data+images, or images-only).
+## Current Stack
+- Expo SDK 54, React 19, React Native 0.81, TypeScript.
+- App entry is `App.tsx`.
+- Providers wrap the app in this order: `ErrorBoundary` -> `SafeAreaProvider` -> `ThemeProvider`.
+- Navigation is auth-gated with Firebase Auth.
+- Main tabs are `Home`, `Plants`, `Care Plan`, `Journal`, and `More`.
+- Nested stacks exist for Plants, Journal, and More. Keep existing route names unchanged unless you update all callers.
 
-## Critical Data Flow Pattern
-**ALWAYS** follow this pattern in `src/services/*.ts`:
+## Architecture Rules
+- Firebase is used for Auth and Firestore only.
+- Do not add Firebase Storage. Images are intentionally device-local.
+- Firestore is initialized with `memoryLocalCache()` in `src/lib/firebase.ts`.
+- Never call `terminate()` on the Firestore instance.
+- AsyncStorage is the app-managed cache layer and is accessed through `src/lib/storage.ts`.
+- `clearAllData()` should clear only local cached data, not Firestore internals.
 
-```typescript
-// 1. Check auth
-const user = auth.currentUser;
-if (!user) throw new Error('Not authenticated');
+## Active Firestore Shape
+- `plants`: plant metadata and stored image filename.
+- `task_templates`: recurring care schedule records.
+- `task_logs`: completion history.
+- `journal_entries`: journal text and stored image filenames.
+- `user_settings/{uid}`: per-user settings payloads for:
+  - `locations`
+  - `plantCatalog`
+  - `plantCareProfiles`
 
-// 2. Query Firestore with timeout/retry
-const snapshot = await withTimeoutAndRetry(
-  () => getDocs(query(...)),
-  { timeoutMs: 15000, maxRetries: 2 }
-);
+All app data is scoped by `user_id` or the authenticated user's settings document.
 
-// 3. Transform Firestore docs (handle Timestamp → ISO string)
-const data = snapshot.docs.map(doc => ({
-  id: doc.id,
-  ...doc.data(),
-  created_at: doc.data().created_at?.toDate?.()?.toISOString() || doc.data().created_at,
-}));
+## Image Storage Rules
+- Images never go to Firestore or cloud storage.
+- Store only filenames in Firestore and backups:
+  - Plant photos: `photo_filename`
+  - Journal photos: `photo_filenames`
+- Treat local URIs as derived values:
+  - Plant UI field: `photo_url`
+  - Journal UI field: `photo_urls`
+- Use `saveImageLocallyWithFilename()` from `src/lib/imageStorage.ts` before saving plant or journal records.
+- Use `resolveLocalImageUri()` or `resolveLocalImageUris()` before rendering images.
 
-// 4. Cache results locally (AsyncStorage)
-await setData(KEYS.ITEMS, data);
-return data;
+Platform behavior:
+- Android dev builds: prefer `expo-media-library` storage in `Pictures/GardenPlanner`.
+- Android Expo Go: fall back to `FileSystem.documentDirectory/garden_images/`.
+- iOS: use `FileSystem.documentDirectory/garden_images/`.
+- Web: use blob URLs.
 
-// 5. Fallback on error
-catch (error) {
-  console.warn('Firestore failed, using cache:', error);
-  return getData<T>(KEYS.ITEMS);
-}
-```
+Migration behavior:
+- `App.tsx` runs `migrateImagesToMediaLibrary()` after authentication on Android.
+- `src/services/backup.ts` also runs Android migration after image import.
+- Preserve this flow when changing image storage.
 
-See `src/services/plants.ts` (lines 30-100) and `src/services/tasks.ts` (lines 25-65) for examples.
+## Service Layer Conventions
+- Keep Firestore and cache logic inside `src/services/*`.
+- Typical service flow is:
+  1. Check `auth.currentUser`.
+  2. Refresh auth with `refreshAuthToken()` before important reads.
+  3. Wrap Firestore operations with `withTimeoutAndRetry()` where practical.
+  4. Convert Firestore `Timestamp` values to ISO strings for app models.
+  5. Update AsyncStorage caches through `getData()` and `setData()`.
+  6. Fall back to cached data for read failures.
+- Prefer existing service modules over duplicating Firestore access from screens.
 
-## Image Handling Rules
-- **Save**: Use `saveImageLocallyWithFilename(uri, prefix)` from `src/lib/imageStorage.ts`.
-- **Store in Firestore**: Save only `photo_filename` string (e.g., `"plant_1738091234_abc123.jpg"`), NOT URIs.
-- **Resolve for UI**: Use `resolveLocalImageUri(filename)` to get the current device path.
-- **Web platform**: Returns blob URLs; no file deletion attempted.
-- **Example** (`src/services/plants.ts` lines 200-220):
-  ```typescript
-  const { filename } = await saveImageLocallyWithFilename(photoUri, 'plant');
-  await addDoc(collection(db, 'plants'), {
-    ...plantData,
-    photo_filename: filename,  // Store filename, not URI
-  });
-  ```
+Specific current behavior to preserve:
+- `src/services/plants.ts`
+  - Uses paginated reads.
+  - Soft-deletes plants with `is_deleted` and `deleted_at`.
+  - Resolves image filenames to local URIs before returning plants.
+  - Cascades plant deletion into tasks via `deleteTasksForPlantIds()`.
+- `src/services/tasks.ts`
+  - Avoids extra Firestore composite index requirements by filtering and sorting in memory in some queries.
+  - `markTaskDone()` writes a task log, updates `next_due_at`, and also updates plant last-care fields.
+  - Recurring task due times are normalized to 6:00 PM.
+  - `syncCareTasksForPlant()` maintains water, fertilise, prune, and coconut harvest tasks from plant settings.
+- `src/services/journal.ts`
+  - Supports multiple images through `photo_filenames` and `photo_urls`.
+  - Still carries the legacy single `photo_url` field for backward compatibility.
+- `src/services/backup.ts`
+  - Supports images-only ZIP export/import.
+  - Does not currently support data-only or full data-plus-images backups.
 
-## Type System & Firestore Timestamps
-- All types in `src/types/database.types.ts`.
-- Firestore stores `Timestamp` objects; transform to ISO strings (`.toDate().toISOString()`) for app use.
-- Preserve both `photo_filename` (stable, stored) and `photo_url` (local URI, derived) in `Plant` and `JournalEntry`.
+## Domain Logic
+- The app is intentionally tailored to Kanyakumari / South Tamil Nadu gardening conditions.
+- `src/utils/seasonHelpers.ts` defines a four-season model:
+  - `summer`
+  - `sw_monsoon`
+  - `ne_monsoon`
+  - `cool_dry`
+- Watering frequencies and reminders are season-aware.
+- `src/utils/plantHelpers.ts` contains important domain behavior for:
+  - expected harvest dates
+  - companion planting
+  - pest and disease suggestions
+  - coconut age-based care guidance
+  - coconut nutrient deficiency guidance
+- Preserve this regional logic unless a change is explicitly requested.
 
-## Service Layer Patterns
-- **Plants**: `src/services/plants.ts` — CRUD + image resolution + pagination (line 30 `getPlants`).
-- **Tasks**: `src/services/tasks.ts` — Templates + completion logs + auto-scheduling (line 25 `getTaskTemplates`).
-- **Journal**: `src/services/journal.ts` — Multi-photo support via `photo_filenames` array.
-- **Backup**: `src/services/backup.ts` — JSON/ZIP export/import with image bundling.
+## Plant and Settings Data
+- Core types live in `src/types/database.types.ts`. Update types first when changing schema.
+- `Plant` includes:
+  - care frequencies
+  - health status
+  - growth stage
+  - pest and disease history
+  - soft-delete fields
+  - coconut-specific metrics
+  - `care_schedule` metadata
+- Plant catalog defaults and aliases live in `src/services/plantCatalog.ts`.
+- Care profile overrides live in `src/services/plantCareProfiles.ts`.
+- Location defaults and normalization live in `src/services/locations.ts`.
+- These settings are cached locally and synced through `user_settings`.
 
-## Backup Types (in Settings UI)
-1. **Data-only JSON**: `exportBackup()` / `importBackup()` — no images, just filenames.
-2. **Complete ZIP**: `exportBackupWithImages()` / `importBackupWithImages()` — data + `images/` folder.
-3. **Images-only ZIP**: `exportImagesOnly()` / `importImagesOnly()` — photos only, matched by filename.
+## UI Conventions
+- Use `useTheme()` for colors and shared tokens.
+- Use `useThemeMode()` for theme mode changes.
+- Prefer existing themed styles over new hardcoded colors, unless matching an already hardcoded local accent in that screen.
+- Most screens use safe area insets and refresh on focus; preserve those patterns when modifying screens.
+- Reuse existing shared components where possible:
+  - `PlantCard`
+  - `TaskCard`
+  - `PhotoSourceModal`
+  - `CollapsibleSection`
+  - `ErrorBoundary`
 
-## Network & Resilience
-- Wrap ALL Firestore calls with `withTimeoutAndRetry()` from `src/utils/firestoreTimeout.ts` (15s timeout, 2 retries).
-- Check `isNetworkAvailable()` before operations; utility is in `src/utils/networkState.ts`.
-- Do NOT retry on auth errors (`permission-denied`, `unauthenticated`).
+## Reliability and Logging
+- Sentry is initialized in `App.tsx` when a DSN is configured.
+- Global error and unhandled promise rejection handlers are already wired up in `App.tsx`.
+- Use `logError()`, `logAuthError()`, and storage-safe helpers instead of ad hoc error handling when touching existing flows.
+- `safeStorage` is the defensive wrapper for AsyncStorage access.
 
-## Error Handling & Observability
-- Sentry initialized in `App.tsx` when `EXPO_PUBLIC_SENTRY_DSN` is set.
-- Use `logError(category, message, error)` from `src/utils/errorLogging.ts` for structured logs.
-- `ErrorBoundary` wraps the app; `errorTracker` persists logs to AsyncStorage.
+## Backup Guidance
+- Current user-facing backup in Settings is images only.
+- Do not reintroduce `exportBackup`, `importBackup`, or full ZIP flows unless the feature is intentionally rebuilt across services, UI, and docs.
+- When importing images, matching is filename-based and should continue to work for both plants and journal entries.
 
 ## Development Commands
 ```bash
-npm install                # Install dependencies
-npx expo start             # Start dev server (or `npm start`)
-npx expo start --android   # Run on Android
-npx expo start --ios       # Run on iOS (macOS only)
-npx expo start --web       # Run in web browser
+npm start
+npm run android
+npm run ios
+npm run web
+npm run lint
 ```
 
-## Firebase Configuration
-- Create `.env` in repo root (see `FIREBASE_SETUP.md` for full guide):
-  ```env
-  EXPO_PUBLIC_FIREBASE_API_KEY=...
-  EXPO_PUBLIC_FIREBASE_PROJECT_ID=...
-  # Never enable Firebase Storage — images are local only
-  ```
-- Security rules enforce `user_id` ownership per collection.
-
-## When Adding Features
-- Update `ARCHITECTURE.md` if changing data flows or storage patterns.
-- Update `BACKUP_GUIDE.md` if modifying export/import logic.
-- **Never** add Firebase Storage — images must stay local to maintain free-tier sustainability.
+## When You Change Behavior
+- Update this file if contributor guidance changes.
+- Update `ARCHITECTURE.md`, `BACKUP_GUIDE.md`, `README.md`, or setup docs only if you also bring them in line with the code.
