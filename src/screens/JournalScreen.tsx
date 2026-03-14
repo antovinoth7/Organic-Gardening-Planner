@@ -1,4 +1,10 @@
-import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
 import {
   View,
   Text,
@@ -10,15 +16,21 @@ import {
   TextInput,
   Modal,
   Dimensions,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from "react-native";
-import { Image } from 'expo-image';
+
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+import { Image } from "expo-image";
 import { getJournalEntries, deleteJournalEntry } from "../services/journal";
 import { getAllPlants } from "../services/plants";
-import {
-  JournalEntry,
-  JournalEntryType,
-  Plant,
-} from "../types/database.types";
+import { JournalEntry, JournalEntryType, Plant } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
@@ -38,7 +50,7 @@ export default function JournalScreen({ navigation, route }: any) {
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState<JournalEntryType | null>(
-    null
+    null,
   );
   const [dateFilter, setDateFilter] = useState<
     "all" | "week" | "month" | "year"
@@ -46,6 +58,9 @@ export default function JournalScreen({ navigation, route }: any) {
 
   // View mode state
   const [viewMode, setViewMode] = useState<"list" | "gallery">("list");
+
+  // Collapsible filter state
+  const [showFilters, setShowFilters] = useState(false);
 
   // Gallery modal state
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -74,7 +89,7 @@ export default function JournalScreen({ navigation, route }: any) {
 
   useEffect(() => {
     let isMounted = true;
-    
+
     // Load data on mount
     loadData();
 
@@ -101,11 +116,14 @@ export default function JournalScreen({ navigation, route }: any) {
     }
   }, [route?.params?.refresh, navigation]);
 
-  const getPlantName = useCallback((plantId: string | null) => {
-    if (!plantId) return null;
-    const plant = plants.find((p) => p.id === plantId);
-    return plant?.name;
-  }, [plants]);
+  const getPlantName = useCallback(
+    (plantId: string | null) => {
+      if (!plantId) return null;
+      const plant = plants.find((p) => p.id === plantId);
+      return plant?.name;
+    },
+    [plants],
+  );
 
   const getEntryTypeIcon = (type: JournalEntryType) => {
     const iconMap: Record<JournalEntryType, string> = {
@@ -115,25 +133,25 @@ export default function JournalScreen({ navigation, route }: any) {
       [JournalEntryType.Milestone]: "flag",
       [JournalEntryType.Other]: "document-text",
     };
+    const colorMap: Record<JournalEntryType, string> = {
+      [JournalEntryType.Observation]: theme.primary,
+      [JournalEntryType.Harvest]: theme.warning,
+      [JournalEntryType.Issue]: theme.error,
+      [JournalEntryType.Milestone]: theme.success,
+      [JournalEntryType.Other]: theme.textSecondary,
+    };
     const iconName = iconMap[type] || iconMap[JournalEntryType.Other];
-    return (
-      <View style={styles.typeIconBadge}>
-        <Ionicons
-          name={iconName as any}
-          size={12}
-          color={theme.primary}
-        />
-      </View>
-    );
+    const color = colorMap[type] || theme.textSecondary;
+    return { iconName, color };
   };
 
   // Calculate statistics
   const stats = useMemo(() => {
     const totalHarvests = entries.filter(
-      (e) => e.entry_type === JournalEntryType.Harvest
+      (e) => e.entry_type === JournalEntryType.Harvest,
     ).length;
     const totalIssues = entries.filter(
-      (e) => e.entry_type === JournalEntryType.Issue
+      (e) => e.entry_type === JournalEntryType.Issue,
     ).length;
 
     const harvestsByPlant: Record<string, number> = {};
@@ -155,7 +173,7 @@ export default function JournalScreen({ navigation, route }: any) {
     });
 
     const topPlant = Object.entries(harvestsByPlant).sort(
-      (a, b) => b[1] - a[1]
+      (a, b) => b[1] - a[1],
     )[0];
 
     return {
@@ -205,10 +223,78 @@ export default function JournalScreen({ navigation, route }: any) {
     }
 
     // Sort by newest first
-    filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    filtered.sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
 
     return filtered;
   }, [entries, searchQuery, selectedType, dateFilter, getPlantName]);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (dateFilter !== "month") count++; // 'month' is default, so only count non-default
+    if (selectedType) count++;
+    return count;
+  }, [dateFilter, selectedType]);
+
+  const toggleFilters = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setShowFilters((prev) => !prev);
+  };
+
+  const activeFilterChips = useMemo(() => {
+    const chips: { key: string; label: string; onRemove: () => void }[] = [];
+    if (dateFilter === "week")
+      chips.push({
+        key: "date",
+        label: "📅 This Week",
+        onRemove: () => setDateFilter("month"),
+      });
+    if (dateFilter === "year")
+      chips.push({
+        key: "date",
+        label: "📅 This Year",
+        onRemove: () => setDateFilter("month"),
+      });
+    if (dateFilter === "all")
+      chips.push({
+        key: "date",
+        label: "📅 All Time",
+        onRemove: () => setDateFilter("month"),
+      });
+    if (selectedType === JournalEntryType.Harvest)
+      chips.push({
+        key: "type",
+        label: "🧺 Harvest",
+        onRemove: () => setSelectedType(null),
+      });
+    if (selectedType === JournalEntryType.Observation)
+      chips.push({
+        key: "type",
+        label: "👁️ Observation",
+        onRemove: () => setSelectedType(null),
+      });
+    if (selectedType === JournalEntryType.Issue)
+      chips.push({
+        key: "type",
+        label: "⚠️ Issue",
+        onRemove: () => setSelectedType(null),
+      });
+    if (selectedType === JournalEntryType.Milestone)
+      chips.push({
+        key: "type",
+        label: "🏁 Milestone",
+        onRemove: () => setSelectedType(null),
+      });
+    return chips;
+  }, [dateFilter, selectedType]);
+
+  const clearAllFilters = () => {
+    setSearchQuery("");
+    setSelectedType(null);
+    setDateFilter("month");
+  };
 
   // Get all photos for gallery view
   const allPhotos = useMemo(() => {
@@ -243,7 +329,7 @@ export default function JournalScreen({ navigation, route }: any) {
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -280,6 +366,26 @@ export default function JournalScreen({ navigation, route }: any) {
           <View style={styles.headerActions}>
             <TouchableOpacity
               style={[
+                styles.filterToggleButton,
+                showFilters && styles.filterToggleButtonActive,
+              ]}
+              onPress={toggleFilters}
+            >
+              <Ionicons
+                name="options"
+                size={20}
+                color={showFilters ? "#fff" : theme.primary}
+              />
+              {activeFilterCount > 0 && !showFilters && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>
+                    {activeFilterCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
                 styles.viewToggle,
                 viewMode === "list" && styles.viewToggleActive,
               ]}
@@ -288,7 +394,9 @@ export default function JournalScreen({ navigation, route }: any) {
               <Ionicons
                 name="list"
                 size={20}
-                color={viewMode === "list" ? theme.primary : theme.textSecondary}
+                color={
+                  viewMode === "list" ? theme.primary : theme.textSecondary
+                }
               />
             </TouchableOpacity>
             <TouchableOpacity
@@ -301,7 +409,9 @@ export default function JournalScreen({ navigation, route }: any) {
               <Ionicons
                 name="grid"
                 size={20}
-                color={viewMode === "gallery" ? theme.primary : theme.textSecondary}
+                color={
+                  viewMode === "gallery" ? theme.primary : theme.textSecondary
+                }
               />
             </TouchableOpacity>
           </View>
@@ -316,242 +426,267 @@ export default function JournalScreen({ navigation, route }: any) {
         }
       >
         {/* Statistics Dashboard */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.statsScroll}
-          contentContainerStyle={styles.statsScrollContent}
-        >
+        <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Ionicons name="document-text" size={20} color={theme.primary} />
+            <Ionicons name="document-text" size={18} color={theme.primary} />
             <Text style={styles.statNumber}>{stats.totalEntries}</Text>
             <Text style={styles.statLabel} numberOfLines={1}>
               Entries
             </Text>
           </View>
           <View style={styles.statCard}>
-            <Ionicons name="basket" size={20} color={theme.warning} />
+            <Ionicons name="basket" size={18} color={theme.warning} />
             <Text style={styles.statNumber}>{stats.totalHarvests}</Text>
             <Text style={styles.statLabel} numberOfLines={1}>
               Harvests
             </Text>
           </View>
           <View style={styles.statCard}>
-            <Ionicons name="scale" size={20} color={theme.success} />
+            <Ionicons name="scale" size={18} color={theme.success} />
             <Text style={styles.statNumber}>{stats.totalWeight}</Text>
             <Text style={styles.statLabel} numberOfLines={1}>
               kg Total
             </Text>
           </View>
-          {stats.topPlant && (
-            <View style={styles.statCard}>
-              <Ionicons name="trophy" size={20} color={theme.warning} />
-              <Text style={styles.statNumber}>{stats.topPlantCount}</Text>
-              <Text style={styles.statLabel} numberOfLines={1}>
-                {stats.topPlant}
-              </Text>
-            </View>
-          )}
           <View style={styles.statCard}>
-            <Ionicons name="alert-circle" size={20} color={theme.error} />
+            <Ionicons name="alert-circle" size={18} color={theme.error} />
             <Text style={styles.statNumber}>{stats.totalIssues}</Text>
             <Text style={styles.statLabel} numberOfLines={1}>
               Issues
             </Text>
           </View>
-        </ScrollView>
-
-        {/* Search Bar and Filters in One Row */}
-        <View style={styles.searchFilterRow}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.filtersScroll}
-          >
-            <TouchableOpacity
-              style={[
-                styles.filterChip,
-                dateFilter === "week" && styles.filterChipActive,
-              ]}
-              onPress={() =>
-                setDateFilter(dateFilter === "week" ? "all" : "week")
-              }
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  dateFilter === "week" && styles.filterChipTextActive,
-                ]}
-              >
-                This Week
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.filterChip,
-                dateFilter === "month" && styles.filterChipActive,
-              ]}
-              onPress={() =>
-                setDateFilter(dateFilter === "month" ? "all" : "month")
-              }
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  dateFilter === "month" && styles.filterChipTextActive,
-                ]}
-              >
-                This Month
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.filterChip,
-                selectedType === JournalEntryType.Harvest &&
-                  styles.filterChipActive,
-              ]}
-              onPress={() =>
-                setSelectedType(
-                  selectedType === JournalEntryType.Harvest
-                    ? null
-                    : JournalEntryType.Harvest
-                )
-              }
-            >
-              <Ionicons
-                name="basket"
-                size={14}
-                color={
-                  selectedType === JournalEntryType.Harvest
-                    ? theme.primary
-                    : theme.textSecondary
-                }
-              />
-              <Text
-                style={[
-                  styles.filterChipText,
-                  selectedType === JournalEntryType.Harvest &&
-                    styles.filterChipTextActive,
-                ]}
-              >
-                Harvest
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.filterChip,
-                selectedType === JournalEntryType.Observation &&
-                  styles.filterChipActive,
-              ]}
-              onPress={() =>
-                setSelectedType(
-                  selectedType === JournalEntryType.Observation
-                    ? null
-                    : JournalEntryType.Observation
-                )
-              }
-            >
-              <Ionicons
-                name="eye"
-                size={14}
-                color={
-                  selectedType === JournalEntryType.Observation
-                    ? theme.primary
-                    : theme.textSecondary
-                }
-              />
-              <Text
-                style={[
-                  styles.filterChipText,
-                  selectedType === JournalEntryType.Observation &&
-                    styles.filterChipTextActive,
-                ]}
-              >
-                Observation
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.filterChip,
-                selectedType === JournalEntryType.Issue &&
-                  styles.filterChipActive,
-              ]}
-              onPress={() =>
-                setSelectedType(
-                  selectedType === JournalEntryType.Issue
-                    ? null
-                    : JournalEntryType.Issue
-                )
-              }
-            >
-              <Ionicons
-                name="alert-circle"
-                size={14}
-                color={
-                  selectedType === JournalEntryType.Issue
-                    ? theme.primary
-                    : theme.textSecondary
-                }
-              />
-              <Text
-                style={[
-                  styles.filterChipText,
-                  selectedType === JournalEntryType.Issue &&
-                    styles.filterChipTextActive,
-                ]}
-              >
-                Issue
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.filterChip,
-                selectedType === JournalEntryType.Milestone &&
-                  styles.filterChipActive,
-              ]}
-              onPress={() =>
-                setSelectedType(
-                  selectedType === JournalEntryType.Milestone
-                    ? null
-                    : JournalEntryType.Milestone
-                )
-              }
-            >
-              <Ionicons
-                name="flag"
-                size={14}
-                color={
-                  selectedType === JournalEntryType.Milestone
-                    ? theme.primary
-                    : theme.textSecondary
-                }
-              />
-              <Text
-                style={[
-                  styles.filterChipText,
-                  selectedType === JournalEntryType.Milestone &&
-                    styles.filterChipTextActive,
-                ]}
-              >
-                Milestone
-              </Text>
-            </TouchableOpacity>
-          </ScrollView>
         </View>
+
+        {/* Active filter pills (shown when filter panel is collapsed) */}
+        {!showFilters && activeFilterChips.length > 0 && (
+          <View style={styles.activeFiltersRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.activeFiltersScroll}
+            >
+              {activeFilterChips.map((chip) => (
+                <TouchableOpacity
+                  key={chip.key}
+                  style={styles.activeFilterPill}
+                  onPress={chip.onRemove}
+                >
+                  <Text style={styles.activeFilterPillText}>{chip.label}</Text>
+                  <Ionicons name="close" size={12} color={theme.primary} />
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                onPress={clearAllFilters}
+                style={styles.clearAllPill}
+              >
+                <Text style={styles.clearAllPillText}>Clear all</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Collapsible Filter Panel */}
+        {showFilters && (
+          <View style={styles.searchFilterRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.filtersScroll}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.filterChip,
+                  dateFilter === "week" && styles.filterChipActive,
+                ]}
+                onPress={() =>
+                  setDateFilter(dateFilter === "week" ? "all" : "week")
+                }
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    dateFilter === "week" && styles.filterChipTextActive,
+                  ]}
+                >
+                  This Week
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.filterChip,
+                  dateFilter === "month" && styles.filterChipActive,
+                ]}
+                onPress={() =>
+                  setDateFilter(dateFilter === "month" ? "all" : "month")
+                }
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    dateFilter === "month" && styles.filterChipTextActive,
+                  ]}
+                >
+                  This Month
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.filterChip,
+                  selectedType === JournalEntryType.Harvest &&
+                    styles.filterChipActive,
+                ]}
+                onPress={() =>
+                  setSelectedType(
+                    selectedType === JournalEntryType.Harvest
+                      ? null
+                      : JournalEntryType.Harvest,
+                  )
+                }
+              >
+                <Ionicons
+                  name="basket"
+                  size={14}
+                  color={
+                    selectedType === JournalEntryType.Harvest
+                      ? theme.primary
+                      : theme.textSecondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    selectedType === JournalEntryType.Harvest &&
+                      styles.filterChipTextActive,
+                  ]}
+                >
+                  Harvest
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.filterChip,
+                  selectedType === JournalEntryType.Observation &&
+                    styles.filterChipActive,
+                ]}
+                onPress={() =>
+                  setSelectedType(
+                    selectedType === JournalEntryType.Observation
+                      ? null
+                      : JournalEntryType.Observation,
+                  )
+                }
+              >
+                <Ionicons
+                  name="eye"
+                  size={14}
+                  color={
+                    selectedType === JournalEntryType.Observation
+                      ? theme.primary
+                      : theme.textSecondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    selectedType === JournalEntryType.Observation &&
+                      styles.filterChipTextActive,
+                  ]}
+                >
+                  Observation
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.filterChip,
+                  selectedType === JournalEntryType.Issue &&
+                    styles.filterChipActive,
+                ]}
+                onPress={() =>
+                  setSelectedType(
+                    selectedType === JournalEntryType.Issue
+                      ? null
+                      : JournalEntryType.Issue,
+                  )
+                }
+              >
+                <Ionicons
+                  name="alert-circle"
+                  size={14}
+                  color={
+                    selectedType === JournalEntryType.Issue
+                      ? theme.primary
+                      : theme.textSecondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    selectedType === JournalEntryType.Issue &&
+                      styles.filterChipTextActive,
+                  ]}
+                >
+                  Issue
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.filterChip,
+                  selectedType === JournalEntryType.Milestone &&
+                    styles.filterChipActive,
+                ]}
+                onPress={() =>
+                  setSelectedType(
+                    selectedType === JournalEntryType.Milestone
+                      ? null
+                      : JournalEntryType.Milestone,
+                  )
+                }
+              >
+                <Ionicons
+                  name="flag"
+                  size={14}
+                  color={
+                    selectedType === JournalEntryType.Milestone
+                      ? theme.primary
+                      : theme.textSecondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    selectedType === JournalEntryType.Milestone &&
+                      styles.filterChipTextActive,
+                  ]}
+                >
+                  Milestone
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        )}
 
         {viewMode === "list" ? (
           <View style={styles.entriesContainer}>
             {filteredEntries.map((entry) => {
               const plantName = getPlantName(entry.plant_id);
-              const date = new Date(entry.created_at).toLocaleDateString(
-                "en-US",
-                {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                }
+              const entryDate = new Date(entry.created_at);
+              const date = entryDate.toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+              });
+              const year = entryDate.getFullYear();
+              const time = entryDate.toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+              });
+              const { iconName, color: typeColor } = getEntryTypeIcon(
+                entry.entry_type,
               );
+              const hasPhotos = entry.photo_urls && entry.photo_urls.length > 0;
+              const entryTypeLabel =
+                entry.entry_type.charAt(0).toUpperCase() +
+                entry.entry_type.slice(1);
 
               return (
                 <TouchableOpacity
@@ -560,47 +695,47 @@ export default function JournalScreen({ navigation, route }: any) {
                   activeOpacity={0.7}
                   onPress={() => navigation.navigate("JournalForm", { entry })}
                 >
-                  {entry.photo_urls && entry.photo_urls.length > 0 && (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      style={styles.photosScroll}
-                    >
-                      {entry.photo_urls.map((photoUrl, idx) => (
-                        <TouchableOpacity
-                          key={idx}
-                          onPress={() => setSelectedImage(photoUrl)}
-                        >
-                          <Image
-                            source={{ uri: photoUrl }}
-                            style={styles.photo}
-                            contentFit="cover"
-                            transition={200}
-                            cachePolicy="memory-disk"
-                            recyclingKey={`journal-${entry.id}-${idx}`}
-                          />
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  )}
-                  <View style={styles.cardContent}>
-                    <View style={styles.cardHeader}>
-                      <View style={styles.headerLeft}>
-                        <Text style={styles.date}>{date}</Text>
-                        {getEntryTypeIcon(entry.entry_type)}
+                  {/* Accent bar */}
+                  <View
+                    style={[styles.cardAccent, { backgroundColor: typeColor }]}
+                  />
+
+                  <View style={styles.cardBody}>
+                    {/* Top row: type icon + date + actions */}
+                    <View style={styles.cardTopRow}>
+                      <View
+                        style={[
+                          styles.typeIconCircle,
+                          { backgroundColor: typeColor + "18" },
+                        ]}
+                      >
+                        <Ionicons
+                          name={iconName as any}
+                          size={16}
+                          color={typeColor}
+                        />
                       </View>
-                      <View style={styles.headerRight}>
+                      <View style={styles.cardMeta}>
+                        <Text style={styles.entryTypeLabel}>
+                          {entryTypeLabel}
+                        </Text>
+                        <Text style={styles.dateText}>
+                          {date}, {year} · {time}
+                        </Text>
+                      </View>
+                      <View style={styles.cardActions}>
                         <TouchableOpacity
                           onPress={(e) => {
                             e.stopPropagation();
                             navigation.navigate("JournalForm", { entry });
                           }}
-                          style={styles.iconButton}
+                          style={styles.actionBtn}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         >
                           <Ionicons
-                            name="pencil-outline"
-                            size={20}
-                            color={theme.primary}
+                            name="create-outline"
+                            size={18}
+                            color={theme.textSecondary}
                           />
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -608,39 +743,49 @@ export default function JournalScreen({ navigation, route }: any) {
                             e.stopPropagation();
                             handleDelete(entry.id);
                           }}
-                          style={styles.iconButton}
+                          style={styles.actionBtn}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         >
                           <Ionicons
                             name="trash-outline"
-                            size={20}
+                            size={18}
                             color={theme.error}
                           />
                         </TouchableOpacity>
                       </View>
                     </View>
-                    {plantName && (
-                      <View style={styles.plantTag}>
-                        <Ionicons name="leaf" size={12} color={theme.primary} />
-                        <Text style={styles.plantTagText}>{plantName}</Text>
-                      </View>
-                    )}
 
-                    {/* Harvest Details */}
-                    {entry.entry_type === JournalEntryType.Harvest &&
-                      entry.harvest_quantity && (
-                        <View style={styles.harvestDetails}>
-                          <View style={styles.harvestBadge}>
+                    {/* Plant tag + harvest details */}
+                    {(plantName ||
+                      (entry.entry_type === JournalEntryType.Harvest &&
+                        entry.harvest_quantity)) && (
+                      <View style={styles.tagsRow}>
+                        {plantName && (
+                          <View style={styles.plantTag}>
                             <Ionicons
-                              name="scale-outline"
-                              size={16}
-                              color={theme.warning}
+                              name="leaf"
+                              size={11}
+                              color={theme.primary}
                             />
-                            <Text style={styles.harvestText}>
-                              {entry.harvest_quantity}{" "}
-                              {entry.harvest_unit || "units"}
-                            </Text>
+                            <Text style={styles.plantTagText}>{plantName}</Text>
                           </View>
-                          {entry.harvest_quality && (
+                        )}
+                        {entry.entry_type === JournalEntryType.Harvest &&
+                          entry.harvest_quantity && (
+                            <View style={styles.harvestBadge}>
+                              <Ionicons
+                                name="scale-outline"
+                                size={11}
+                                color={theme.warning}
+                              />
+                              <Text style={styles.harvestText}>
+                                {entry.harvest_quantity}{" "}
+                                {entry.harvest_unit || "units"}
+                              </Text>
+                            </View>
+                          )}
+                        {entry.entry_type === JournalEntryType.Harvest &&
+                          entry.harvest_quality && (
                             <View
                               style={[
                                 styles.qualityBadge,
@@ -652,10 +797,40 @@ export default function JournalScreen({ navigation, route }: any) {
                               </Text>
                             </View>
                           )}
-                        </View>
-                      )}
+                      </View>
+                    )}
 
-                    <Text style={styles.contentText}>{entry.content}</Text>
+                    {/* Content preview */}
+                    <Text style={styles.contentText} numberOfLines={3}>
+                      {entry.content}
+                    </Text>
+
+                    {/* Photos */}
+                    {hasPhotos && (
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.photosScroll}
+                        contentContainerStyle={styles.photosScrollContent}
+                      >
+                        {entry.photo_urls.map((photoUrl, idx) => (
+                          <TouchableOpacity
+                            key={idx}
+                            onPress={() => setSelectedImage(photoUrl)}
+                            activeOpacity={0.8}
+                          >
+                            <Image
+                              source={{ uri: photoUrl }}
+                              style={styles.photo}
+                              contentFit="cover"
+                              transition={200}
+                              cachePolicy="memory-disk"
+                              recyclingKey={`journal-${entry.id}-${idx}`}
+                            />
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    )}
                   </View>
                 </TouchableOpacity>
               );
@@ -675,23 +850,17 @@ export default function JournalScreen({ navigation, route }: any) {
                   <>
                     <Text style={styles.emptyText}>No entries found</Text>
                     <Text style={styles.emptySubtext}>
-                      {searchQuery ? (
-                        `No results for "${searchQuery}"`
-                      ) : dateFilter !== "all" ? (
-                        `No entries in ${dateFilter === "week" ? "the past week" : dateFilter === "month" ? "this month" : "this year"}`
-                      ) : selectedType ? (
-                        `No ${selectedType} entries found`
-                      ) : (
-                        "Try adjusting your filters"
-                      )}
+                      {searchQuery
+                        ? `No results for "${searchQuery}"`
+                        : dateFilter !== "all"
+                          ? `No entries in ${dateFilter === "week" ? "the past week" : dateFilter === "month" ? "this month" : "this year"}`
+                          : selectedType
+                            ? `No ${selectedType} entries found`
+                            : "Try adjusting your filters"}
                     </Text>
                     <TouchableOpacity
                       style={styles.clearFiltersButton}
-                      onPress={() => {
-                        setSearchQuery("");
-                        setSelectedType(null);
-                        setDateFilter("month");
-                      }}
+                      onPress={clearAllFilters}
                     >
                       <Text style={styles.clearFiltersText}>Clear Filters</Text>
                     </TouchableOpacity>
@@ -812,6 +981,71 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       backgroundColor: theme.primaryLight,
       borderColor: theme.primary,
     },
+    filterToggleButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.backgroundSecondary,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    filterToggleButtonActive: {
+      backgroundColor: theme.primary,
+      borderColor: theme.primary,
+    },
+    filterBadge: {
+      position: "absolute",
+      top: 1,
+      right: 1,
+      minWidth: 14,
+      height: 14,
+      borderRadius: 7,
+      backgroundColor: theme.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 2,
+    },
+    filterBadgeText: {
+      fontSize: 9,
+      color: theme.buttonText,
+      fontWeight: "700",
+      lineHeight: 14,
+    },
+    activeFiltersRow: {
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+    },
+    activeFiltersScroll: {
+      alignItems: "center",
+      gap: 6,
+    },
+    activeFilterPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: theme.primaryLight,
+      borderRadius: 14,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      gap: 4,
+      borderWidth: 1,
+      borderColor: theme.primary,
+    },
+    activeFilterPillText: {
+      fontSize: 12,
+      color: theme.primary,
+      fontWeight: "600",
+    },
+    clearAllPill: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+    },
+    clearAllPillText: {
+      fontSize: 12,
+      color: theme.error,
+      fontWeight: "600",
+    },
     fab: {
       position: "absolute",
       right: 20,
@@ -828,27 +1062,24 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       shadowRadius: 8,
       elevation: 6,
     },
-    statsScroll: {
-      marginTop: 12,
-      marginBottom: 10,
-    },
-    statsScrollContent: {
-      paddingHorizontal: 12,
-      gap: 3,
-      alignItems: "stretch",
+    statsRow: {
+      flexDirection: "row",
+      marginTop: 8,
+      marginBottom: 4,
+      marginHorizontal: 12,
+      gap: 8,
     },
     statCard: {
+      flex: 1,
       backgroundColor: theme.backgroundSecondary,
       borderRadius: 10,
-      width: 88,
-      minHeight: 88,
       paddingVertical: 8,
-      paddingHorizontal: 6,
+      paddingHorizontal: 4,
       alignItems: "center",
       justifyContent: "center",
     },
     statNumber: {
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: "bold",
       color: theme.text,
       marginTop: 2,
@@ -861,8 +1092,8 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       textAlign: "center",
     },
     searchFilterRow: {
-      marginTop: 10,
-      marginBottom: 12,
+      marginTop: 6,
+      marginBottom: 8,
     },
     searchContainer: {
       flexDirection: "row",
@@ -922,25 +1153,73 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     card: {
       backgroundColor: theme.card,
-      borderRadius: 12,
-      marginBottom: 16,
+      borderRadius: 14,
+      marginBottom: 12,
       overflow: "hidden",
+      flexDirection: "row",
       borderWidth: 1,
       borderColor: theme.border,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
+    },
+    cardAccent: {
+      width: 4,
+    },
+    cardBody: {
+      flex: 1,
+      padding: 12,
+    },
+    cardTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    typeIconCircle: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    cardMeta: {
+      flex: 1,
+      marginLeft: 10,
+    },
+    entryTypeLabel: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.text,
+    },
+    dateText: {
+      fontSize: 11,
+      color: theme.textSecondary,
+      marginTop: 1,
+    },
+    cardActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+    },
+    actionBtn: {
+      padding: 6,
+      borderRadius: 8,
+    },
+    tagsRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+      marginTop: 8,
     },
     photosScroll: {
-      maxHeight: 200,
+      marginTop: 10,
+      marginHorizontal: -12,
+    },
+    photosScrollContent: {
+      paddingHorizontal: 12,
+      gap: 8,
     },
     photo: {
-      width: 300,
-      height: 200,
-      marginRight: 8,
-      backgroundColor: theme.primaryLight,
+      width: 120,
+      height: 90,
+      borderRadius: 8,
+      backgroundColor: theme.backgroundSecondary,
     },
     cardContent: {
       padding: 16,
@@ -977,17 +1256,16 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     plantTag: {
       flexDirection: "row",
       alignItems: "center",
-      alignSelf: "flex-start",
       backgroundColor: theme.primaryLight,
       paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 12,
-      marginBottom: 8,
+      paddingVertical: 3,
+      borderRadius: 10,
+      gap: 4,
     },
     plantTagText: {
-      fontSize: 12,
+      fontSize: 11,
       color: theme.primary,
-      marginLeft: 4,
+      fontWeight: "600",
     },
     harvestDetails: {
       flexDirection: "row",
@@ -999,19 +1277,19 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       alignItems: "center",
       backgroundColor: theme.warningLight,
       paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 12,
+      paddingVertical: 3,
+      borderRadius: 10,
       gap: 4,
     },
     harvestText: {
-      fontSize: 12,
+      fontSize: 11,
       color: theme.warning,
       fontWeight: "600",
     },
     qualityBadge: {
       paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 12,
+      paddingVertical: 3,
+      borderRadius: 10,
     },
     qualityexcellent: {
       backgroundColor: theme.primaryLight,
@@ -1026,14 +1304,15 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       backgroundColor: theme.errorLight,
     },
     qualityText: {
-      fontSize: 10,
+      fontSize: 9,
       fontWeight: "bold",
       color: theme.textSecondary,
     },
     contentText: {
-      fontSize: 15,
+      fontSize: 13,
       color: theme.text,
-      lineHeight: 22,
+      lineHeight: 20,
+      marginTop: 8,
     },
     galleryGrid: {
       flexDirection: "row",

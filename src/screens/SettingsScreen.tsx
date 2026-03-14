@@ -14,14 +14,13 @@ import {
   importImagesOnly,
   getImagesOnlyStorageSize,
 } from "../services/backup";
-import { useTheme, useThemeMode } from "../theme";
+import { useTheme } from "../theme";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { clearAllData } from "../lib/storage";
 
 export default function SettingsScreen({ navigation }: any) {
   const theme = useTheme();
-  const { mode, setMode } = useThemeMode();
   const styles = createStyles(theme);
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -160,65 +159,6 @@ export default function SettingsScreen({ navigation }: any) {
 
       <ScrollView ref={scrollViewRef} style={styles.content}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Appearance</Text>
-
-          <View style={styles.card}>
-            <View style={styles.themeRow}>
-              <Text style={styles.infoText}>App Theme</Text>
-              <View style={styles.themeButtons}>
-                <TouchableOpacity
-                  style={[
-                    styles.themeButton,
-                    mode === "system" && styles.themeButtonActive,
-                  ]}
-                  onPress={() => setMode("system")}
-                >
-                  <Text
-                    style={[
-                      styles.themeButtonText,
-                      mode === "system" && styles.themeButtonTextActive,
-                    ]}
-                  >
-                    Automatic
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.themeButton,
-                    mode === "light" && styles.themeButtonActive,
-                  ]}
-                  onPress={() => setMode("light")}
-                >
-                  <Text
-                    style={[
-                      styles.themeButtonText,
-                      mode === "light" && styles.themeButtonTextActive,
-                    ]}
-                  >
-                    Light
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.themeButton,
-                    mode === "dark" && styles.themeButtonActive,
-                  ]}
-                  onPress={() => setMode("dark")}
-                >
-                  <Text
-                    style={[
-                      styles.themeButtonText,
-                      mode === "dark" && styles.themeButtonTextActive,
-                    ]}
-                  >
-                    Dark
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
-        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Images-Only Backup</Text>
           <Text style={styles.sectionDescription}>
             Export or import ONLY your photos without any data. Useful for
@@ -262,8 +202,8 @@ export default function SettingsScreen({ navigation }: any) {
 
           <Text style={styles.backupNote}>
             📸 Note: Images are stored with their original filenames. When
-            imported, they&apos;ll automatically match with your existing plants and
-            journal entries.
+            imported, they&apos;ll automatically match with your existing plants
+            and journal entries.
           </Text>
         </View>
 
@@ -397,35 +337,6 @@ const createStyles = (theme: any) =>
       color: theme.text,
       marginLeft: 12,
       flex: 1,
-    },
-    themeRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    themeButtons: {
-      flexDirection: "row",
-      gap: 8,
-    },
-    themeButton: {
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: theme.border,
-      backgroundColor: theme.background,
-    },
-    themeButtonActive: {
-      backgroundColor: theme.primaryLight,
-      borderColor: theme.primary,
-    },
-    themeButtonText: {
-      fontSize: 12,
-      color: theme.textSecondary,
-      fontWeight: "600",
-    },
-    themeButtonTextActive: {
-      color: theme.primary,
     },
     backupButton: {
       flexDirection: "row",

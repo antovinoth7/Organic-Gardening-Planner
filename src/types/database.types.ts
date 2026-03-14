@@ -1,30 +1,58 @@
-export type SpaceType = 'pot' | 'bed' | 'ground';
-export type TaskType = 'water' | 'fertilise' | 'prune' | 'repot' | 'spray' | 'mulch';
-export type PlantType = 'vegetable' | 'herb' | 'flower' | 'fruit_tree' | 'timber_tree' | 'coconut_tree' | 'shrub';
+export type SpaceType = "pot" | "bed" | "ground";
+export type TaskType =
+  | "water"
+  | "fertilise"
+  | "prune"
+  | "repot"
+  | "spray"
+  | "mulch"
+  | "harvest";
+export type PlantType =
+  | "vegetable"
+  | "herb"
+  | "flower"
+  | "fruit_tree"
+  | "timber_tree"
+  | "coconut_tree"
+  | "shrub";
 export enum JournalEntryType {
-  Observation = 'observation',
-  Harvest = 'harvest',
-  Issue = 'issue',
-  Milestone = 'milestone',
-  Other = 'other',
+  Observation = "observation",
+  Harvest = "harvest",
+  Issue = "issue",
+  Milestone = "milestone",
+  Other = "other",
 }
-export type SunlightLevel = 'full_sun' | 'partial_sun' | 'shade';
-export type SoilType = 'garden_soil' | 'potting_mix' | 'coco_peat' | 'custom';
-export type WaterRequirement = 'low' | 'medium' | 'high';
-export type HealthStatus = 'healthy' | 'stressed' | 'recovering' | 'sick';
-export type IssueSeverity = 'low' | 'medium' | 'high' | 'severe';
+export type SunlightLevel = "full_sun" | "partial_sun" | "shade";
+export type SoilType =
+  | "garden_soil"
+  | "potting_mix"
+  | "coco_peat"
+  | "red_laterite"
+  | "coastal_sandy"
+  | "black_cotton"
+  | "alluvial"
+  | "custom";
+export type WaterRequirement = "low" | "medium" | "high";
+export type HealthStatus = "healthy" | "stressed" | "recovering" | "sick";
+export type IssueSeverity = "low" | "medium" | "high" | "severe";
 export type FertiliserType =
-  | 'compost'
-  | 'vermicompost'
-  | 'cow_dung_slurry'
-  | 'fish_emulsion'
-  | 'groundnut_cake'
-  | 'seaweed'
-  | 'neem_cake'
-  | 'panchagavya'
-  | 'jeevamrutham'
-  | 'other';
-export type GrowthStage = 'seedling' | 'vegetative' | 'flowering' | 'fruiting' | 'dormant' | 'mature';
+  | "compost"
+  | "vermicompost"
+  | "cow_dung_slurry"
+  | "fish_emulsion"
+  | "groundnut_cake"
+  | "seaweed"
+  | "neem_cake"
+  | "panchagavya"
+  | "jeevamrutham"
+  | "other";
+export type GrowthStage =
+  | "seedling"
+  | "vegetative"
+  | "flowering"
+  | "fruiting"
+  | "dormant"
+  | "mature";
 
 export interface LocationConfig {
   parentLocations: string[];
@@ -60,7 +88,7 @@ export type PlantCareProfiles = Record<
 
 export interface PestDiseaseRecord {
   id?: string;
-  type: 'pest' | 'disease';
+  type: "pest" | "disease";
   name: string;
   occurredAt: string;
   severity?: IssueSeverity;
@@ -117,6 +145,13 @@ export interface Plant {
   pruning_frequency_days?: number | null;
   last_pruned_date?: string | null;
   pruning_notes?: string | null;
+  // Coconut-specific tracking (Kanyakumari)
+  coconut_fronds_count?: number | null; // healthy range: 30-35
+  nuts_per_month?: number | null; // nuts collected at last harvest
+  last_climbing_date?: string | null; // last harvest via climbing
+  spathe_count_per_month?: number | null; // inflorescence count (yield predictor for bearing trees)
+  nut_fall_count?: number | null; // premature nut drop count at last incident
+  last_nut_fall_date?: string | null; // date of last premature nut fall incident
   // Soft delete
   is_deleted?: boolean | null;
   deleted_at?: string | null;
@@ -139,7 +174,7 @@ export interface TaskTemplate {
   preferred_time: string | null;
   enabled: boolean;
   next_due_at: string;
-  priority_level?: 'critical' | 'high' | 'medium' | 'low' | null;
+  priority_level?: "critical" | "high" | "medium" | "low" | null;
   created_at: string;
 }
 
@@ -170,7 +205,7 @@ export interface JournalEntry {
   // Enhanced Harvest tracking fields
   harvest_quantity?: number | null;
   harvest_unit?: string | null; // 'kg', 'g', 'lbs', 'pieces', 'bunches'
-  harvest_quality?: 'excellent' | 'good' | 'fair' | 'poor' | null;
+  harvest_quality?: "excellent" | "good" | "fair" | "poor" | null;
   harvest_notes?: string | null; // Storage method, taste notes, etc.
   created_at: string;
 }

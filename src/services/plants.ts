@@ -1,32 +1,32 @@
-import { Plant } from '../types/database.types';
-import { db, auth, refreshAuthToken } from '../lib/firebase';
-import { 
-  collection, 
-  doc, 
+import { Plant } from "../types/database.types";
+import { db, auth, refreshAuthToken } from "../lib/firebase";
+import {
+  collection,
+  doc,
   documentId,
-  getDocs, 
-  getDoc, 
-  addDoc, 
-  updateDoc, 
-  query, 
-  where, 
+  getDocs,
+  getDoc,
+  addDoc,
+  updateDoc,
+  query,
+  where,
   orderBy,
   limit,
   startAfter,
   QueryDocumentSnapshot,
-  Timestamp 
-} from 'firebase/firestore';
+  Timestamp,
+} from "firebase/firestore";
 import {
   saveImageLocallyWithFilename,
   resolveLocalImageUri,
   getFilenameFromUri,
   SavedImage,
-} from '../lib/imageStorage';
-import { getData, setData, KEYS } from '../lib/storage';
-import { withTimeoutAndRetry } from '../utils/firestoreTimeout';
-import { logError } from '../utils/errorLogging';
+} from "../lib/imageStorage";
+import { getData, setData, KEYS } from "../lib/storage";
+import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
+import { logError } from "../utils/errorLogging";
 
-const PLANTS_COLLECTION = 'plants';
+const PLANTS_COLLECTION = "plants";
 const DEFAULT_PAGE_SIZE = 50;
 const FETCH_ALL_PAGE_SIZE = 100;
 
@@ -38,10 +38,10 @@ const FETCH_ALL_PAGE_SIZE = 100;
  */
 export const getPlants = async (
   pageSize: number = DEFAULT_PAGE_SIZE,
-  lastDoc?: QueryDocumentSnapshot
-): Promise<{ plants: Plant[], lastDoc?: QueryDocumentSnapshot }> => {
+  lastDoc?: QueryDocumentSnapshot,
+): Promise<{ plants: Plant[]; lastDoc?: QueryDocumentSnapshot }> => {
   const user = auth.currentUser;
-  if (!user) throw new Error('Not authenticated');
+  if (!user) throw new Error("Not authenticated");
 
   // Refresh token to prevent expiration issues (tokens expire after 1 hour)
   await refreshAuthToken();
@@ -50,55 +50,58 @@ export const getPlants = async (
     // Build query with pagination
     let q = query(
       collection(db, PLANTS_COLLECTION),
-      where('user_id', '==', user.uid),
-      orderBy('created_at', 'desc'),
-      limit(pageSize)
+      where("user_id", "==", user.uid),
+      orderBy("created_at", "desc"),
+      limit(pageSize),
     );
 
     if (lastDoc) {
       q = query(
         collection(db, PLANTS_COLLECTION),
-        where('user_id', '==', user.uid),
-        orderBy('created_at', 'desc'),
+        where("user_id", "==", user.uid),
+        orderBy("created_at", "desc"),
         startAfter(lastDoc),
-        limit(pageSize)
+        limit(pageSize),
       );
     }
-    
+
     // Wrap Firestore call with timeout
-    const snapshot = await withTimeoutAndRetry(
-      () => getDocs(q),
-      { timeoutMs: 15000, maxRetries: 2 }
-    );
-    
+    const snapshot = await withTimeoutAndRetry(() => getDocs(q), {
+      timeoutMs: 15000,
+      maxRetries: 2,
+    });
+
     // Batch image resolution for better performance
-    const plantsData = snapshot.docs.map(doc => {
+    const plantsData = snapshot.docs.map((doc) => {
       const data = doc.data();
-      const photoFilename = data.photo_filename ?? getFilenameFromUri(data.photo_url ?? '');
+      const photoFilename =
+        data.photo_filename ?? getFilenameFromUri(data.photo_url ?? "");
       return {
         id: doc.id,
         ...data,
         photo_filename: photoFilename ?? null,
         photoIdentifier: data.photo_filename ?? data.photo_url ?? null,
-        plant_type: data.plant_type || 'vegetable',
-        created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at,
-        deleted_at: data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
+        plant_type: data.plant_type || "vegetable",
+        created_at:
+          data.created_at?.toDate?.()?.toISOString() || data.created_at,
+        deleted_at:
+          data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
         is_deleted: data.is_deleted ?? false,
       };
     });
-    
+
     // Resolve all images in parallel
     const resolvedUrls = await Promise.all(
-      plantsData.map(async p => {
+      plantsData.map(async (p) => {
         try {
           return await resolveLocalImageUri(p.photoIdentifier);
         } catch (error) {
-          console.warn('Failed to resolve plant image:', error);
+          console.warn("Failed to resolve plant image:", error);
           return null;
         }
-      })
+      }),
     );
-    
+
     const plants = plantsData.map((plant, index) => {
       const { photoIdentifier: _photoIdentifier, ...plantData } = plant;
       return {
@@ -107,37 +110,47 @@ export const getPlants = async (
       } as Plant;
     });
     const activePlants = plants.filter((plant) => !plant.is_deleted);
-    
+
     // Cache the results locally (only first page to avoid memory issues)
     if (!lastDoc) {
       await setData(KEYS.PLANTS, activePlants);
     }
-    
+
     return {
       plants: activePlants,
-      lastDoc: snapshot.docs[snapshot.docs.length - 1]
+      lastDoc: snapshot.docs[snapshot.docs.length - 1],
     };
   } catch (error) {
-    console.warn('Failed to fetch from Firestore, using cached data:', error);
-    logError('network', 'Failed to fetch plants from Firestore', error as Error, { userId: user.uid });
+    console.warn("Failed to fetch from Firestore, using cached data:", error);
+    logError(
+      "network",
+      "Failed to fetch plants from Firestore",
+      error as Error,
+      { userId: user.uid },
+    );
     // Fall back to cached data if offline
     const cachedPlants = await getData<Plant>(KEYS.PLANTS);
     // Batch resolve cached images for performance
-    const photoIdentifiers = cachedPlants.map(p => p.photo_filename ?? p.photo_url ?? null);
+    const photoIdentifiers = cachedPlants.map(
+      (p) => p.photo_filename ?? p.photo_url ?? null,
+    );
     const resolvedUrls = await Promise.all(
-      photoIdentifiers.map(async id => {
+      photoIdentifiers.map(async (id) => {
         try {
           return await resolveLocalImageUri(id);
         } catch (error) {
-          console.warn('Failed to resolve cached plant image:', error);
+          console.warn("Failed to resolve cached plant image:", error);
           return null;
         }
-      })
+      }),
     );
-    
+
     const resolvedCached = cachedPlants.map((plant, index) => ({
       ...plant,
-      photo_filename: plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? '') ?? null,
+      photo_filename:
+        plant.photo_filename ??
+        getFilenameFromUri(plant.photo_url ?? "") ??
+        null,
       photo_url: resolvedUrls[index] ?? null,
     }));
     return { plants: resolvedCached.filter((plant) => !plant.is_deleted) };
@@ -145,22 +158,30 @@ export const getPlants = async (
 };
 
 export const getAllPlants = async (
-  pageSize: number = FETCH_ALL_PAGE_SIZE
+  pageSize: number = FETCH_ALL_PAGE_SIZE,
 ): Promise<Plant[]> => {
   const allPlants: Plant[] = [];
   let lastDoc: QueryDocumentSnapshot | undefined = undefined;
   let hasMore = true;
 
   while (hasMore) {
-    const response = await getPlants(pageSize, lastDoc);
-    allPlants.push(...(response.plants ?? []));
+    try {
+      const response = await getPlants(pageSize, lastDoc);
+      allPlants.push(...(response.plants ?? []));
 
-    if (!response.lastDoc || response.plants.length < pageSize) {
-      hasMore = false;
-      continue;
+      if (!response.lastDoc || response.plants.length < pageSize) {
+        hasMore = false;
+        continue;
+      }
+
+      lastDoc = response.lastDoc;
+    } catch (error) {
+      console.warn(
+        "getAllPlants: page fetch failed, returning partial results:",
+        error,
+      );
+      break;
     }
-
-    lastDoc = response.lastDoc;
   }
 
   return allPlants;
@@ -168,32 +189,32 @@ export const getAllPlants = async (
 
 export const getPlant = async (id: string): Promise<Plant | null> => {
   const user = auth.currentUser;
-  if (!user) throw new Error('Not authenticated');
-  
+  if (!user) throw new Error("Not authenticated");
+
   const docRef = doc(db, PLANTS_COLLECTION, id);
-  
-  const docSnap = await withTimeoutAndRetry(
-    () => getDoc(docRef),
-    { timeoutMs: 10000, maxRetries: 2 }
-  );
-  
+
+  const docSnap = await withTimeoutAndRetry(() => getDoc(docRef), {
+    timeoutMs: 10000,
+    maxRetries: 2,
+  });
+
   if (!docSnap.exists()) return null;
 
   const data = docSnap.data();
-  
+
   // Security: Verify the plant belongs to the current user
   if (data.user_id !== user.uid) {
-    console.warn('Attempted to access plant belonging to another user');
+    console.warn("Attempted to access plant belonging to another user");
     return null;
   }
-  
+
   if (data.is_deleted) return null;
 
   const photoIdentifier = data.photo_filename ?? data.photo_url ?? null;
   const resolvedPhotoUrl = await resolveLocalImageUri(photoIdentifier);
   const photoFilename =
-    data.photo_filename ?? getFilenameFromUri(data.photo_url ?? '');
-  
+    data.photo_filename ?? getFilenameFromUri(data.photo_url ?? "");
+
   return {
     id: docSnap.id,
     ...data,
@@ -207,28 +228,30 @@ export const getPlant = async (id: string): Promise<Plant | null> => {
 
 export const getArchivedPlants = async (): Promise<Plant[]> => {
   const user = auth.currentUser;
-  if (!user) throw new Error('Not authenticated');
+  if (!user) throw new Error("Not authenticated");
 
   try {
     const q = query(
       collection(db, PLANTS_COLLECTION),
-      where('user_id', '==', user.uid),
-      where('is_deleted', '==', true)
+      where("user_id", "==", user.uid),
+      where("is_deleted", "==", true),
     );
 
-    const snapshot = await withTimeoutAndRetry(
-      () => getDocs(q),
-      { timeoutMs: 15000, maxRetries: 2 }
-    );
+    const snapshot = await withTimeoutAndRetry(() => getDocs(q), {
+      timeoutMs: 15000,
+      maxRetries: 2,
+    });
 
-    const plants = snapshot.docs.map(doc => {
+    const plants = snapshot.docs.map((doc) => {
       const data = doc.data();
       return {
         id: doc.id,
         ...data,
-        plant_type: data.plant_type || 'vegetable',
-        created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at,
-        deleted_at: data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
+        plant_type: data.plant_type || "vegetable",
+        created_at:
+          data.created_at?.toDate?.()?.toISOString() || data.created_at,
+        deleted_at:
+          data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
         is_deleted: data.is_deleted ?? false,
       };
     }) as Plant[];
@@ -241,7 +264,7 @@ export const getArchivedPlants = async (): Promise<Plant[]> => {
 
     return plants;
   } catch (error) {
-    console.warn('Failed to fetch archived plants, using cached data:', error);
+    console.warn("Failed to fetch archived plants, using cached data:", error);
     const cachedPlants = await getData<Plant>(KEYS.PLANTS);
     return cachedPlants.filter((plant) => plant.is_deleted);
   }
@@ -249,95 +272,100 @@ export const getArchivedPlants = async (): Promise<Plant[]> => {
 
 export const plantExists = async (id: string): Promise<boolean> => {
   const user = auth.currentUser;
-  if (!user) throw new Error('Not authenticated');
+  if (!user) throw new Error("Not authenticated");
 
   const q = query(
     collection(db, PLANTS_COLLECTION),
-    where('user_id', '==', user.uid),
-    where(documentId(), '==', id)
+    where("user_id", "==", user.uid),
+    where(documentId(), "==", id),
   );
 
-  const snapshot = await withTimeoutAndRetry(
-    () => getDocs(q),
-    { timeoutMs: 10000, maxRetries: 2 }
-  );
+  const snapshot = await withTimeoutAndRetry(() => getDocs(q), {
+    timeoutMs: 10000,
+    maxRetries: 2,
+  });
 
   return !snapshot.empty;
 };
 
-export const createPlant = async (plant: Omit<Plant, 'id' | 'user_id' | 'created_at'>): Promise<Plant> => {
+export const createPlant = async (
+  plant: Omit<Plant, "id" | "user_id" | "created_at">,
+): Promise<Plant> => {
   const user = auth.currentUser;
-  if (!user) throw new Error('Not authenticated');
+  if (!user) throw new Error("Not authenticated");
 
   // CRITICAL: photo_filename should already be set for local images
   // Only the filename (not the image data) is stored in Firestore
   const { photo_url: _photoUrl, ...rest } = plant;
   const photoFilename =
-    plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? '');
+    plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "");
   const newPlant = {
     ...rest,
     photo_filename: photoFilename ?? null,
     user_id: user.uid,
     created_at: Timestamp.now(),
   };
-  
+
   const docRef = await withTimeoutAndRetry(
     () => addDoc(collection(db, PLANTS_COLLECTION), newPlant),
-    { timeoutMs: 15000, maxRetries: 2 }
+    { timeoutMs: 15000, maxRetries: 2 },
   );
-  
+
   const resolvedPhotoUrl = await resolveLocalImageUri(photoFilename ?? null);
   const result = {
     id: docRef.id,
     ...newPlant,
     photo_url: resolvedPhotoUrl ?? null,
-    created_at: newPlant.created_at.toDate().toISOString()
+    created_at: newPlant.created_at.toDate().toISOString(),
   } as Plant;
-  
+
   // Update local cache
   const cachedPlants = await getData<Plant>(KEYS.PLANTS);
   await setData(KEYS.PLANTS, [...cachedPlants, result]);
-  
+
   return result;
 };
 
-export const updatePlant = async (id: string, updates: Partial<Plant>): Promise<Plant> => {
+export const updatePlant = async (
+  id: string,
+  updates: Partial<Plant>,
+): Promise<Plant> => {
   const docRef = doc(db, PLANTS_COLLECTION, id);
-  
+
   // CRITICAL: photo_filename should already be set for local images
   // Only the filename (not the image data) is stored in Firestore
   const firestoreUpdates: Partial<Plant> = { ...updates };
-  if ('photo_url' in firestoreUpdates) {
+  if ("photo_url" in firestoreUpdates) {
     delete (firestoreUpdates as Partial<Plant>).photo_url;
   }
-  await withTimeoutAndRetry(
-    () => updateDoc(docRef, firestoreUpdates as any),
-    { timeoutMs: 15000, maxRetries: 2 }
-  );
-  
+  await withTimeoutAndRetry(() => updateDoc(docRef, firestoreUpdates as any), {
+    timeoutMs: 15000,
+    maxRetries: 2,
+  });
+
   const updated = await getPlant(id);
-  if (!updated) throw new Error('Plant not found');
-  
+  if (!updated) throw new Error("Plant not found");
+
   // Update local cache
   const cachedPlants = await getData<Plant>(KEYS.PLANTS);
-  const index = cachedPlants.findIndex(p => p.id === id);
+  const index = cachedPlants.findIndex((p) => p.id === id);
   if (index !== -1) {
     cachedPlants[index] = updated;
     await setData(KEYS.PLANTS, cachedPlants);
   }
-  
+
   return updated;
 };
 
 export const updatePlantLocation = async (
   id: string,
-  location: string
+  location: string,
 ): Promise<void> => {
   const docRef = doc(db, PLANTS_COLLECTION, id);
-  await withTimeoutAndRetry(
-    () => updateDoc(docRef, { location }),
-    { timeoutMs: 10000, maxRetries: 2 }
-  );
+  await withTimeoutAndRetry(() => updateDoc(docRef, { location }), {
+    timeoutMs: 10000,
+    maxRetries: 2,
+  });
 
   const cachedPlants = await getData<Plant>(KEYS.PLANTS);
   const index = cachedPlants.findIndex((plant) => plant.id === id);
@@ -349,18 +377,21 @@ export const updatePlantLocation = async (
 
 export const updatePlantVariety = async (
   id: string,
-  plantVariety: string
+  plantVariety: string,
 ): Promise<void> => {
   const docRef = doc(db, PLANTS_COLLECTION, id);
   await withTimeoutAndRetry(
     () => updateDoc(docRef, { plant_variety: plantVariety }),
-    { timeoutMs: 10000, maxRetries: 2 }
+    { timeoutMs: 10000, maxRetries: 2 },
   );
 
   const cachedPlants = await getData<Plant>(KEYS.PLANTS);
   const index = cachedPlants.findIndex((plant) => plant.id === id);
   if (index !== -1) {
-    cachedPlants[index] = { ...cachedPlants[index], plant_variety: plantVariety };
+    cachedPlants[index] = {
+      ...cachedPlants[index],
+      plant_variety: plantVariety,
+    };
     await setData(KEYS.PLANTS, cachedPlants);
   }
 };
@@ -373,13 +404,21 @@ export const deletePlant = async (id: string): Promise<void> => {
         is_deleted: true,
         deleted_at: Timestamp.now(),
       }),
-    { timeoutMs: 10000, maxRetries: 2 }
+    { timeoutMs: 10000, maxRetries: 2 },
   );
-  
+
   // Update local cache
   const cachedPlants = await getData<Plant>(KEYS.PLANTS);
-  const filtered = cachedPlants.filter(p => p.id !== id);
+  const filtered = cachedPlants.filter((p) => p.id !== id);
   await setData(KEYS.PLANTS, filtered);
+
+  // Cascade: delete orphaned tasks and logs for this plant
+  try {
+    const { deleteTasksForPlantIds } = await import("./tasks");
+    await deleteTasksForPlantIds([id]);
+  } catch (error) {
+    console.warn("Failed to cascade-delete tasks for plant:", error);
+  }
 };
 
 export const restorePlant = async (id: string): Promise<Plant> => {
@@ -390,34 +429,34 @@ export const restorePlant = async (id: string): Promise<Plant> => {
         is_deleted: false,
         deleted_at: null,
       }),
-    { timeoutMs: 10000, maxRetries: 2 }
+    { timeoutMs: 10000, maxRetries: 2 },
   );
 
-  const docSnap = await withTimeoutAndRetry(
-    () => getDoc(docRef),
-    { timeoutMs: 10000, maxRetries: 2 }
-  );
+  const docSnap = await withTimeoutAndRetry(() => getDoc(docRef), {
+    timeoutMs: 10000,
+    maxRetries: 2,
+  });
 
-  if (!docSnap.exists()) throw new Error('Plant not found');
+  if (!docSnap.exists()) throw new Error("Plant not found");
 
   const data = docSnap.data();
   const photoIdentifier = data.photo_filename ?? data.photo_url ?? null;
   const resolvedPhotoUrl = await resolveLocalImageUri(photoIdentifier);
   const photoFilename =
-    data.photo_filename ?? getFilenameFromUri(data.photo_url ?? '');
+    data.photo_filename ?? getFilenameFromUri(data.photo_url ?? "");
   const restored = {
     id: docSnap.id,
     ...data,
     photo_filename: photoFilename ?? null,
     photo_url: resolvedPhotoUrl ?? null,
-    plant_type: data.plant_type || 'vegetable',
+    plant_type: data.plant_type || "vegetable",
     created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at,
     deleted_at: data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
     is_deleted: data.is_deleted ?? false,
   } as Plant;
 
   const cachedPlants = await getData<Plant>(KEYS.PLANTS);
-  const index = cachedPlants.findIndex(p => p.id === id);
+  const index = cachedPlants.findIndex((p) => p.id === id);
   if (index !== -1) {
     cachedPlants[index] = restored;
   } else {
@@ -434,8 +473,8 @@ export const restorePlant = async (id: string): Promise<Plant> => {
  * @param sourceUri - Source image URI (from picker or camera)
  * @returns Local file URI and filename for persistence
  */
-export const savePlantImage = async (sourceUri: string): Promise<SavedImage> => {
-  return saveImageLocallyWithFilename(sourceUri, 'plant');
+export const savePlantImage = async (
+  sourceUri: string,
+): Promise<SavedImage> => {
+  return saveImageLocallyWithFilename(sourceUri, "plant");
 };
-
-

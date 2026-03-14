@@ -1,4 +1,9 @@
-import { TaskTemplate, TaskLog, Plant, TaskType } from "../types/database.types";
+import {
+  TaskTemplate,
+  TaskLog,
+  Plant,
+  TaskType,
+} from "../types/database.types";
 import { db, auth, refreshAuthToken } from "../lib/firebase";
 import {
   collection,
@@ -16,7 +21,11 @@ import {
 import { getData, setData, KEYS } from "../lib/storage";
 import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
 import { logError } from "../utils/errorLogging";
-import { getCurrentSeason } from "../utils/seasonHelpers";
+import {
+  getCurrentSeason,
+  getWateringFrequencyMultiplier,
+} from "../utils/seasonHelpers";
+import { getCoconutAgeInfo } from "../utils/plantHelpers";
 
 const TASKS_COLLECTION = "task_templates";
 const TASK_LOGS_COLLECTION = "task_logs";
@@ -24,13 +33,15 @@ const PLANTS_COLLECTION = "plants";
 type PlantLastCareField =
   | "last_watered_date"
   | "last_fertilised_date"
-  | "last_pruned_date";
+  | "last_pruned_date"
+  | "last_harvest_date";
 const TASK_TYPE_TO_PLANT_LAST_CARE_FIELD: Partial<
   Record<TaskType, PlantLastCareField>
 > = {
   water: "last_watered_date",
   fertilise: "last_fertilised_date",
   prune: "last_pruned_date",
+  harvest: "last_harvest_date",
 };
 type MarkTaskDoneOptions = {
   skipAlreadyDoneCheck?: boolean;
@@ -48,7 +59,7 @@ export const getTaskTemplates = async (): Promise<TaskTemplate[]> => {
     const q = query(
       collection(db, TASKS_COLLECTION),
       where("user_id", "==", user.uid),
-      orderBy("created_at", "desc")
+      orderBy("created_at", "desc"),
     );
 
     const snapshot = await withTimeoutAndRetry(() => getDocs(q), {
@@ -94,7 +105,7 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
     23,
     59,
     59,
-    999
+    999,
   );
 
   try {
@@ -102,7 +113,7 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
     const q = query(
       collection(db, TASKS_COLLECTION),
       where("user_id", "==", user.uid),
-      where("enabled", "==", true)
+      where("enabled", "==", true),
     );
 
     const snapshot = await withTimeoutAndRetry(() => getDocs(q), {
@@ -143,7 +154,7 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
       23,
       59,
       59,
-      999
+      999,
     );
     const filtered = cachedTasks.filter((task) => {
       if (!task.enabled || !task.next_due_at) return false;
@@ -156,7 +167,7 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
 };
 
 export const createTaskTemplate = async (
-  template: Omit<TaskTemplate, "id" | "user_id" | "created_at">
+  template: Omit<TaskTemplate, "id" | "user_id" | "created_at">,
 ): Promise<TaskTemplate> => {
   const user = auth.currentUser;
   if (!user) throw new Error("Not authenticated");
@@ -172,7 +183,7 @@ export const createTaskTemplate = async (
 
   const docRef = await withTimeoutAndRetry(
     () => addDoc(collection(db, TASKS_COLLECTION), newTemplate),
-    { timeoutMs: 15000, maxRetries: 2 }
+    { timeoutMs: 15000, maxRetries: 2 },
   );
 
   return {
@@ -188,15 +199,17 @@ export const createTaskTemplate = async (
 
 export const updateTaskTemplate = async (
   id: string,
-  updates: Partial<TaskTemplate>
+  updates: Partial<TaskTemplate>,
 ): Promise<TaskTemplate> => {
   const docRef = doc(db, TASKS_COLLECTION, id);
 
   const firestoreUpdates: Record<string, any> = { ...updates };
   if (updates.next_due_at) {
-    firestoreUpdates.next_due_at = Timestamp.fromDate(
-      new Date(updates.next_due_at)
-    );
+    const parsedDate = new Date(updates.next_due_at);
+    if (Number.isNaN(parsedDate.getTime())) {
+      throw new Error("Invalid next_due_at date value");
+    }
+    firestoreUpdates.next_due_at = Timestamp.fromDate(parsedDate);
   }
 
   await withTimeoutAndRetry(() => updateDoc(docRef, firestoreUpdates), {
@@ -224,10 +237,10 @@ export const updateTaskTemplate = async (
 };
 
 export const deleteTasksForPlantIds = async (
-  plantIds: string[]
+  plantIds: string[],
 ): Promise<void> => {
   const uniquePlantIds = Array.from(
-    new Set(plantIds.filter((plantId) => plantId && plantId.trim() !== ""))
+    new Set(plantIds.filter((plantId) => plantId && plantId.trim() !== "")),
   );
   if (uniquePlantIds.length === 0) return;
 
@@ -239,17 +252,17 @@ export const deleteTasksForPlantIds = async (
   const logs = await getTaskLogs();
 
   const tasksToDelete = tasks.filter(
-    (task) => task.plant_id && plantIdSet.has(task.plant_id)
+    (task) => task.plant_id && plantIdSet.has(task.plant_id),
   );
   const logsToDelete = logs.filter(
-    (log) => log.plant_id && plantIdSet.has(log.plant_id)
+    (log) => log.plant_id && plantIdSet.has(log.plant_id),
   );
 
   for (const task of tasksToDelete) {
     try {
       await withTimeoutAndRetry(
         () => deleteDoc(doc(db, TASKS_COLLECTION, task.id)),
-        { timeoutMs: 10000, maxRetries: 2 }
+        { timeoutMs: 10000, maxRetries: 2 },
       );
     } catch (error) {
       console.warn(`Failed to delete task template ${task.id}:`, error);
@@ -260,7 +273,7 @@ export const deleteTasksForPlantIds = async (
     try {
       await withTimeoutAndRetry(
         () => deleteDoc(doc(db, TASK_LOGS_COLLECTION, log.id)),
-        { timeoutMs: 10000, maxRetries: 2 }
+        { timeoutMs: 10000, maxRetries: 2 },
       );
     } catch (error) {
       console.warn(`Failed to delete task log ${log.id}:`, error);
@@ -270,7 +283,7 @@ export const deleteTasksForPlantIds = async (
   const cachedTasks = await getData<TaskTemplate>(KEYS.TASKS);
   if (cachedTasks.length > 0) {
     const filteredTasks = cachedTasks.filter(
-      (task) => !task.plant_id || !plantIdSet.has(task.plant_id)
+      (task) => !task.plant_id || !plantIdSet.has(task.plant_id),
     );
     await setData(KEYS.TASKS, filteredTasks);
   }
@@ -278,7 +291,7 @@ export const deleteTasksForPlantIds = async (
   const cachedLogs = await getData<TaskLog>(KEYS.TASK_LOGS);
   if (cachedLogs.length > 0) {
     const filteredLogs = cachedLogs.filter(
-      (log) => !log.plant_id || !plantIdSet.has(log.plant_id)
+      (log) => !log.plant_id || !plantIdSet.has(log.plant_id),
     );
     await setData(KEYS.TASK_LOGS, filteredLogs);
   }
@@ -288,7 +301,7 @@ export const markTaskDone = async (
   template: TaskTemplate,
   notes?: string,
   productUsed?: string,
-  options?: MarkTaskDoneOptions
+  options?: MarkTaskDoneOptions,
 ): Promise<boolean> => {
   const user = auth.currentUser;
   if (!user) throw new Error("Not authenticated");
@@ -298,9 +311,29 @@ export const markTaskDone = async (
     ? template.frequency_days
     : 0;
 
+  // For water tasks, apply Kanyakumari season-aware multiplier so next due
+  // date reflects actual rainfall / heat conditions.
+  let effectiveDays = frequencyDays;
+  if (
+    template.task_type === "water" &&
+    template.plant_id &&
+    frequencyDays > 0
+  ) {
+    const cachedPlants = await getData<Plant>(KEYS.PLANTS);
+    const waterPlant = cachedPlants.find((p) => p.id === template.plant_id);
+    if (waterPlant) {
+      effectiveDays = Math.max(
+        1,
+        Math.round(
+          frequencyDays * getWateringFrequencyMultiplier(waterPlant.space_type),
+        ),
+      );
+    }
+  }
+
   // Calculate next due date at 6 PM (18:00) instead of using completion time
   const nextDueAt = new Date(doneAt);
-  nextDueAt.setDate(nextDueAt.getDate() + frequencyDays);
+  nextDueAt.setDate(nextDueAt.getDate() + effectiveDays);
   nextDueAt.setHours(18, 0, 0, 0); // Always set to 6:00 PM
 
   const startOfDay = new Date(doneAt);
@@ -395,7 +428,7 @@ export const markTaskDone = async (
 
       const cachedPlants = await getData<Plant>(KEYS.PLANTS);
       const plantIndex = cachedPlants.findIndex(
-        (plant) => plant.id === template.plant_id
+        (plant) => plant.id === template.plant_id,
       );
       if (plantIndex !== -1) {
         cachedPlants[plantIndex] = {
@@ -407,7 +440,7 @@ export const markTaskDone = async (
     } catch (error) {
       console.warn(
         `Failed to update ${plantLastCareField} for plant ${template.plant_id}:`,
-        error
+        error,
       );
     }
   }
@@ -427,13 +460,13 @@ export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {
       q = query(
         collection(db, TASK_LOGS_COLLECTION),
         where("user_id", "==", user.uid),
-        where("template_id", "==", templateId)
+        where("template_id", "==", templateId),
       );
     } else {
       // Query all user's logs - no orderBy to avoid composite index
       q = query(
         collection(db, TASK_LOGS_COLLECTION),
-        where("user_id", "==", user.uid)
+        where("user_id", "==", user.uid),
       );
     }
 
@@ -450,7 +483,7 @@ export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {
 
     // Sort in-memory by done_at descending
     logs.sort(
-      (a, b) => new Date(b.done_at).getTime() - new Date(a.done_at).getTime()
+      (a, b) => new Date(b.done_at).getTime() - new Date(a.done_at).getTime(),
     );
 
     // Cache locally
@@ -464,7 +497,7 @@ export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {
       ? cachedLogs.filter((log) => log.template_id === templateId)
       : cachedLogs;
     filtered.sort(
-      (a, b) => new Date(b.done_at).getTime() - new Date(a.done_at).getTime()
+      (a, b) => new Date(b.done_at).getTime() - new Date(a.done_at).getTime(),
     );
     return filtered;
   }
@@ -480,16 +513,16 @@ const parseDateValue = (value?: string | null): Date | null => {
 const computeNextDueAt = (
   plant: Plant,
   taskType: TaskType,
-  frequency: number
+  frequency: number,
 ): string => {
   const reference =
     taskType === "water"
       ? plant.last_watered_date
       : taskType === "fertilise"
-      ? plant.last_fertilised_date
-      : taskType === "prune"
-      ? plant.last_pruned_date
-      : null;
+        ? plant.last_fertilised_date
+        : taskType === "prune"
+          ? plant.last_pruned_date
+          : null;
 
   const base = parseDateValue(reference) || new Date();
 
@@ -505,7 +538,7 @@ const computeNextDueAt = (
  * This will create task templates for plants that have care schedules configured
  */
 const _generateRecurringTasksFromPlants = async (
-  plants: Plant[]
+  plants: Plant[],
 ): Promise<void> => {
   const user = auth.currentUser;
   if (!user) throw new Error("Not authenticated");
@@ -522,7 +555,7 @@ const _generateRecurringTasksFromPlants = async (
     // Generate water task
     if (schedule.water_frequency_days && schedule.water_frequency_days > 0) {
       const existingWaterTask = existingTasks.find(
-        (t) => t.plant_id === plant.id && t.task_type === "water"
+        (t) => t.plant_id === plant.id && t.task_type === "water",
       );
 
       if (!existingWaterTask) {
@@ -533,7 +566,7 @@ const _generateRecurringTasksFromPlants = async (
           next_due_at: computeNextDueAt(
             plant,
             "water",
-            schedule.water_frequency_days
+            schedule.water_frequency_days,
           ),
           enabled: true,
           preferred_time: null,
@@ -547,7 +580,7 @@ const _generateRecurringTasksFromPlants = async (
       schedule.fertilise_frequency_days > 0
     ) {
       const existingFertiliseTask = existingTasks.find(
-        (t) => t.plant_id === plant.id && t.task_type === "fertilise"
+        (t) => t.plant_id === plant.id && t.task_type === "fertilise",
       );
 
       if (!existingFertiliseTask) {
@@ -558,7 +591,7 @@ const _generateRecurringTasksFromPlants = async (
           next_due_at: computeNextDueAt(
             plant,
             "fertilise",
-            schedule.fertilise_frequency_days
+            schedule.fertilise_frequency_days,
           ),
           enabled: true,
           preferred_time: null,
@@ -569,7 +602,7 @@ const _generateRecurringTasksFromPlants = async (
     // Generate prune task
     if (schedule.prune_frequency_days && schedule.prune_frequency_days > 0) {
       const existingPruneTask = existingTasks.find(
-        (t) => t.plant_id === plant.id && t.task_type === "prune"
+        (t) => t.plant_id === plant.id && t.task_type === "prune",
       );
 
       if (!existingPruneTask) {
@@ -580,7 +613,7 @@ const _generateRecurringTasksFromPlants = async (
           next_due_at: computeNextDueAt(
             plant,
             "prune",
-            schedule.prune_frequency_days
+            schedule.prune_frequency_days,
           ),
           enabled: true,
           preferred_time: null,
@@ -595,25 +628,50 @@ export const syncCareTasksForPlant = async (plant: Plant): Promise<void> => {
 
   const desiredFrequencies = [
     { taskType: "water" as TaskType, frequency: plant.watering_frequency_days },
-    { taskType: "fertilise" as TaskType, frequency: plant.fertilising_frequency_days },
+    {
+      taskType: "fertilise" as TaskType,
+      frequency: plant.fertilising_frequency_days,
+    },
     { taskType: "prune" as TaskType, frequency: plant.pruning_frequency_days },
   ].filter(
     (item) =>
       typeof item.frequency === "number" &&
       Number.isFinite(item.frequency) &&
-      item.frequency > 0
+      item.frequency > 0,
   ) as { taskType: TaskType; frequency: number }[];
+
+  // For coconut trees, auto-derive a Harvest task from the tree's age.
+  // harvestFrequencyDays === 0 means the tree is not yet bearing.
+  if (plant.plant_type === "coconut_tree" && plant.planting_date) {
+    const ageInfo = getCoconutAgeInfo(plant.planting_date);
+    if (ageInfo && ageInfo.harvestFrequencyDays > 0) {
+      desiredFrequencies.push({
+        taskType: "harvest",
+        frequency: ageInfo.harvestFrequencyDays,
+      });
+    }
+  }
 
   if (desiredFrequencies.length === 0) return;
 
   const existingTasks = await getTaskTemplates();
-  const plantTasks = existingTasks.filter(
-    (task) => task.plant_id === plant.id
-  );
+  const plantTasks = existingTasks.filter((task) => task.plant_id === plant.id);
   const plantCreatedAt = parseDateValue(plant.created_at);
 
   for (const { taskType, frequency } of desiredFrequencies) {
-    const nextDueAt = computeNextDueAt(plant, taskType, frequency);
+    // Apply Kanyakumari season-aware multiplier for water tasks.
+    // frequencyDays stored remains the user-configured base so the user's
+    // intent is preserved across seasons; only next_due_at is adjusted.
+    const effectiveFrequency =
+      taskType === "water"
+        ? Math.max(
+            1,
+            Math.round(
+              frequency * getWateringFrequencyMultiplier(plant.space_type),
+            ),
+          )
+        : frequency;
+    const nextDueAt = computeNextDueAt(plant, taskType, effectiveFrequency);
     const existing = plantTasks.find((task) => task.task_type === taskType);
     if (existing) {
       const updates: Partial<TaskTemplate> = {};
@@ -652,7 +710,7 @@ export const syncCareTasksForPlant = async (plant: Plant): Promise<void> => {
  */
 export const calculateTaskPriority = (
   task: TaskTemplate,
-  plant: Plant | null
+  plant: Plant | null,
 ): "critical" | "high" | "medium" | "low" => {
   if (!plant) {
     return "medium";
@@ -672,7 +730,7 @@ export const calculateTaskPriority = (
   const dueDate = new Date(task.next_due_at);
   const now = new Date();
   const daysOverdue = Math.floor(
-    (now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)
+    (now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24),
   );
 
   if (daysOverdue > 2) {
@@ -696,9 +754,29 @@ export const calculateTaskPriority = (
 export const getSeasonalCareReminder = (plant: Plant): string | null => {
   const season = getCurrentSeason();
 
-  // Provide basic seasonal advice
-  if (season === "monsoon" && plant.space_type === "pot") {
-    return "Ensure proper drainage to prevent waterlogging";
+  // Provide season-specific advice for Kanyakumari conditions
+  if (
+    (season === "sw_monsoon" || season === "ne_monsoon") &&
+    plant.space_type === "pot"
+  ) {
+    return season === "ne_monsoon"
+      ? "NE Monsoon: heaviest rains — check drainage daily, move pots under cover if needed"
+      : "SW Monsoon: ensure proper drainage to prevent waterlogging";
+  }
+
+  if (
+    season === "ne_monsoon" &&
+    (plant.space_type === "bed" || plant.space_type === "ground")
+  ) {
+    return "NE Monsoon season — reduce watering; natural rainfall is usually sufficient";
+  }
+
+  if (season === "summer") {
+    return "Peak summer heat — water early morning or after sunset to reduce evaporation";
+  }
+
+  if (season === "cool_dry") {
+    return "Cool dry period — good time to apply organic mulch and prepare beds for the next season";
   }
 
   return null;

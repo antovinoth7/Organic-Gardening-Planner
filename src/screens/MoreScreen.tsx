@@ -23,7 +23,7 @@ export default function MoreScreen({ navigation }: any) {
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.accountHeader}>
           <View style={styles.accountIcon}>
-            <Ionicons name="person-circle" size={26} color={theme.primary} />
+            <Ionicons name="person-circle" size={26} color="#fff" />
           </View>
           <View style={styles.accountText}>
             <Text style={styles.accountLabel}>Account</Text>
@@ -80,10 +80,7 @@ export default function MoreScreen({ navigation }: any) {
           />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.signOutButton}
-          onPress={handleSignOut}
-        >
+        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
           <Ionicons name="log-out-outline" size={18} color={theme.error} />
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
@@ -101,9 +98,7 @@ const createStyles = (theme: any) =>
     header: {
       padding: 24,
       paddingTop: 12,
-      backgroundColor: theme.backgroundSecondary,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
+      backgroundColor: theme.primary,
     },
     accountHeader: {
       flexDirection: "row",
@@ -114,7 +109,7 @@ const createStyles = (theme: any) =>
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: theme.primaryLight,
+      backgroundColor: "rgba(255,255,255,0.2)",
       alignItems: "center",
       justifyContent: "center",
     },
@@ -124,7 +119,7 @@ const createStyles = (theme: any) =>
     accountLabel: {
       fontSize: 12,
       fontWeight: "600",
-      color: theme.textSecondary,
+      color: "rgba(255,255,255,0.7)",
       textTransform: "uppercase",
       letterSpacing: 1,
       marginBottom: 2,
@@ -132,11 +127,11 @@ const createStyles = (theme: any) =>
     accountEmail: {
       fontSize: 18,
       fontWeight: "700",
-      color: theme.text,
+      color: "#fff",
     },
-  content: {
-    padding: 16,
-  },
+    content: {
+      padding: 16,
+    },
     menuItem: {
       flexDirection: "row",
       alignItems: "center",

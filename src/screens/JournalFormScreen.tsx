@@ -10,7 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { Image } from 'expo-image';
+import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import PhotoSourceModal from "../components/PhotoSourceModal";
 import {
@@ -46,7 +46,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
   const isEditing = !!editEntry;
 
   const [entryType, setEntryType] = useState<JournalEntryType>(
-    editEntry?.entry_type || initialEntryType || JournalEntryType.Observation
+    editEntry?.entry_type || initialEntryType || JournalEntryType.Observation,
   );
   const [content, setContent] = useState(editEntry?.content || "");
   const buildInitialPhotoItems = (): PhotoItem[] => {
@@ -54,39 +54,43 @@ export default function JournalFormScreen({ navigation, route }: any) {
     if (editEntry.photo_filenames && editEntry.photo_filenames.length > 0) {
       return editEntry.photo_filenames.map((filename, index) => ({
         filename,
-        uri: editEntry.photo_urls?.[index] ?? getLocalImageUriFromFilename(filename),
+        uri:
+          editEntry.photo_urls?.[index] ??
+          getLocalImageUriFromFilename(filename),
       }));
     }
     const legacyUris =
-      editEntry.photo_urls || (editEntry.photo_url ? [editEntry.photo_url] : []);
+      editEntry.photo_urls ||
+      (editEntry.photo_url ? [editEntry.photo_url] : []);
     return legacyUris.map((uri) => ({
       uri,
       filename: getFilenameFromUri(uri),
     }));
   };
   const [photoItems, setPhotoItems] = useState<PhotoItem[]>(
-    buildInitialPhotoItems
+    buildInitialPhotoItems,
   );
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(
-    editEntry?.plant_id || initialPlantId || null
+    editEntry?.plant_id || initialPlantId || null,
   );
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(false);
   const [showPlantPicker, setShowPlantPicker] = useState(false);
   const [showPhotoSourceModal, setShowPhotoSourceModal] = useState(false);
+  const [plantSearch, setPlantSearch] = useState("");
 
   // Harvest-specific fields
   const [harvestQuantity, setHarvestQuantity] = useState(
-    editEntry?.harvest_quantity?.toString() || ""
+    editEntry?.harvest_quantity?.toString() || "",
   );
   const [harvestUnit, setHarvestUnit] = useState(
-    editEntry?.harvest_unit || "pieces"
+    editEntry?.harvest_unit || "pieces",
   );
   const [harvestQuality, setHarvestQuality] = useState<
     "excellent" | "good" | "fair" | "poor"
   >(editEntry?.harvest_quality || "good");
   const [harvestNotes, setHarvestNotes] = useState(
-    editEntry?.harvest_notes || ""
+    editEntry?.harvest_notes || "",
   );
 
   useEffect(() => {
@@ -142,21 +146,26 @@ export default function JournalFormScreen({ navigation, route }: any) {
       return;
     }
 
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: "images",
-      allowsEditing: false,
-      quality: 0.8,
-      cameraType: ImagePicker.CameraType.back,
-    });
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: "images",
+        allowsEditing: false,
+        quality: 0.8,
+        cameraType: ImagePicker.CameraType.back,
+      });
 
-    if (!result.canceled) {
-      const cameraUri = result.assets[0]?.uri;
-      if (cameraUri) {
-        setPhotoItems((prev) => [
-          ...prev,
-          { uri: cameraUri, filename: null },
-        ]);
+      if (!result.canceled) {
+        const cameraUri = result.assets[0]?.uri;
+        if (cameraUri) {
+          setPhotoItems((prev) => [
+            ...prev,
+            { uri: cameraUri, filename: null },
+          ]);
+        }
       }
+    } catch (error) {
+      console.warn("Camera launch failed:", error);
+      Alert.alert("Camera Error", "Failed to open camera. Please try again.");
     }
   };
 
@@ -178,7 +187,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
     if (content.trim().length < 3) {
       Alert.alert(
         "Validation Error",
-        "Journal entry must be at least 3 characters long"
+        "Journal entry must be at least 3 characters long",
       );
       return;
     }
@@ -186,7 +195,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
     if (content.trim().length > 5000) {
       Alert.alert(
         "Validation Error",
-        "Journal entry must be less than 5000 characters"
+        "Journal entry must be less than 5000 characters",
       );
       return;
     }
@@ -201,7 +210,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
       if (isNaN(quantity) || quantity <= 0) {
         Alert.alert(
           "Validation Error",
-          "Harvest quantity must be a positive number"
+          "Harvest quantity must be a positive number",
         );
         return;
       }
@@ -209,7 +218,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
       if (quantity > 100000) {
         Alert.alert(
           "Validation Error",
-          "Harvest quantity seems too large. Please check your input."
+          "Harvest quantity seems too large. Please check your input.",
         );
         return;
       }
@@ -254,10 +263,15 @@ export default function JournalFormScreen({ navigation, route }: any) {
         photo_urls: photoUrls,
         plant_id: selectedPlantId,
         harvest_quantity:
-          entryType === JournalEntryType.Harvest ? parseFloat(harvestQuantity) : null,
-        harvest_unit: entryType === JournalEntryType.Harvest ? harvestUnit : null,
-        harvest_quality: entryType === JournalEntryType.Harvest ? harvestQuality : null,
-        harvest_notes: entryType === JournalEntryType.Harvest ? harvestNotes : null,
+          entryType === JournalEntryType.Harvest
+            ? parseFloat(harvestQuantity)
+            : null,
+        harvest_unit:
+          entryType === JournalEntryType.Harvest ? harvestUnit : null,
+        harvest_quality:
+          entryType === JournalEntryType.Harvest ? harvestQuality : null,
+        harvest_notes:
+          entryType === JournalEntryType.Harvest ? harvestNotes : null,
       };
 
       if (isEditing && editEntry) {
@@ -268,7 +282,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
 
       // Trigger refresh in parent screen
       navigation.navigate({
-        name: 'JournalList',
+        name: "JournalList",
         params: { refresh: Date.now() },
         merge: true,
       });
@@ -417,8 +431,8 @@ export default function JournalFormScreen({ navigation, route }: any) {
             {photoItems.map((item, index) =>
               item.uri ? (
                 <View key={index} style={styles.photoContainer}>
-                  <Image 
-                    source={{ uri: item.uri }} 
+                  <Image
+                    source={{ uri: item.uri }}
                     style={styles.photoThumbnail}
                     contentFit="cover"
                     transition={200}
@@ -432,7 +446,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
                     <Ionicons name="close-circle" size={24} color="#fff" />
                   </TouchableOpacity>
                 </View>
-              ) : null
+              ) : null,
             )}
           </View>
         )}
@@ -463,21 +477,58 @@ export default function JournalFormScreen({ navigation, route }: any) {
 
         {showPlantPicker && (
           <View style={styles.plantPicker}>
-            {plants.map((plant) => (
-              <TouchableOpacity
-                key={plant.id}
-                style={[
-                  styles.plantOption,
-                  selectedPlantId === plant.id && styles.plantOptionSelected,
-                ]}
-                onPress={() => {
-                  setSelectedPlantId(plant.id);
-                  setShowPlantPicker(false);
-                }}
-              >
-                <Text style={styles.plantOptionText}>{plant.name}</Text>
-              </TouchableOpacity>
-            ))}
+            <View style={styles.plantSearchRow}>
+              <Ionicons name="search" size={16} color={theme.textSecondary} />
+              <TextInput
+                style={styles.plantSearchInput}
+                placeholder="Search plants..."
+                placeholderTextColor={theme.inputPlaceholder}
+                value={plantSearch}
+                onChangeText={setPlantSearch}
+                autoFocus
+              />
+              {plantSearch !== "" && (
+                <TouchableOpacity onPress={() => setPlantSearch("")}>
+                  <Ionicons
+                    name="close-circle"
+                    size={16}
+                    color={theme.textTertiary}
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+            <ScrollView
+              style={styles.plantList}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+            >
+              {plants
+                .filter((p) =>
+                  p.name.toLowerCase().includes(plantSearch.toLowerCase()),
+                )
+                .map((plant) => (
+                  <TouchableOpacity
+                    key={plant.id}
+                    style={[
+                      styles.plantOption,
+                      selectedPlantId === plant.id &&
+                        styles.plantOptionSelected,
+                    ]}
+                    onPress={() => {
+                      setSelectedPlantId(plant.id);
+                      setShowPlantPicker(false);
+                      setPlantSearch("");
+                    }}
+                  >
+                    <Text style={styles.plantOptionText}>{plant.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              {plants.filter((p) =>
+                p.name.toLowerCase().includes(plantSearch.toLowerCase()),
+              ).length === 0 && (
+                <Text style={styles.plantNoResults}>No plants found</Text>
+              )}
+            </ScrollView>
           </View>
         )}
 
@@ -562,7 +613,9 @@ export default function JournalFormScreen({ navigation, route }: any) {
               placeholder="Storage method, taste notes, etc. (optional)"
               placeholderTextColor={theme.inputPlaceholder}
               value={harvestNotes}
-              onChangeText={(text) => setHarvestNotes(sanitizeAlphaNumericSpaces(text))}
+              onChangeText={(text) =>
+                setHarvestNotes(sanitizeAlphaNumericSpaces(text))
+              }
               multiline
               numberOfLines={2}
               textAlignVertical="top"
@@ -690,6 +743,30 @@ const createStyles = (theme: any) =>
       borderWidth: 1,
       borderColor: theme.border,
     },
+    plantSearchRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+      gap: 8,
+    },
+    plantSearchInput: {
+      flex: 1,
+      fontSize: 15,
+      color: theme.inputText,
+      padding: 0,
+    },
+    plantList: {
+      maxHeight: 200,
+    },
+    plantNoResults: {
+      padding: 16,
+      fontSize: 14,
+      color: theme.textSecondary,
+      textAlign: "center",
+    },
     plantOption: {
       padding: 16,
       borderBottomWidth: 1,
@@ -716,14 +793,14 @@ const createStyles = (theme: any) =>
     typeSelector: {
       flexDirection: "row",
       marginBottom: 16,
-      gap: 8,
+      gap: 6,
     },
     typeButton: {
       flex: 1,
-      flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      padding: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 2,
       backgroundColor: theme.backgroundSecondary,
       borderRadius: 10,
       borderWidth: 2,
@@ -735,9 +812,10 @@ const createStyles = (theme: any) =>
       borderColor: theme.primary,
     },
     typeButtonText: {
-      fontSize: 11,
+      fontSize: 10,
       color: theme.primary,
       fontWeight: "600",
+      textAlign: "center",
     },
     typeButtonTextActive: {
       color: theme.textInverse,

@@ -113,6 +113,12 @@ const PLANT_VARIETIES_BY_TYPE: Record<PlantType, string[]> = {
     "Potato",
     "Eggplant",
     "Pepper",
+    // Kanyakumari root vegetables & tubers
+    "Taro",
+    "Elephant Yam",
+    "Sweet Potato",
+    "Ash Plantain",
+    "Colocasia",
   ],
   herb: [
     "Coriander",
@@ -126,6 +132,10 @@ const PLANT_VARIETIES_BY_TYPE: Record<PlantType, string[]> = {
     "Rosemary",
     "Thyme",
     "Oregano",
+    // Kanyakumari spices grown as herbs
+    "Turmeric",
+    "Ginger",
+    "Betel Leaf",
   ],
   flower: [
     "Marigold",
@@ -157,6 +167,13 @@ const PLANT_VARIETIES_BY_TYPE: Record<PlantType, string[]> = {
     "Soursop",
     "Mangosteen",
     "Rambutan",
+    // Kanyakumari-specific fruit trees
+    "Red Banana",
+    "Breadfruit",
+    "Pineapple",
+    "Passion Fruit",
+    "Star Fruit",
+    "Arecanut",
   ],
   timber_tree: [
     "Neem",
@@ -438,10 +455,10 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
 Object.assign(PLANT_CARE_PROFILES, PLANT_CARE_OVERRIDES);
 
 const findProfileByVariety = (
-  plantVariety: string
+  plantVariety: string,
 ): PlantCareProfile | null => {
   const key = Object.keys(PLANT_CARE_PROFILES).find((profileKey) =>
-    profileKey.endsWith(`:${plantVariety}`)
+    profileKey.endsWith(`:${plantVariety}`),
   );
   return key ? PLANT_CARE_PROFILES[key] : null;
 };
@@ -450,7 +467,7 @@ const applyOverrides = (
   base: PlantCareProfile,
   overrides?: PlantCareProfiles,
   plantType?: PlantType,
-  plantVariety?: string
+  plantVariety?: string,
 ): PlantCareProfile => {
   if (!plantType || !plantVariety || !overrides) {
     return base;
@@ -471,13 +488,15 @@ const applyOverrides = (
 export function getPlantCareProfile(
   plantVariety: string,
   plantType?: PlantType,
-  overrides?: PlantCareProfiles
+  overrides?: PlantCareProfiles,
 ): PlantCareProfile | null {
   if (plantType) {
     const key = buildProfileKey(plantType, plantVariety);
     const base =
       PLANT_CARE_PROFILES[key] || DEFAULT_PROFILES_BY_TYPE[plantType] || null;
-    return base ? applyOverrides(base, overrides, plantType, plantVariety) : null;
+    return base
+      ? applyOverrides(base, overrides, plantType, plantVariety)
+      : null;
   }
 
   if (!plantVariety) return null;
@@ -489,7 +508,7 @@ export function getPlantCareProfile(
 export function hasPlantCareProfile(
   plantVariety: string,
   plantType?: PlantType,
-  overrides?: PlantCareProfiles
+  overrides?: PlantCareProfiles,
 ): boolean {
   if (plantType) {
     const key = buildProfileKey(plantType, plantVariety);

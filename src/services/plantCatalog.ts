@@ -1,7 +1,11 @@
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db, refreshAuthToken } from "../lib/firebase";
 import { getData, setData, KEYS } from "../lib/storage";
-import { PlantCatalog, PlantCatalogCategory, PlantType } from "../types/database.types";
+import {
+  PlantCatalog,
+  PlantCatalogCategory,
+  PlantType,
+} from "../types/database.types";
 import { logError } from "../utils/errorLogging";
 import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
 
@@ -48,6 +52,12 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
         "Potato",
         "Eggplant",
         "Pepper",
+        // Kanyakumari root vegetables & tubers
+        "Taro",
+        "Elephant Yam",
+        "Sweet Potato",
+        "Ash Plantain",
+        "Colocasia",
       ],
       varieties: {
         Brinjal: ["Long Purple", "Round Green", "Striped"],
@@ -74,6 +84,11 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
         Spinach: ["Palak", "Local Green", "Hybrid Leafy"],
         Cabbage: ["Golden Acre", "CO 1", "Green Ball"],
         Cauliflower: ["Pusa Snowball", "CO 1", "Early White"],
+        Taro: ["Seppan Kizhangu", "White Taro", "Local"],
+        "Elephant Yam": ["Karunai Kizhangu", "White Yam", "Local"],
+        "Sweet Potato": ["Orange Flesh", "White Flesh", "Local"],
+        "Ash Plantain": ["Vazhakkai", "Green Plantain", "Local"],
+        Colocasia: ["Purple Stem", "Green Stem", "Seppan"],
       },
     },
     herb: {
@@ -89,6 +104,10 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
         "Rosemary",
         "Thyme",
         "Oregano",
+        // Kanyakumari spices grown as herbs
+        "Turmeric",
+        "Ginger",
+        "Betel Leaf",
       ],
       varieties: {
         Coriander: ["CO 4", "CO 5", "Local"],
@@ -96,6 +115,9 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
         "Curry Leaf": ["Dwarf", "Regular", "Local"],
         Lemongrass: ["East Indian", "West Indian", "Local"],
         Tulsi: ["Krishna Tulsi", "Rama Tulsi"],
+        Turmeric: ["Erode Local", "Salem", "Finger Turmeric", "CO 1"],
+        Ginger: ["Maran", "Rio-de-Janeiro", "Nadia", "Local"],
+        "Betel Leaf": ["Vetrilai", "Kapur", "Local"],
       },
     },
     flower: {
@@ -136,6 +158,13 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
         "Soursop",
         "Mangosteen",
         "Rambutan",
+        // Kanyakumari-specific fruit trees
+        "Red Banana",
+        "Breadfruit",
+        "Pineapple",
+        "Passion Fruit",
+        "Star Fruit",
+        "Arecanut",
       ],
       varieties: {
         Banana: ["Nendran", "Poovan", "Rasthali", "Robusta", "Monthan"],
@@ -147,6 +176,12 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
         Jackfruit: ["Palur 1", "Palur 2", "Local"],
         "Custard Apple": ["Balanagar", "Arka Sahan", "Local"],
         Amla: ["NA 7", "Krishna", "Kanchan"],
+        "Red Banana": ["Sevvaazhai", "Karpura Chakkarakeli", "Local Red"],
+        Breadfruit: ["Seeni Chakka", "Yellow Skin", "Local"],
+        Pineapple: ["Kew", "Queen", "Mauritius"],
+        "Passion Fruit": ["Purple Passion", "Yellow Passion", "Local"],
+        "Star Fruit": ["Sweet", "Sour", "Local"],
+        Arecanut: ["Mangala", "Sumangala", "Local Tall"],
       },
     },
     timber_tree: {
@@ -162,7 +197,12 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
       varieties: {},
     },
     coconut_tree: {
-      plants: ["Dwarf Coconut", "Tall Coconut", "Hybrid Coconut", "King Coconut"],
+      plants: [
+        "Dwarf Coconut",
+        "Tall Coconut",
+        "Hybrid Coconut",
+        "King Coconut",
+      ],
       varieties: {
         "Dwarf Coconut": ["COD", "Malayan Dwarf"],
         "Tall Coconut": ["West Coast Tall", "East Coast Tall"],
@@ -190,13 +230,7 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
 const SETTINGS_COLLECTION = "user_settings";
 const PLANT_CATALOG_FIELD = "plantCatalog";
 const REQUIRED_LOCAL_PLANTS: Partial<Record<PlantType, string[]>> = {
-  vegetable: [
-    "Brinjal",
-    "Ladies Finger",
-    "Chilli",
-    "Drumstick",
-    "Tapioca",
-  ],
+  vegetable: ["Brinjal", "Ladies Finger", "Chilli", "Drumstick", "Tapioca"],
 };
 const KNOWN_VARIETY_ALIASES: Record<string, string> = {
   "lady's finger": "ladies finger",
@@ -250,10 +284,10 @@ const normalizeList = (values: string[] | undefined | null): string[] => {
 
 const normalizeVarieties = (
   varieties: Record<string, string[]> | undefined | null,
-  validPlants: string[]
+  validPlants: string[],
 ): Record<string, string[]> => {
   const validPlantMap = new Map(
-    validPlants.map((plant) => [toLookupKey(plant), plant])
+    validPlants.map((plant) => [toLookupKey(plant), plant]),
   );
   const result: Record<string, string[]> = {};
 
@@ -277,7 +311,7 @@ const normalizeVarieties = (
 };
 
 const createVarietyLookup = (
-  varieties: Record<string, string[]> | undefined | null
+  varieties: Record<string, string[]> | undefined | null,
 ): Record<string, string[]> => {
   const lookup: Record<string, string[]> = {};
   if (!varieties || typeof varieties !== "object") return lookup;
@@ -294,11 +328,12 @@ const createVarietyLookup = (
 
 const getKnownVarietiesForPlant = (
   plantName: string,
-  defaultVarietyLookup: Record<string, string[]>
+  defaultVarietyLookup: Record<string, string[]>,
 ): string[] => {
   const plantKey = toLookupKey(plantName);
   const aliasKey = KNOWN_VARIETY_ALIASES[plantKey];
-  const defaults = defaultVarietyLookup[plantKey] ??
+  const defaults =
+    defaultVarietyLookup[plantKey] ??
     (aliasKey ? defaultVarietyLookup[aliasKey] : undefined);
   return defaults ? [...defaults] : [];
 };
@@ -308,7 +343,7 @@ const normalizeCategory = (
   defaultPlants: string[],
   defaultVarieties: Record<string, string[]>,
   requiredPlants: string[],
-  hasCategory: boolean
+  hasCategory: boolean,
 ): PlantCatalogCategory => {
   const plants = normalizeList(category?.plants);
   const resolvedPlants = hasCategory ? [...plants] : [...defaultPlants];
@@ -319,10 +354,10 @@ const normalizeCategory = (
   });
   const normalizedIncomingVarieties = normalizeVarieties(
     category?.varieties,
-    resolvedPlants
+    resolvedPlants,
   );
   const incomingVarietySet = new Set(
-    Object.keys(normalizedIncomingVarieties).map((plant) => toLookupKey(plant))
+    Object.keys(normalizedIncomingVarieties).map((plant) => toLookupKey(plant)),
   );
   const defaultVarietyLookup = createVarietyLookup(defaultVarieties);
   const mergedVarieties: Record<string, string[]> = {
@@ -345,10 +380,8 @@ const normalizeCategory = (
 
 const normalizeCatalog = (catalog?: PlantCatalog | null): PlantCatalog => {
   const categories = {} as Record<PlantType, PlantCatalogCategory>;
-  const incomingCategories = catalog?.categories ?? ({} as Record<
-    PlantType,
-    PlantCatalogCategory
-  >);
+  const incomingCategories =
+    catalog?.categories ?? ({} as Record<PlantType, PlantCatalogCategory>);
 
   PLANT_CATEGORIES.forEach((type) => {
     const defaultCategory = DEFAULT_PLANT_CATALOG.categories[type];
@@ -359,7 +392,7 @@ const normalizeCatalog = (catalog?: PlantCatalog | null): PlantCatalog => {
       defaultCategory.plants,
       defaultCategory.varieties,
       REQUIRED_LOCAL_PLANTS[type] ?? [],
-      hasCategory
+      hasCategory,
     );
   });
 
@@ -396,16 +429,16 @@ export const getPlantCatalog = async (): Promise<PlantCatalog> => {
           setDoc(
             docRef,
             { [PLANT_CATALOG_FIELD]: cached, updated_at: serverTimestamp() },
-            { merge: true }
+            { merge: true },
           ),
-        { timeoutMs: 10000, maxRetries: 1, throwOnTimeout: false }
+        { timeoutMs: 10000, maxRetries: 1, throwOnTimeout: false },
       );
       return cached;
     }
 
     const data = snapshot.data();
     const remoteCatalog = normalizeCatalog(
-      (data as Record<string, any>)[PLANT_CATALOG_FIELD] ?? data
+      (data as Record<string, any>)[PLANT_CATALOG_FIELD] ?? data,
     );
     await setData(KEYS.PLANT_CATALOG, [remoteCatalog]);
     return remoteCatalog;
@@ -418,7 +451,7 @@ export const getPlantCatalog = async (): Promise<PlantCatalog> => {
 };
 
 export const savePlantCatalog = async (
-  catalog: PlantCatalog
+  catalog: PlantCatalog,
 ): Promise<PlantCatalog> => {
   const normalized = normalizeCatalog(catalog);
   await setData(KEYS.PLANT_CATALOG, [normalized]);
@@ -433,9 +466,9 @@ export const savePlantCatalog = async (
         setDoc(
           docRef,
           { [PLANT_CATALOG_FIELD]: normalized, updated_at: serverTimestamp() },
-          { merge: true }
+          { merge: true },
         ),
-      { timeoutMs: 10000, maxRetries: 2, throwOnTimeout: false }
+      { timeoutMs: 10000, maxRetries: 2, throwOnTimeout: false },
     );
   } catch (error) {
     logError("network", "Failed to save plant catalog", error as Error, {

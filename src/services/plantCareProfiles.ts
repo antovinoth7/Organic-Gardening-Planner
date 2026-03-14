@@ -29,6 +29,10 @@ const SOIL_TYPES: SoilType[] = [
   "garden_soil",
   "potting_mix",
   "coco_peat",
+  "red_laterite",
+  "coastal_sandy",
+  "black_cotton",
+  "alluvial",
   "custom",
 ];
 const FERTILISERS: FertiliserType[] = [
@@ -60,12 +64,14 @@ const normalizeNumber = (value: unknown): number | undefined => {
 };
 
 const normalizeOverride = (
-  override: PlantCareProfileOverride | undefined | null
+  override: PlantCareProfileOverride | undefined | null,
 ): PlantCareProfileOverride => {
   if (!override || typeof override !== "object") return {};
   const normalized: PlantCareProfileOverride = {};
 
-  if (WATER_REQUIREMENTS.includes(override.waterRequirement as WaterRequirement)) {
+  if (
+    WATER_REQUIREMENTS.includes(override.waterRequirement as WaterRequirement)
+  ) {
     normalized.waterRequirement = override.waterRequirement as WaterRequirement;
   }
   if (SUNLIGHT_LEVELS.includes(override.sunlight as SunlightLevel)) {
@@ -79,8 +85,7 @@ const normalizeOverride = (
       override.preferredFertiliser as FertiliserType;
   }
   if (GROWTH_STAGES.includes(override.initialGrowthStage as GrowthStage)) {
-    normalized.initialGrowthStage =
-      override.initialGrowthStage as GrowthStage;
+    normalized.initialGrowthStage = override.initialGrowthStage as GrowthStage;
   }
 
   const wateringDays = normalizeNumber(override.wateringFrequencyDays);
@@ -96,7 +101,7 @@ const normalizeOverride = (
 };
 
 const normalizeProfiles = (
-  profiles?: PlantCareProfiles | null
+  profiles?: PlantCareProfiles | null,
 ): PlantCareProfiles => {
   const normalized = createEmptyProfiles();
 
@@ -112,7 +117,7 @@ const normalizeProfiles = (
       const trimmed = plantName?.toString().trim();
       if (!trimmed) return;
       const normalizedOverride = normalizeOverride(
-        override as PlantCareProfileOverride
+        override as PlantCareProfileOverride,
       );
       if (Object.keys(normalizedOverride).length === 0) return;
       normalized[type][trimmed] = normalizedOverride;
@@ -151,16 +156,16 @@ export const getPlantCareProfiles = async (): Promise<PlantCareProfiles> => {
           setDoc(
             docRef,
             { [CARE_FIELD]: cached, updated_at: serverTimestamp() },
-            { merge: true }
+            { merge: true },
           ),
-        { timeoutMs: 10000, maxRetries: 1, throwOnTimeout: false }
+        { timeoutMs: 10000, maxRetries: 1, throwOnTimeout: false },
       );
       return cached;
     }
 
     const data = snapshot.data();
     const remoteProfiles = normalizeProfiles(
-      (data as Record<string, any>)[CARE_FIELD] ?? data
+      (data as Record<string, any>)[CARE_FIELD] ?? data,
     );
     await setData(KEYS.PLANT_CARE_PROFILES, [remoteProfiles]);
     return remoteProfiles;
@@ -173,7 +178,7 @@ export const getPlantCareProfiles = async (): Promise<PlantCareProfiles> => {
 };
 
 export const savePlantCareProfiles = async (
-  profiles: PlantCareProfiles
+  profiles: PlantCareProfiles,
 ): Promise<PlantCareProfiles> => {
   const normalized = normalizeProfiles(profiles);
   await setData(KEYS.PLANT_CARE_PROFILES, [normalized]);
@@ -188,9 +193,9 @@ export const savePlantCareProfiles = async (
         setDoc(
           docRef,
           { [CARE_FIELD]: normalized, updated_at: serverTimestamp() },
-          { merge: true }
+          { merge: true },
         ),
-      { timeoutMs: 10000, maxRetries: 2, throwOnTimeout: false }
+      { timeoutMs: 10000, maxRetries: 2, throwOnTimeout: false },
     );
   } catch (error) {
     logError("network", "Failed to save plant care profiles", error as Error, {

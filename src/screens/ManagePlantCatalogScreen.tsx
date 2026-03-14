@@ -1,4 +1,3 @@
-
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -96,6 +95,10 @@ const SOIL_LABELS: Record<SoilType, string> = {
   garden_soil: "Garden Soil",
   potting_mix: "Potting Mix",
   coco_peat: "Coco Peat",
+  red_laterite: "Red Laterite (Seivaal)",
+  coastal_sandy: "Coastal Sandy Soil",
+  black_cotton: "Black Cotton Soil",
+  alluvial: "Alluvial Soil",
   custom: "Custom",
 };
 
@@ -121,8 +124,7 @@ const GROWTH_STAGE_LABELS: Record<GrowthStage, string> = {
   mature: "Mature",
 };
 
-const sanitizePlantName = (value: string) =>
-  sanitizeLandmarkText(value).trim();
+const sanitizePlantName = (value: string) => sanitizeLandmarkText(value).trim();
 const sanitizeNumberInput = (value: string) => value.replace(/[^0-9]/g, "");
 
 const isDuplicate = (list: string[], value: string, ignore?: string) => {
@@ -147,7 +149,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
       : {};
   const [catalog, setCatalog] = useState<PlantCatalog>(DEFAULT_PLANT_CATALOG);
   const [careProfiles, setCareProfiles] = useState<PlantCareProfiles>(
-    {} as PlantCareProfiles
+    {} as PlantCareProfiles,
   );
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -155,10 +157,11 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
   const [activeCategory, setActiveCategory] = useState<PlantType>("vegetable");
   const [newPlantName, setNewPlantName] = useState("");
   const [editPlant, setEditPlant] = useState<EditPlantState | null>(null);
-  const [reassignPlant, setReassignPlant] =
-    useState<ReassignPlantState | null>(null);
+  const [reassignPlant, setReassignPlant] = useState<ReassignPlantState | null>(
+    null,
+  );
   const [varietyModal, setVarietyModal] = useState<VarietyModalState | null>(
-    null
+    null,
   );
   const [newVariety, setNewVariety] = useState("");
   const [careModal, setCareModal] = useState<CareModalState | null>(null);
@@ -178,7 +181,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
     } catch (error: any) {
       Alert.alert(
         "Error",
-        error?.message || "Failed to load plant catalog. Please try again."
+        error?.message || "Failed to load plant catalog. Please try again.",
       );
     } finally {
       setLoading(false);
@@ -215,8 +218,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
   }, [plants]);
 
   const categoryPlants = catalog.categories[activeCategory]?.plants ?? [];
-  const categoryVarieties =
-    catalog.categories[activeCategory]?.varieties ?? {};
+  const categoryVarieties = catalog.categories[activeCategory]?.varieties ?? {};
   const categoryCareProfiles = careProfiles[activeCategory] ?? {};
   const hasCareOverride =
     !!careModal && !!categoryCareProfiles[careModal.plantName];
@@ -240,7 +242,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
     } catch (error: any) {
       Alert.alert(
         "Error",
-        error?.message || "Failed to save plant catalog. Please try again."
+        error?.message || "Failed to save plant catalog. Please try again.",
       );
     } finally {
       setSaving(false);
@@ -250,11 +252,11 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
   const updatePlantsForVariety = async (
     category: PlantType,
     fromVariety: string,
-    toVariety: string
+    toVariety: string,
   ) => {
     const targets = plants.filter(
       (plant) =>
-        plant.plant_type === category && plant.plant_variety === fromVariety
+        plant.plant_type === category && plant.plant_variety === fromVariety,
     );
 
     for (const plant of targets) {
@@ -270,7 +272,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
           return plant;
         }
         return { ...plant, plant_variety: toVariety };
-      })
+      }),
     );
 
     return targets.length;
@@ -321,7 +323,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
     if (Number.isNaN(wateringDays) || wateringDays < 1) {
       Alert.alert(
         "Validation Error",
-        "Enter a valid watering frequency (days)."
+        "Enter a valid watering frequency (days).",
       );
       return;
     }
@@ -330,7 +332,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
     if (Number.isNaN(fertilisingDays) || fertilisingDays < 1) {
       Alert.alert(
         "Validation Error",
-        "Enter a valid fertilising frequency (days)."
+        "Enter a valid fertilising frequency (days).",
       );
       return;
     }
@@ -363,7 +365,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
     } catch (error: any) {
       Alert.alert(
         "Error",
-        error?.message || "Failed to save care defaults. Please try again."
+        error?.message || "Failed to save care defaults. Please try again.",
       );
     } finally {
       setSaving(false);
@@ -401,14 +403,14 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
               Alert.alert(
                 "Error",
                 error?.message ||
-                  "Failed to reset care defaults. Please try again."
+                  "Failed to reset care defaults. Please try again.",
               );
             } finally {
               setSaving(false);
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -465,7 +467,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
         }
 
         const updatedPlants = categoryPlants.map((plant) =>
-          plant === editPlant.name ? name : plant
+          plant === editPlant.name ? name : plant,
         );
 
         const nextVarieties = { ...categoryVarieties };
@@ -476,13 +478,14 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
             ? Array.from(
                 new Set(
                   [...nextVarieties[name], ...existing].map((item) =>
-                    item.toLowerCase()
-                  )
-                )
-              ).map((item) =>
-                existing.find(
-                  (value) => value.toLowerCase() === item.toLowerCase()
-                ) || item
+                    item.toLowerCase(),
+                  ),
+                ),
+              ).map(
+                (item) =>
+                  existing.find(
+                    (value) => value.toLowerCase() === item.toLowerCase(),
+                  ) || item,
               )
             : existing;
           nextVarieties[name] = merged;
@@ -521,7 +524,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
       } catch (error: any) {
         Alert.alert(
           "Error",
-          error?.message || "Failed to rename plant. Please try again."
+          error?.message || "Failed to rename plant. Please try again.",
         );
       } finally {
         setSaving(false);
@@ -535,7 +538,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
         [
           { text: "Cancel", style: "cancel" },
           { text: "Rename", onPress: applyRename },
-        ]
+        ],
       );
     } else {
       applyRename();
@@ -561,7 +564,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
     if (remaining.length === 0) {
       Alert.alert(
         "Cannot Delete",
-        "Add another plant option before deleting this one."
+        "Add another plant option before deleting this one.",
       );
       return;
     }
@@ -614,7 +617,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
     } catch (error: any) {
       Alert.alert(
         "Error",
-        error?.message || "Failed to delete plant. Please try again."
+        error?.message || "Failed to delete plant. Please try again.",
       );
     } finally {
       setSaving(false);
@@ -627,10 +630,10 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
     const plantName = varietyModal.plantName;
     const suggestions = categoryVarieties[plantName] ?? [];
     const normalized = Array.from(
-      new Set(suggestions.map((item) => item.toLowerCase()))
+      new Set(suggestions.map((item) => item.toLowerCase())),
     ).map(
       (value) =>
-        suggestions.find((item) => item.toLowerCase() === value) ?? value
+        suggestions.find((item) => item.toLowerCase() === value) ?? value,
     );
 
     const nextVarieties = { ...categoryVarieties };
@@ -686,7 +689,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
   const handleRemoveVarietySuggestion = (plantName: string, value: string) => {
     const current = categoryVarieties[plantName] ?? [];
     const filtered = current.filter(
-      (item) => item.toLowerCase() !== value.toLowerCase()
+      (item) => item.toLowerCase() !== value.toLowerCase(),
     );
     const nextVarieties = { ...categoryVarieties };
     if (filtered.length === 0) {
@@ -808,8 +811,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                 </Text>
               ) : (
                 categoryPlants.map((plantName) => {
-                  const count =
-                    plantCounts[activeCategory]?.[plantName] || 0;
+                  const count = plantCounts[activeCategory]?.[plantName] || 0;
                   return (
                     <View key={plantName} style={styles.plantRow}>
                       <View style={styles.plantInfo}>
@@ -821,9 +823,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                       <View style={styles.plantActions}>
                         <TouchableOpacity
                           style={styles.iconButton}
-                          onPress={() =>
-                            setVarietyModal({ plantName })
-                          }
+                          onPress={() => setVarietyModal({ plantName })}
                         >
                           <Ionicons
                             name="albums-outline"
@@ -968,9 +968,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
 
             <View style={styles.reassignList}>
               {(reassignPlant
-                ? categoryPlants.filter(
-                    (plant) => plant !== reassignPlant.name
-                  )
+                ? categoryPlants.filter((plant) => plant !== reassignPlant.name)
                 : []
               ).map((option) => (
                 <TouchableOpacity
@@ -982,7 +980,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                   ]}
                   onPress={() =>
                     setReassignPlant((prev) =>
-                      prev ? { ...prev, replacement: option } : prev
+                      prev ? { ...prev, replacement: option } : prev,
                     )
                   }
                 >
@@ -1012,7 +1010,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                   reassignPlant &&
                   handleDeletePlant(
                     reassignPlant.name,
-                    reassignPlant.replacement
+                    reassignPlant.replacement,
                   )
                 }
               >
@@ -1065,7 +1063,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
 
             <View style={styles.varietyChips}>
               {(varietyModal
-                ? categoryVarieties[varietyModal.plantName] ?? []
+                ? (categoryVarieties[varietyModal.plantName] ?? [])
                 : []
               ).map((variety) => (
                 <View key={variety} style={styles.varietyChip}>
@@ -1075,7 +1073,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                       varietyModal &&
                       handleRemoveVarietySuggestion(
                         varietyModal.plantName,
-                        variety
+                        variety,
                       )
                     }
                   >
@@ -1090,9 +1088,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
               {varietyModal &&
                 (categoryVarieties[varietyModal.plantName] ?? []).length ===
                   0 && (
-                  <Text style={styles.emptyText}>
-                    No suggestions yet.
-                  </Text>
+                  <Text style={styles.emptyText}>No suggestions yet.</Text>
                 )}
             </View>
 
@@ -1169,7 +1165,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                                 ...prev,
                                 waterRequirement: value as WaterRequirement,
                               }
-                            : prev
+                            : prev,
                         )
                       }
                       style={styles.picker}
@@ -1181,14 +1177,16 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                             label={label}
                             value={value}
                           />
-                        )
+                        ),
                       )}
                     </Picker>
                   </View>
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Watering frequency (days)</Text>
+                  <Text style={styles.fieldLabel}>
+                    Watering frequency (days)
+                  </Text>
                   <TextInput
                     style={styles.careInput}
                     keyboardType="numeric"
@@ -1200,7 +1198,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                               ...prev,
                               wateringFrequencyDays: sanitizeNumberInput(text),
                             }
-                          : prev
+                          : prev,
                       )
                     }
                     placeholder="e.g., 3"
@@ -1209,7 +1207,9 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Fertilising frequency (days)</Text>
+                  <Text style={styles.fieldLabel}>
+                    Fertilising frequency (days)
+                  </Text>
                   <TextInput
                     style={styles.careInput}
                     keyboardType="numeric"
@@ -1219,9 +1219,10 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                         prev
                           ? {
                               ...prev,
-                              fertilisingFrequencyDays: sanitizeNumberInput(text),
+                              fertilisingFrequencyDays:
+                                sanitizeNumberInput(text),
                             }
-                          : prev
+                          : prev,
                       )
                     }
                     placeholder="e.g., 14"
@@ -1244,7 +1245,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                               ...prev,
                               pruningFrequencyDays: sanitizeNumberInput(text),
                             }
-                          : prev
+                          : prev,
                       )
                     }
                     placeholder="Leave blank if not needed"
@@ -1266,7 +1267,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                         setCareForm((prev) =>
                           prev
                             ? { ...prev, sunlight: value as SunlightLevel }
-                            : prev
+                            : prev,
                         )
                       }
                       style={styles.picker}
@@ -1286,7 +1287,9 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                       selectedValue={careForm?.soilType}
                       onValueChange={(value) =>
                         setCareForm((prev) =>
-                          prev ? { ...prev, soilType: value as SoilType } : prev
+                          prev
+                            ? { ...prev, soilType: value as SoilType }
+                            : prev,
                         )
                       }
                       style={styles.picker}
@@ -1311,14 +1314,20 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                                 ...prev,
                                 preferredFertiliser: value as FertiliserType,
                               }
-                            : prev
+                            : prev,
                         )
                       }
                       style={styles.picker}
                     >
-                      {Object.entries(FERTILISER_LABELS).map(([value, label]) => (
-                        <Picker.Item key={value} label={label} value={value} />
-                      ))}
+                      {Object.entries(FERTILISER_LABELS).map(
+                        ([value, label]) => (
+                          <Picker.Item
+                            key={value}
+                            label={label}
+                            value={value}
+                          />
+                        ),
+                      )}
                     </Picker>
                   </View>
                 </View>
@@ -1336,14 +1345,20 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                                 ...prev,
                                 initialGrowthStage: value as GrowthStage,
                               }
-                            : prev
+                            : prev,
                         )
                       }
                       style={styles.picker}
                     >
-                      {Object.entries(GROWTH_STAGE_LABELS).map(([value, label]) => (
-                        <Picker.Item key={value} label={label} value={value} />
-                      ))}
+                      {Object.entries(GROWTH_STAGE_LABELS).map(
+                        ([value, label]) => (
+                          <Picker.Item
+                            key={value}
+                            label={label}
+                            value={value}
+                          />
+                        ),
+                      )}
                     </Picker>
                   </View>
                 </View>
@@ -1384,7 +1399,12 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
         </View>
       </Modal>
 
-      <Modal visible={saving} transparent animationType="fade" hardwareAccelerated>
+      <Modal
+        visible={saving}
+        transparent
+        animationType="fade"
+        hardwareAccelerated
+      >
         <View style={styles.savingOverlay}>
           <ActivityIndicator size="large" color={theme.primary} />
           <Text style={styles.savingText}>Updating catalog...</Text>
@@ -1812,4 +1832,3 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontWeight: "600",
     },
   });
-

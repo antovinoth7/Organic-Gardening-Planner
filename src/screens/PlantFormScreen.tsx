@@ -13,7 +13,7 @@ import {
   Modal,
   useWindowDimensions,
 } from "react-native";
-import { Image } from 'expo-image';
+import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -21,6 +21,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   getPlant,
+  getAllPlants,
   createPlant,
   updatePlant,
   savePlantImage,
@@ -29,6 +30,7 @@ import { getFilenameFromUri } from "../lib/imageStorage";
 import { syncCareTasksForPlant } from "../services/tasks";
 import {
   SpaceType,
+  Plant,
   PlantType,
   SunlightLevel,
   SoilType,
@@ -49,6 +51,8 @@ import {
   getIncompatiblePlants,
   getCommonPests,
   getCommonDiseases,
+  getCoconutAgeInfo,
+  CoconutAgeInfo,
 } from "../utils/plantHelpers";
 import {
   getPlantCareProfile,
@@ -74,7 +78,7 @@ import {
 
 const NOTES_MAX_LENGTH = 500;
 type FormMode = "quick" | "advanced";
-type FormSectionKey = "basic" | "care" | "harvest" | "history";
+type FormSectionKey = "basic" | "care" | "harvest" | "coconut" | "history";
 const sanitizeNumberText = (value: string) => value.replace(/[^0-9]/g, "");
 const TAMIL_NADU_HARVEST_SEASONS = [
   "Year Round",
@@ -93,6 +97,121 @@ const ISSUE_SEVERITY_OPTIONS: {
   { value: "severe", label: "Severe" },
 ];
 
+/**
+ * Builds the base portion of an auto-generated plant name.
+ *
+ * Rules (in order):
+ * 1. Anti-redundancy: if the sub-variety name already contains the parent
+ *    variety word (e.g. variety="Tall Coconut", plantVariety="Coconut"),
+ *    use just the sub-variety — avoids "Coconut - Tall Coconut".
+ * 2. For trees (fruit_tree / timber_tree / coconut_tree) with a planting
+ *    date, append the two-digit year — primary disambiguator for a grove
+ *    where you track multiple trees planted in different years.
+ *    e.g. "Tall Coconut '95", "Dwarf Coconut '21"
+ * 3. If a parentLocation is provided, append a short location token.
+ *    e.g. "Tomato (South)", "Tall Coconut '95 (Field)"
+ */
+const buildGeneratedPlantNameBase = (
+  plantType: PlantType | string,
+  plantVariety: string,
+  variety: string,
+  plantingDate?: string,
+  parentLocation?: string,
+): string => {
+  const pv = plantVariety.trim();
+  const v = variety.trim();
+  if (!pv) return "";
+
+  // 1. Build the plant-name portion, avoiding redundancy.
+  let base: string;
+  if (!v) {
+    base = pv;
+  } else if (v.toLowerCase().includes(pv.toLowerCase())) {
+    // Sub-variety already contains parent word — use the sub-variety alone.
+    base = v;
+  } else {
+    base = `${pv} - ${v}`;
+  }
+
+  // 2. For trees: append abbreviated planting year.
+  const isTree = ["fruit_tree", "timber_tree", "coconut_tree"].includes(
+    plantType as string,
+  );
+  if (isTree && plantingDate) {
+    const d = new Date(plantingDate);
+    if (!isNaN(d.getTime())) {
+      base = `${base} '${String(d.getFullYear()).slice(2)}`;
+    }
+  }
+
+  // 3. Append short location token (first word, up to 10 chars).
+  const loc = parentLocation?.trim();
+  if (loc) {
+    const token = loc.split(/\s+/)[0].slice(0, 10);
+    if (token) base = `${base} (${token})`;
+  }
+
+  return base;
+};
+
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const isGeneratedPlantName = (value: string, baseName: string): boolean => {
+  const normalizedValue = value.trim();
+  const normalizedBase = baseName.trim();
+  if (!normalizedValue || !normalizedBase) return false;
+  const pattern = new RegExp(
+    `^${escapeRegExp(normalizedBase)}(?: #(\\d+))?$`,
+    "i",
+  );
+  return pattern.test(normalizedValue);
+};
+
+const buildGeneratedPlantName = (
+  baseName: string,
+  existingPlants: Plant[],
+  currentPlantId?: string,
+  currentGeneratedName?: string,
+): string => {
+  const normalizedBase = baseName.trim();
+  if (!normalizedBase) return "";
+
+  if (
+    currentPlantId &&
+    currentGeneratedName &&
+    isGeneratedPlantName(currentGeneratedName, normalizedBase)
+  ) {
+    return currentGeneratedName;
+  }
+
+  const pattern = new RegExp(
+    `^${escapeRegExp(normalizedBase)}(?: #(\\d+))?$`,
+    "i",
+  );
+  let baseTaken = false;
+  const usedSuffixes = new Set<number>();
+
+  existingPlants.forEach((plant) => {
+    if (plant.id === currentPlantId) return;
+    const match = plant.name?.trim().match(pattern);
+    if (!match) return;
+    if (!match[1]) {
+      baseTaken = true;
+    } else {
+      const suffix = parseInt(match[1], 10);
+      if (!Number.isNaN(suffix)) usedSuffixes.add(suffix);
+    }
+  });
+
+  if (!baseTaken) return normalizedBase;
+
+  // Find the first available suffix starting at #2 (gap-filling).
+  let next = 2;
+  while (usedSuffixes.has(next)) next++;
+  return `${normalizedBase} #${next}`;
+};
+
 export default function PlantFormScreen({ route, navigation }: any) {
   const { plantId } = route.params || {};
   const theme = useTheme();
@@ -108,22 +227,26 @@ export default function PlantFormScreen({ route, navigation }: any) {
         }
       : {};
   const [name, setName] = useState("");
+  const [existingPlants, setExistingPlants] = useState<Plant[]>([]);
+  const [loadedGeneratedName, setLoadedGeneratedName] = useState("");
   const [plantType, setPlantType] = useState<PlantType>("vegetable");
   const [plantVariety, setPlantVariety] = useState("");
-  const [plantCatalog, setPlantCatalog] =
-    useState<PlantCatalog>(DEFAULT_PLANT_CATALOG);
-  const [plantCareProfiles, setPlantCareProfiles] =
-    useState<PlantCareProfiles>({} as PlantCareProfiles);
+  const [plantCatalog, setPlantCatalog] = useState<PlantCatalog>(
+    DEFAULT_PLANT_CATALOG,
+  );
+  const [plantCareProfiles, setPlantCareProfiles] = useState<PlantCareProfiles>(
+    {} as PlantCareProfiles,
+  );
   const [careProfilesLoaded, setCareProfilesLoaded] = useState(false);
   const [spaceType, setSpaceType] = useState<SpaceType>("ground");
   const [location, setLocation] = useState("");
   const [parentLocation, setParentLocation] = useState("");
   const [childLocation, setChildLocation] = useState("");
   const [parentLocations, setParentLocations] = useState<string[]>(
-    DEFAULT_PARENT_LOCATIONS
+    DEFAULT_PARENT_LOCATIONS,
   );
   const [childLocations, setChildLocations] = useState<string[]>(
-    DEFAULT_CHILD_LOCATIONS
+    DEFAULT_CHILD_LOCATIONS,
   );
   const [landmarks, setLandmarks] = useState("");
   const [bedName, setBedName] = useState("");
@@ -170,6 +293,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
     basic: true,
     care: true,
     harvest: false,
+    coconut: false,
     history: false,
   });
   const [autoApplyCareDefaults, setAutoApplyCareDefaults] = useState(true);
@@ -187,6 +311,19 @@ export default function PlantFormScreen({ route, navigation }: any) {
   const [pruningFrequency, setPruningFrequency] = useState("");
   const [pruningNotes, setPruningNotes] = useState("");
 
+  // Coconut-specific tracking (Kanyakumari)
+  const [coconutFrondsCount, setCoconutFrondsCount] = useState("");
+  const [nutsPerMonth, setNutsPerMonth] = useState("");
+  const [lastClimbingDate, setLastClimbingDate] = useState("");
+  const [showClimbingDatePicker, setShowClimbingDatePicker] = useState(false);
+  const [spatheCount, setSpatheCount] = useState("");
+  const [nutFallCount, setNutFallCount] = useState("");
+  const [lastNutFallDate, setLastNutFallDate] = useState("");
+  const [showNutFallDatePicker, setShowNutFallDatePicker] = useState(false);
+  const [coconutAgeInfo, setCoconutAgeInfo] = useState<CoconutAgeInfo | null>(
+    null,
+  );
+
   // Track if form has been modified
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const initialDataLoaded = useRef(false);
@@ -202,10 +339,10 @@ export default function PlantFormScreen({ route, navigation }: any) {
       const timeoutId = setTimeout(() => {
         initialDataLoaded.current = true;
       }, 500);
-      
+
       return () => clearTimeout(timeoutId);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plantId]);
 
   const loadLocations = async () => {
@@ -227,6 +364,15 @@ export default function PlantFormScreen({ route, navigation }: any) {
     }
   };
 
+  const loadExistingPlants = async () => {
+    try {
+      const plants = await getAllPlants();
+      setExistingPlants(plants);
+    } catch (error) {
+      console.error("Error loading plants for naming:", error);
+    }
+  };
+
   const loadPlantCareProfiles = async () => {
     try {
       const profiles = await getPlantCareProfiles();
@@ -242,6 +388,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
     loadLocations();
     loadPlantCatalog();
     loadPlantCareProfiles();
+    loadExistingPlants();
   }, []);
 
   useFocusEffect(
@@ -249,12 +396,13 @@ export default function PlantFormScreen({ route, navigation }: any) {
       loadLocations();
       loadPlantCatalog();
       loadPlantCareProfiles();
-    }, [])
+      loadExistingPlants();
+    }, []),
   );
 
   const setSectionExpandedState = (
     section: FormSectionKey,
-    expanded: boolean
+    expanded: boolean,
   ) => {
     setSectionExpanded((prev) => ({ ...prev, [section]: expanded }));
   };
@@ -264,12 +412,9 @@ export default function PlantFormScreen({ route, navigation }: any) {
       basic: [],
       care: [],
       harvest: [],
+      coconut: [],
       history: [],
     };
-
-    if (!name.trim()) {
-      errors.basic.push("Please enter a plant name");
-    }
 
     if (!plantVariety.trim()) {
       errors.basic.push("Please select a specific plant type");
@@ -288,7 +433,9 @@ export default function PlantFormScreen({ route, navigation }: any) {
       Number.isNaN(parseInt(wateringFrequency, 10)) ||
       parseInt(wateringFrequency, 10) < 1
     ) {
-      errors.care.push("Please enter a valid watering frequency (number of days)");
+      errors.care.push(
+        "Please enter a valid watering frequency (number of days)",
+      );
     }
 
     if (
@@ -296,18 +443,19 @@ export default function PlantFormScreen({ route, navigation }: any) {
       Number.isNaN(parseInt(fertilisingFrequency, 10)) ||
       parseInt(fertilisingFrequency, 10) < 1
     ) {
-      errors.care.push("Please enter a valid fertilising frequency (number of days)");
+      errors.care.push(
+        "Please enter a valid fertilising frequency (number of days)",
+      );
     }
 
     if (notes.length > NOTES_MAX_LENGTH) {
       errors.harvest.push(
-        `Notes must be ${NOTES_MAX_LENGTH} characters or less`
+        `Notes must be ${NOTES_MAX_LENGTH} characters or less`,
       );
     }
 
     return errors;
   }, [
-    name,
     plantVariety,
     parentLocation,
     childLocation,
@@ -316,9 +464,10 @@ export default function PlantFormScreen({ route, navigation }: any) {
     notes,
   ]);
 
-  const validationErrors = React.useMemo(() => getValidationErrors(), [
-    getValidationErrors,
-  ]);
+  const validationErrors = React.useMemo(
+    () => getValidationErrors(),
+    [getValidationErrors],
+  );
 
   // Detect form changes
   useEffect(() => {
@@ -356,6 +505,9 @@ export default function PlantFormScreen({ route, navigation }: any) {
     growthStage,
     pruningFrequency,
     pruningNotes,
+    coconutFrondsCount,
+    nutsPerMonth,
+    lastClimbingDate,
   ]);
 
   // Auto-calculate expected harvest date when plant variety or planting date changes
@@ -364,7 +516,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
       const calculatedDate = calculateExpectedHarvestDate(
         plantVariety,
         plantingDate,
-        plantType
+        plantType,
       );
       if (calculatedDate) {
         setExpectedHarvestDate(calculatedDate);
@@ -372,11 +524,56 @@ export default function PlantFormScreen({ route, navigation }: any) {
     }
   }, [plantVariety, plantingDate, plantType]);
 
+  // Auto-apply care defaults based on coconut tree age from planting date
+  useEffect(() => {
+    if (plantType === "coconut_tree" && plantingDate) {
+      const info = getCoconutAgeInfo(plantingDate);
+      setCoconutAgeInfo(info);
+      // On new plant only: auto-apply stage, watering, fertilising from age
+      if (info && !plantId) {
+        setGrowthStage(info.growthStage);
+        setWateringFrequency(info.wateringFrequencyDays.toString());
+        setFertilisingFrequency(info.fertilisingFrequencyDays.toString());
+        setPruningFrequency(info.pruningFrequencyDays.toString());
+      }
+    } else {
+      setCoconutAgeInfo(null);
+    }
+  }, [plantType, plantingDate, plantId]);
+
   // Reset auto-suggest flag when plant variety changes
   useEffect(() => {
     autoSuggestApplied.current = false;
     setCustomVarietyMode(false);
   }, [plantVariety]);
+
+  const generatedPlantNameBase = React.useMemo(
+    () =>
+      buildGeneratedPlantNameBase(
+        plantType,
+        plantVariety,
+        variety,
+        plantingDate,
+        parentLocation,
+      ),
+    [plantType, plantVariety, variety, plantingDate, parentLocation],
+  );
+
+  const generatedPlantName = React.useMemo(
+    () =>
+      buildGeneratedPlantName(
+        generatedPlantNameBase,
+        existingPlants,
+        plantId,
+        loadedGeneratedName,
+      ),
+    [existingPlants, generatedPlantNameBase, loadedGeneratedName, plantId],
+  );
+
+  const resolvedPlantName = React.useMemo(() => {
+    const nickname = name.trim();
+    return nickname || generatedPlantName;
+  }, [generatedPlantName, name]);
 
   // AUTO-SUGGEST: Apply smart defaults when plant variety is selected
   useEffect(() => {
@@ -392,7 +589,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
       const profile = getPlantCareProfile(
         plantVariety,
         plantType,
-        plantCareProfiles
+        plantCareProfiles,
       );
 
       if (profile) {
@@ -416,14 +613,21 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
         const defaultHarvestSeason = getDefaultHarvestSeason(
           plantVariety,
-          plantType
+          plantType,
         );
         if (defaultHarvestSeason) {
           setHarvestSeason(defaultHarvestSeason);
         }
       }
     }
-  }, [plantVariety, plantId, plantType, autoApplyCareDefaults, careProfilesLoaded, plantCareProfiles]);
+  }, [
+    plantVariety,
+    plantId,
+    plantType,
+    autoApplyCareDefaults,
+    careProfilesLoaded,
+    plantCareProfiles,
+  ]);
 
   // Combine parent and child locations
   useEffect(() => {
@@ -470,14 +674,12 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
   const varietySuggestions = React.useMemo(() => {
     if (!plantVariety) return [];
-    return (
-      plantCatalog.categories[plantType]?.varieties?.[plantVariety] ?? []
-    );
+    return plantCatalog.categories[plantType]?.varieties?.[plantVariety] ?? [];
   }, [plantCatalog, plantType, plantVariety]);
 
   const basicFieldCount = React.useMemo(() => {
     // Always shown in Basic Information
-    // 1) Photo, 2) Plant Name, 3) Plant Category, 4) Specific Plant, 5) Main Location
+    // 1) Photo, 2) Display name, 3) Plant Category, 4) Specific Plant, 5) Main Location
     let count = 5;
 
     // Direction/section picker appears after main location is selected
@@ -526,7 +728,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
     const backHandler = BackHandler.addEventListener(
       "hardwareBackPress",
-      backAction
+      backAction,
     );
 
     // Handle navigation back button
@@ -543,7 +745,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
       backHandler.remove();
       unsubscribe();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasUnsavedChanges, navigation]);
 
   const handleBackPress = () => {
@@ -574,7 +776,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
           },
         },
       ],
-      { cancelable: false }
+      { cancelable: false },
     );
   };
 
@@ -582,14 +784,41 @@ export default function PlantFormScreen({ route, navigation }: any) {
     try {
       const plant = await getPlant(plantId);
       if (plant) {
-        setName(plant.name);
+        // Derive the parent location from the stored composite location string.
+        const locationParts = plant.location?.split(" - ") || [];
+        const existingParentLoc =
+          locationParts.length >= 1 ? locationParts[0] : "";
+
+        // Try to recognise the saved name as auto-generated using the NEW rich
+        // base (includes year + location token). If that fails, also try the
+        // OLD simple base (plant variety only) for backward compatibility with
+        // plants saved before this naming logic was introduced.
+        const richBase = buildGeneratedPlantNameBase(
+          plant.plant_type,
+          plant.plant_variety || "",
+          plant.variety || "",
+          plant.planting_date || undefined,
+          existingParentLoc || undefined,
+        );
+        const simpleBase = buildGeneratedPlantNameBase(
+          plant.plant_type,
+          plant.plant_variety || "",
+          plant.variety || "",
+        );
+        const generatedName = isGeneratedPlantName(plant.name, richBase)
+          ? plant.name
+          : isGeneratedPlantName(plant.name, simpleBase)
+            ? plant.name
+            : "";
+
+        setName(generatedName ? "" : plant.name);
+        setLoadedGeneratedName(generatedName);
         setPlantType(plant.plant_type);
         setPlantVariety(plant.plant_variety || "");
         setSpaceType(plant.space_type);
         setLocation(plant.location);
 
         // Parse location into parent and child
-        const locationParts = plant.location?.split(" - ") || [];
         if (locationParts.length === 2) {
           setParentLocation(locationParts[0]);
           setChildLocation(locationParts[1]);
@@ -613,7 +842,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
         setNotes(plant.notes || "");
         setPhotoUri(plant.photo_url);
         setPhotoFilename(
-          plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "")
+          plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? ""),
         );
         // Load new fields
         setSunlight(plant.sunlight || "full_sun");
@@ -621,7 +850,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
         setWaterRequirement(plant.water_requirement || "medium");
         setWateringFrequency(plant.watering_frequency_days?.toString() || "3");
         setFertilisingFrequency(
-          plant.fertilising_frequency_days?.toString() || "14"
+          plant.fertilising_frequency_days?.toString() || "14",
         );
         setPreferredFertiliser(plant.preferred_fertiliser || "compost");
         setMulchingUsed(plant.mulching_used || false);
@@ -635,6 +864,14 @@ export default function PlantFormScreen({ route, navigation }: any) {
         setGrowthStage(plant.growth_stage || "seedling");
         setPruningFrequency(plant.pruning_frequency_days?.toString() || "");
         setPruningNotes(plant.pruning_notes || "");
+
+        // Load coconut tracking fields
+        setCoconutFrondsCount(plant.coconut_fronds_count?.toString() || "");
+        setNutsPerMonth(plant.nuts_per_month?.toString() || "");
+        setLastClimbingDate(plant.last_climbing_date || "");
+        setSpatheCount(plant.spathe_count_per_month?.toString() || "");
+        setNutFallCount(plant.nut_fall_count?.toString() || "");
+        setLastNutFallDate(plant.last_nut_fall_date || "");
 
         // Mark initial data as loaded
         setTimeout(() => {
@@ -673,16 +910,21 @@ export default function PlantFormScreen({ route, navigation }: any) {
       return;
     }
 
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: "images",
-      allowsEditing: false,
-      quality: 0.8,
-      cameraType: ImagePicker.CameraType.back,
-    });
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: "images",
+        allowsEditing: false,
+        quality: 0.8,
+        cameraType: ImagePicker.CameraType.back,
+      });
 
-    if (!result.canceled) {
-      setPhotoUri(result.assets[0].uri);
-      setPhotoFilename(null);
+      if (!result.canceled) {
+        setPhotoUri(result.assets[0].uri);
+        setPhotoFilename(null);
+      }
+    } catch (error) {
+      console.warn("Camera launch failed:", error);
+      Alert.alert("Camera Error", "Failed to open camera. Please try again.");
     }
   };
 
@@ -696,10 +938,11 @@ export default function PlantFormScreen({ route, navigation }: any) {
       "basic",
       "care",
       "harvest",
+      "coconut",
       "history",
     ];
     const firstErrorSection = sectionOrder.find(
-      (section) => validationErrors[section].length > 0
+      (section) => validationErrors[section].length > 0,
     );
     if (firstErrorSection) {
       if (firstErrorSection === "harvest" && formMode === "quick") {
@@ -718,8 +961,22 @@ export default function PlantFormScreen({ route, navigation }: any) {
     isSaving.current = true;
     setHasUnsavedChanges(false); // Clear flag immediately to prevent navigation alert
     try {
+      const nickname = name.trim();
       let resolvedPhotoFilename = photoFilename;
       const combinedLocation = `${parentLocation.trim()} - ${childLocation.trim()}`;
+      const shouldUseLoadedPlants =
+        Boolean(nickname) || existingPlants.length > 0;
+      const plantsForNaming = shouldUseLoadedPlants
+        ? existingPlants
+        : await getAllPlants();
+      const finalPlantName =
+        nickname ||
+        buildGeneratedPlantName(
+          generatedPlantNameBase,
+          plantsForNaming,
+          plantId,
+          loadedGeneratedName,
+        );
 
       // Save new photo if needed
       if (photoUri) {
@@ -733,7 +990,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
       }
 
       const plantData: any = {
-        name: name.trim(),
+        name: finalPlantName,
         plant_type: plantType,
         plant_variety: plantVariety.trim() || null,
         space_type: spaceType,
@@ -774,9 +1031,33 @@ export default function PlantFormScreen({ route, navigation }: any) {
         plantData.harvest_end_date = harvestEndDate.trim() || null;
       }
 
+      // Add coconut tracking fields only for coconut trees
+      if (plantType === "coconut_tree") {
+        plantData.coconut_fronds_count = coconutFrondsCount
+          ? parseInt(coconutFrondsCount, 10)
+          : null;
+        plantData.nuts_per_month = nutsPerMonth
+          ? parseInt(nutsPerMonth, 10)
+          : null;
+        plantData.last_climbing_date = lastClimbingDate || null;
+        plantData.spathe_count_per_month = spatheCount
+          ? parseInt(spatheCount, 10)
+          : null;
+        plantData.nut_fall_count = nutFallCount
+          ? parseInt(nutFallCount, 10)
+          : null;
+        plantData.last_nut_fall_date = lastNutFallDate || null;
+      }
+
       const savedPlant = plantId
         ? await updatePlant(plantId, plantData)
         : await createPlant(plantData);
+
+      setLoadedGeneratedName(nickname ? "" : finalPlantName);
+      setExistingPlants((prev) => {
+        const nextPlants = prev.filter((plant) => plant.id !== savedPlant.id);
+        return [...nextPlants, savedPlant];
+      });
 
       try {
         await syncCareTasksForPlant(savedPlant);
@@ -786,7 +1067,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
       // Trigger refresh in parent screens by setting a navigation param
       navigation.navigate({
-        name: 'PlantsList',
+        name: "PlantsList",
         params: { refresh: Date.now() },
         merge: true,
       });
@@ -873,8 +1154,8 @@ export default function PlantFormScreen({ route, navigation }: any) {
         >
           <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
             {photoUri ? (
-              <Image 
-                source={{ uri: photoUri }} 
+              <Image
+                source={{ uri: photoUri }}
                 style={styles.photo}
                 contentFit="cover"
                 transition={200}
@@ -887,14 +1168,6 @@ export default function PlantFormScreen({ route, navigation }: any) {
               </View>
             )}
           </TouchableOpacity>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Plant Name *"
-            value={name}
-            onChangeText={(text) => setName(sanitizeAlphaNumericSpaces(text))}
-            placeholderTextColor={theme.inputPlaceholder}
-          />
 
           <Text style={styles.label}>Plant Category *</Text>
           <View style={styles.pickerContainer}>
@@ -1008,6 +1281,37 @@ export default function PlantFormScreen({ route, navigation }: any) {
               />
             ))}
 
+          <Text style={styles.label}>Display Name</Text>
+          <View style={styles.nicknameInputWrapper}>
+            <TextInput
+              style={styles.nicknameInput}
+              placeholder={
+                generatedPlantName || "Auto-generated from plant type"
+              }
+              value={name}
+              onChangeText={(text) => setName(sanitizeAlphaNumericSpaces(text))}
+              placeholderTextColor={theme.inputPlaceholder}
+            />
+            {name.trim().length > 0 && (
+              <TouchableOpacity
+                onPress={() => setName("")}
+                style={styles.nicknameClearButton}
+                accessibilityLabel="Reset to auto-generated name"
+              >
+                <Ionicons
+                  name="close-circle"
+                  size={20}
+                  color={theme.textSecondary}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
+          <Text style={styles.helperText}>
+            {name.trim()
+              ? `Auto-generated: "${generatedPlantName || "pending selection"}"`
+              : "Auto-generated from plant type and location. Tap to customise."}
+          </Text>
+
           {formMode === "advanced" && (
             <>
               <TouchableOpacity
@@ -1015,7 +1319,9 @@ export default function PlantFormScreen({ route, navigation }: any) {
                 onPress={() => setShowPlantingDatePicker(true)}
               >
                 <Text
-                  style={plantingDate ? styles.dateText : styles.datePlaceholder}
+                  style={
+                    plantingDate ? styles.dateText : styles.datePlaceholder
+                  }
                 >
                   {plantingDate || "Planting Date (tap to select)"}
                 </Text>
@@ -1089,7 +1395,9 @@ export default function PlantFormScreen({ route, navigation }: any) {
                 style={styles.input}
                 placeholder="Nearby landmark or reference point"
                 value={landmarks}
-                onChangeText={(text) => setLandmarks(sanitizeLandmarkText(text))}
+                onChangeText={(text) =>
+                  setLandmarks(sanitizeLandmarkText(text))
+                }
                 placeholderTextColor={theme.inputPlaceholder}
               />
             </>
@@ -1124,14 +1432,17 @@ export default function PlantFormScreen({ route, navigation }: any) {
                   <View
                     style={[
                       styles.smartDefaultsIconWrap,
-                      autoApplyCareDefaults && styles.smartDefaultsIconWrapActive,
+                      autoApplyCareDefaults &&
+                        styles.smartDefaultsIconWrapActive,
                     ]}
                   >
                     <Ionicons
                       name={autoApplyCareDefaults ? "sparkles" : "leaf-outline"}
                       size={18}
                       color={
-                        autoApplyCareDefaults ? theme.primary : theme.textSecondary
+                        autoApplyCareDefaults
+                          ? theme.primary
+                          : theme.textSecondary
                       }
                     />
                   </View>
@@ -1163,7 +1474,8 @@ export default function PlantFormScreen({ route, navigation }: any) {
                 </View>
               </TouchableOpacity>
               <Text style={styles.helperText}>
-                Auto-fills watering, fertilising, pruning, and sunlight settings.
+                Auto-fills watering, fertilising, pruning, and sunlight
+                settings.
               </Text>
             </>
           )}
@@ -1284,7 +1596,10 @@ export default function PlantFormScreen({ route, navigation }: any) {
                   style={styles.picker}
                   itemStyle={styles.pickerItem}
                 >
-                  <Picker.Item label="☀️ Full Sun (6+ hours)" value="full_sun" />
+                  <Picker.Item
+                    label="☀️ Full Sun (6+ hours)"
+                    value="full_sun"
+                  />
                   <Picker.Item
                     label="⛅ Partial Sun (3-6 hours)"
                     value="partial_sun"
@@ -1305,6 +1620,16 @@ export default function PlantFormScreen({ route, navigation }: any) {
                   <Picker.Item label="Garden Soil" value="garden_soil" />
                   <Picker.Item label="Potting Mix" value="potting_mix" />
                   <Picker.Item label="Coco Peat Mix" value="coco_peat" />
+                  <Picker.Item
+                    label="Red Laterite (Seivaal)"
+                    value="red_laterite"
+                  />
+                  <Picker.Item
+                    label="Coastal Sandy Soil"
+                    value="coastal_sandy"
+                  />
+                  <Picker.Item label="Black Cotton Soil" value="black_cotton" />
+                  <Picker.Item label="Alluvial Soil" value="alluvial" />
                   <Picker.Item label="Custom Mix" value="custom" />
                 </Picker>
               </View>
@@ -1339,7 +1664,9 @@ export default function PlantFormScreen({ route, navigation }: any) {
             style={styles.input}
             placeholder="Watering Frequency (days) *"
             value={wateringFrequency}
-            onChangeText={(text) => setWateringFrequency(sanitizeNumberText(text))}
+            onChangeText={(text) =>
+              setWateringFrequency(sanitizeNumberText(text))
+            }
             keyboardType="numeric"
             placeholderTextColor={theme.inputPlaceholder}
           />
@@ -1369,7 +1696,10 @@ export default function PlantFormScreen({ route, navigation }: any) {
                 >
                   <Picker.Item label="Compost" value="compost" />
                   <Picker.Item label="Vermicompost" value="vermicompost" />
-                  <Picker.Item label="Cow Dung Slurry" value="cow_dung_slurry" />
+                  <Picker.Item
+                    label="Cow Dung Slurry"
+                    value="cow_dung_slurry"
+                  />
                   <Picker.Item label="Neem Cake" value="neem_cake" />
                   <Picker.Item label="Panchagavya" value="panchagavya" />
                   <Picker.Item label="Jeevamrutham" value="jeevamrutham" />
@@ -1524,85 +1854,289 @@ export default function PlantFormScreen({ route, navigation }: any) {
               </Picker>
             </View>
 
-          {plantType === "fruit_tree" && (
-            <>
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => setShowStartDatePicker(true)}
-              >
-                <Text
-                  style={
-                    harvestStartDate ? styles.dateText : styles.datePlaceholder
-                  }
+            {plantType === "fruit_tree" && (
+              <>
+                <TouchableOpacity
+                  style={styles.dateButton}
+                  onPress={() => setShowStartDatePicker(true)}
                 >
-                  {harvestStartDate || "Harvest Start Date (tap to select)"}
-                </Text>
-                <Ionicons name="calendar-outline" size={20} color="#666" />
-              </TouchableOpacity>
-              {showStartDatePicker && (
-                <DateTimePicker
-                  value={
-                    harvestStartDate ? new Date(harvestStartDate) : new Date()
-                  }
-                  mode="date"
-                  display="default"
-                  onChange={(event, selectedDate) => {
-                    setShowStartDatePicker(false);
-                    if (selectedDate) {
-                      setHarvestStartDate(
-                        selectedDate.toISOString().split("T")[0]
-                      );
+                  <Text
+                    style={
+                      harvestStartDate
+                        ? styles.dateText
+                        : styles.datePlaceholder
                     }
-                  }}
-                />
-              )}
+                  >
+                    {harvestStartDate || "Harvest Start Date (tap to select)"}
+                  </Text>
+                  <Ionicons name="calendar-outline" size={20} color="#666" />
+                </TouchableOpacity>
+                {showStartDatePicker && (
+                  <DateTimePicker
+                    value={
+                      harvestStartDate ? new Date(harvestStartDate) : new Date()
+                    }
+                    mode="date"
+                    display="default"
+                    onChange={(event, selectedDate) => {
+                      setShowStartDatePicker(false);
+                      if (selectedDate) {
+                        setHarvestStartDate(
+                          selectedDate.toISOString().split("T")[0],
+                        );
+                      }
+                    }}
+                  />
+                )}
 
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => setShowEndDatePicker(true)}
-              >
-                <Text
-                  style={
-                    harvestEndDate ? styles.dateText : styles.datePlaceholder
-                  }
+                <TouchableOpacity
+                  style={styles.dateButton}
+                  onPress={() => setShowEndDatePicker(true)}
                 >
-                  {harvestEndDate || "Harvest End Date (tap to select)"}
-                </Text>
-                <Ionicons name="calendar-outline" size={20} color="#666" />
-              </TouchableOpacity>
-              {showEndDatePicker && (
-                <DateTimePicker
-                  value={harvestEndDate ? new Date(harvestEndDate) : new Date()}
-                  mode="date"
-                  display="default"
-                  onChange={(event, selectedDate) => {
-                    setShowEndDatePicker(false);
-                    if (selectedDate) {
-                      setHarvestEndDate(
-                        selectedDate.toISOString().split("T")[0]
-                      );
+                  <Text
+                    style={
+                      harvestEndDate ? styles.dateText : styles.datePlaceholder
                     }
-                  }}
-                />
-              )}
-            </>
-          )}
+                  >
+                    {harvestEndDate || "Harvest End Date (tap to select)"}
+                  </Text>
+                  <Ionicons name="calendar-outline" size={20} color="#666" />
+                </TouchableOpacity>
+                {showEndDatePicker && (
+                  <DateTimePicker
+                    value={
+                      harvestEndDate ? new Date(harvestEndDate) : new Date()
+                    }
+                    mode="date"
+                    display="default"
+                    onChange={(event, selectedDate) => {
+                      setShowEndDatePicker(false);
+                      if (selectedDate) {
+                        setHarvestEndDate(
+                          selectedDate.toISOString().split("T")[0],
+                        );
+                      }
+                    }}
+                  />
+                )}
+              </>
+            )}
 
-          {/* Expected Harvest Date */}
-          {expectedHarvestDate && (
-            <View style={styles.infoCard}>
-              <View style={styles.infoCardHeader}>
-                <Ionicons name="calendar" size={20} color="#FF9800" />
-                <Text style={styles.infoCardTitle}>Expected Harvest Date</Text>
+            {/* Expected Harvest Date */}
+            {expectedHarvestDate && (
+              <View style={styles.infoCard}>
+                <View style={styles.infoCardHeader}>
+                  <Ionicons name="calendar" size={20} color="#FF9800" />
+                  <Text style={styles.infoCardTitle}>
+                    Expected Harvest Date
+                  </Text>
+                </View>
+                <Text style={styles.infoCardText}>
+                  {new Date(expectedHarvestDate).toLocaleDateString()}
+                </Text>
+                <Text style={styles.infoCardSubtext}>
+                  Auto-calculated based on plant variety and planting date
+                </Text>
               </View>
-              <Text style={styles.infoCardText}>
-                {new Date(expectedHarvestDate).toLocaleDateString()}
+            )}
+          </CollapsibleSection>
+        )}
+
+        {/* Coconut Tracking (Kanyakumari-specific) */}
+        {formMode === "advanced" && plantType === "coconut_tree" && (
+          <CollapsibleSection
+            title="Coconut Tracking"
+            icon="analytics"
+            fieldCount={3}
+            defaultExpanded={false}
+            expanded={sectionExpanded.coconut}
+            onExpandedChange={(expanded) =>
+              setSectionExpandedState("coconut", expanded)
+            }
+            hasError={false}
+          >
+            {/* Age-stage info card — auto-derived from planting date */}
+            {coconutAgeInfo && (
+              <View
+                style={[
+                  styles.infoCard,
+                  {
+                    marginBottom: 16,
+                    borderLeftColor: "#8B5A2B",
+                    borderLeftWidth: 4,
+                  },
+                ]}
+              >
+                <View style={styles.infoCardHeader}>
+                  <Ionicons name="leaf" size={16} color="#8B5A2B" />
+                  <Text style={[styles.infoCardTitle, { color: "#8B5A2B" }]}>
+                    Age-based Care — {coconutAgeInfo.ageLabel}
+                  </Text>
+                </View>
+                <Text style={styles.infoCardText}>
+                  Stage: {coconutAgeInfo.stageLabel}
+                </Text>
+                <Text style={styles.infoCardText}>
+                  Expected yield: {coconutAgeInfo.expectedNutsPerYear}
+                </Text>
+                <Text
+                  style={[
+                    styles.infoCardText,
+                    { marginTop: 6, fontWeight: "600" },
+                  ]}
+                >
+                  Suggested schedule:
+                </Text>
+                <Text style={styles.infoCardText}>
+                  • Water every {coconutAgeInfo.wateringFrequencyDays} day
+                  {coconutAgeInfo.wateringFrequencyDays !== 1 ? "s" : ""}
+                </Text>
+                <Text style={styles.infoCardText}>
+                  • Fertilise every {coconutAgeInfo.fertilisingFrequencyDays}{" "}
+                  days
+                </Text>
+                <Text
+                  style={[
+                    styles.infoCardText,
+                    { marginTop: 6, fontWeight: "600" },
+                  ]}
+                >
+                  Care tips for this stage:
+                </Text>
+                {coconutAgeInfo.careTips.map((tip, i) => (
+                  <Text key={i} style={styles.infoCardText}>
+                    • {tip}
+                  </Text>
+                ))}
+              </View>
+            )}
+
+            <Text style={styles.label}>Fronds Count</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g., 32"
+              value={coconutFrondsCount}
+              onChangeText={(text) =>
+                setCoconutFrondsCount(sanitizeNumberText(text))
+              }
+              keyboardType="numeric"
+              placeholderTextColor="#999"
+            />
+            <Text style={styles.helperText}>
+              Healthy coconut tree: 30–35 living fronds. Below 20 indicates
+              stress.
+            </Text>
+
+            <Text style={styles.label}>Nuts per Month (approx.)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g., 8"
+              value={nutsPerMonth}
+              onChangeText={(text) => setNutsPerMonth(sanitizeNumberText(text))}
+              keyboardType="numeric"
+              placeholderTextColor="#999"
+            />
+
+            <Text style={styles.label}>Last Climbing / Harvest Date</Text>
+            <TouchableOpacity
+              style={styles.dateButton}
+              onPress={() => setShowClimbingDatePicker(true)}
+            >
+              <Text
+                style={
+                  lastClimbingDate ? styles.dateText : styles.datePlaceholder
+                }
+              >
+                {lastClimbingDate || "Select date (tap to choose)"}
               </Text>
-              <Text style={styles.infoCardSubtext}>
-                Auto-calculated based on plant variety and planting date
+              <Ionicons name="calendar-outline" size={20} color="#666" />
+            </TouchableOpacity>
+            {showClimbingDatePicker && (
+              <DateTimePicker
+                value={
+                  lastClimbingDate ? new Date(lastClimbingDate) : new Date()
+                }
+                mode="date"
+                display="default"
+                onChange={(_, selectedDate) => {
+                  setShowClimbingDatePicker(false);
+                  if (selectedDate) {
+                    setLastClimbingDate(
+                      selectedDate.toISOString().split("T")[0],
+                    );
+                  }
+                }}
+              />
+            )}
+            {coconutAgeInfo && coconutAgeInfo.harvestFrequencyDays > 0 && (
+              <Text style={styles.helperText}>
+                Suggested harvest cycle: every{" "}
+                {coconutAgeInfo.harvestFrequencyDays} days for this stage.
               </Text>
-            </View>
-          )}
+            )}
+
+            <Text style={styles.label}>
+              Spathe / Inflorescence Count (per month)
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g., 3"
+              value={spatheCount}
+              onChangeText={(text) => setSpatheCount(sanitizeNumberText(text))}
+              keyboardType="numeric"
+              placeholderTextColor="#999"
+            />
+            <Text style={styles.helperText}>
+              Count of new flower stalks (spathes) emerging per month. A healthy
+              bearing tree produces 1–2 per month. Useful predictor of next
+              harvest volume.
+            </Text>
+
+            <Text style={styles.label}>
+              Premature Nut Fall Count (last incident)
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g., 12"
+              value={nutFallCount}
+              onChangeText={(text) => setNutFallCount(sanitizeNumberText(text))}
+              keyboardType="numeric"
+              placeholderTextColor="#999"
+            />
+            <Text style={styles.helperText}>
+              Nuts falling before maturity. High count (&gt;10) may indicate Red
+              Palm Weevil, water stress, or boron deficiency.
+            </Text>
+
+            <Text style={styles.label}>Last Nut Fall Incident Date</Text>
+            <TouchableOpacity
+              style={styles.dateButton}
+              onPress={() => setShowNutFallDatePicker(true)}
+            >
+              <Text
+                style={
+                  lastNutFallDate ? styles.dateText : styles.datePlaceholder
+                }
+              >
+                {lastNutFallDate || "Select date (tap to choose)"}
+              </Text>
+              <Ionicons name="calendar-outline" size={20} color="#666" />
+            </TouchableOpacity>
+            {showNutFallDatePicker && (
+              <DateTimePicker
+                value={lastNutFallDate ? new Date(lastNutFallDate) : new Date()}
+                mode="date"
+                display="default"
+                onChange={(_, selectedDate) => {
+                  setShowNutFallDatePicker(false);
+                  if (selectedDate) {
+                    setLastNutFallDate(
+                      selectedDate.toISOString().split("T")[0],
+                    );
+                  }
+                }}
+              />
+            )}
           </CollapsibleSection>
         )}
 
@@ -1621,83 +2155,90 @@ export default function PlantFormScreen({ route, navigation }: any) {
               showValidationErrors && validationErrors.history.length > 0
             }
           >
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionHeaderText}>Records</Text>
-            <TouchableOpacity
-              style={styles.addPestButton}
-              onPress={() => {
-                setCurrentPestDisease({
-                  type: "pest",
-                  name: "",
-                  occurredAt: new Date().toISOString().split("T")[0],
-                  severity: "medium",
-                  resolved: false,
-                });
-                setShowPestOccurredDatePicker(false);
-                setShowPestDiseaseModal(true);
-              }}
-            >
-              <Ionicons name="add-circle" size={24} color="#2e7d32" />
-            </TouchableOpacity>
-          </View>
-
-          {pestDiseaseHistory.length > 0 ? (
-            <View style={styles.pestDiseaseList}>
-              {pestDiseaseHistory.map((record, index) => (
-                <View key={index} style={styles.pestDiseaseCard}>
-                  <View style={styles.pestDiseaseHeader}>
-                    <Ionicons
-                      name={record.type === "pest" ? "bug" : "medical"}
-                      size={20}
-                      color={record.resolved ? "#4CAF50" : "#f44336"}
-                    />
-                    <Text style={styles.pestDiseaseName}>{record.name}</Text>
-                    {record.resolved && (
-                      <View style={styles.resolvedBadge}>
-                        <Text style={styles.resolvedText}>Resolved</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.pestDiseaseDate}>
-                    Occurred: {new Date(record.occurredAt).toLocaleDateString()}
-                  </Text>
-                  {(record.severity || record.affectedPart) && (
-                    <Text style={styles.pestDiseaseMetaText}>
-                      {record.severity
-                        ? `Severity: ${record.severity.toUpperCase()}`
-                        : ""}
-                      {record.severity && record.affectedPart ? "  |  " : ""}
-                      {record.affectedPart
-                        ? `Affected Part: ${record.affectedPart}`
-                        : ""}
-                    </Text>
-                  )}
-                  {record.treatment && (
-                    <Text style={styles.pestDiseaseTreatment}>
-                      Treatment: {record.treatment}
-                    </Text>
-                  )}
-                  {record.notes && (
-                    <Text style={styles.pestDiseaseNotes}>{record.notes}</Text>
-                  )}
-                  <TouchableOpacity
-                    style={styles.deletePestButton}
-                    onPress={() => {
-                      setPestDiseaseHistory(
-                        pestDiseaseHistory.filter((_, i) => i !== index)
-                      );
-                    }}
-                  >
-                    <Ionicons name="trash-outline" size={18} color="#f44336" />
-                  </TouchableOpacity>
-                </View>
-              ))}
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionHeaderText}>Records</Text>
+              <TouchableOpacity
+                style={styles.addPestButton}
+                onPress={() => {
+                  setCurrentPestDisease({
+                    type: "pest",
+                    name: "",
+                    occurredAt: new Date().toISOString().split("T")[0],
+                    severity: "medium",
+                    resolved: false,
+                  });
+                  setShowPestOccurredDatePicker(false);
+                  setShowPestDiseaseModal(true);
+                }}
+              >
+                <Ionicons name="add-circle" size={24} color="#2e7d32" />
+              </TouchableOpacity>
             </View>
-          ) : (
-            <Text style={styles.noPestHistory}>
-              No pest or disease records yet
-            </Text>
-          )}
+
+            {pestDiseaseHistory.length > 0 ? (
+              <View style={styles.pestDiseaseList}>
+                {pestDiseaseHistory.map((record, index) => (
+                  <View key={index} style={styles.pestDiseaseCard}>
+                    <View style={styles.pestDiseaseHeader}>
+                      <Ionicons
+                        name={record.type === "pest" ? "bug" : "medical"}
+                        size={20}
+                        color={record.resolved ? "#4CAF50" : "#f44336"}
+                      />
+                      <Text style={styles.pestDiseaseName}>{record.name}</Text>
+                      {record.resolved && (
+                        <View style={styles.resolvedBadge}>
+                          <Text style={styles.resolvedText}>Resolved</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.pestDiseaseDate}>
+                      Occurred:{" "}
+                      {new Date(record.occurredAt).toLocaleDateString()}
+                    </Text>
+                    {(record.severity || record.affectedPart) && (
+                      <Text style={styles.pestDiseaseMetaText}>
+                        {record.severity
+                          ? `Severity: ${record.severity.toUpperCase()}`
+                          : ""}
+                        {record.severity && record.affectedPart ? "  |  " : ""}
+                        {record.affectedPart
+                          ? `Affected Part: ${record.affectedPart}`
+                          : ""}
+                      </Text>
+                    )}
+                    {record.treatment && (
+                      <Text style={styles.pestDiseaseTreatment}>
+                        Treatment: {record.treatment}
+                      </Text>
+                    )}
+                    {record.notes && (
+                      <Text style={styles.pestDiseaseNotes}>
+                        {record.notes}
+                      </Text>
+                    )}
+                    <TouchableOpacity
+                      style={styles.deletePestButton}
+                      onPress={() => {
+                        setPestDiseaseHistory(
+                          pestDiseaseHistory.filter((_, i) => i !== index),
+                        );
+                      }}
+                    >
+                      <Ionicons
+                        name="trash-outline"
+                        size={18}
+                        color="#f44336"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.noPestHistory}>
+                No pest or disease records yet
+              </Text>
+            )}
           </CollapsibleSection>
         )}
 
@@ -1707,7 +2248,9 @@ export default function PlantFormScreen({ route, navigation }: any) {
               style={[styles.input, styles.textArea]}
               placeholder="Notes"
               value={notes}
-              onChangeText={(text) => setNotes(sanitizeAlphaNumericSpaces(text))}
+              onChangeText={(text) =>
+                setNotes(sanitizeAlphaNumericSpaces(text))
+              }
               multiline
               numberOfLines={4}
               maxLength={NOTES_MAX_LENGTH}
@@ -1717,24 +2260,27 @@ export default function PlantFormScreen({ route, navigation }: any) {
               {notes.length}/{NOTES_MAX_LENGTH}
             </Text>
 
-            {plantVariety && getCompanionSuggestions(plantVariety).length > 0 && (
-              <View style={styles.infoCard}>
-                <View style={styles.infoCardHeader}>
-                  <Ionicons name="leaf" size={20} color="#4CAF50" />
-                  <Text style={styles.infoCardTitle}>Companion Plants</Text>
+            {plantVariety &&
+              getCompanionSuggestions(plantVariety).length > 0 && (
+                <View style={styles.infoCard}>
+                  <View style={styles.infoCardHeader}>
+                    <Ionicons name="leaf" size={20} color="#4CAF50" />
+                    <Text style={styles.infoCardTitle}>Companion Plants</Text>
+                  </View>
+                  <Text style={styles.infoCardSubtext}>
+                    Good companion plants for {plantVariety}:
+                  </Text>
+                  <View style={styles.chipContainer}>
+                    {getCompanionSuggestions(plantVariety).map((companion) => (
+                      <View key={companion} style={styles.companionChip}>
+                        <Text style={styles.companionChipText}>
+                          {companion}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
-                <Text style={styles.infoCardSubtext}>
-                  Good companion plants for {plantVariety}:
-                </Text>
-                <View style={styles.chipContainer}>
-                  {getCompanionSuggestions(plantVariety).map((companion) => (
-                    <View key={companion} style={styles.companionChip}>
-                      <Text style={styles.companionChipText}>{companion}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
+              )}
 
             {plantVariety && getIncompatiblePlants(plantVariety).length > 0 && (
               <View style={styles.infoCard}>
@@ -2289,6 +2835,25 @@ const createStyles = (theme: any) =>
       marginBottom: 8,
       marginTop: 4,
     },
+    nicknameInputWrapper: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: theme.inputBackground,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.inputBorder,
+      marginBottom: 12,
+    },
+    nicknameInput: {
+      flex: 1,
+      padding: 16,
+      fontSize: 16,
+      color: theme.inputText,
+    },
+    nicknameClearButton: {
+      paddingHorizontal: 12,
+      paddingVertical: 16,
+    },
     pickerContainer: {
       backgroundColor: theme.pickerBackground,
       borderRadius: 12,
@@ -2761,5 +3326,3 @@ const createStyles = (theme: any) =>
       color: theme.textInverse,
     },
   });
-
-
