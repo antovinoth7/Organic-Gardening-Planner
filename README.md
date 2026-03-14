@@ -27,6 +27,7 @@ Personal gardening planner built with Expo React Native and Firebase. It tracks 
 - Cloud: Firebase Auth + Firestore.
 - Cache: AsyncStorage via `src/lib/storage.ts`.
 - Error reporting: optional Sentry integration.
+- Firestore stores structured text data and image filenames only.
 
 Image storage by platform:
 - Android dev/prod builds: `expo-media-library` album `Pictures/GardenPlanner`.
@@ -38,8 +39,6 @@ Notes:
 - Firestore is initialized with `memoryLocalCache()`.
 - Firebase Storage is intentionally not used.
 - Android image migration to MediaLibrary runs automatically after login when applicable.
-
-See `ARCHITECTURE.md` for a deeper breakdown.
 
 ## Tech Stack
 - Expo SDK 54
@@ -69,14 +68,16 @@ For Android photo persistence across app reinstalls, use a development build or 
    npm install
    ```
 
-2. Configure Firebase
-   - Create a Firebase project.
+2. Create and configure Firebase
+   - Create a Firebase project in the Firebase Console.
+   - Keep the project on the Spark free plan.
+   - Register a Web app for this project.
+   - Do not enable Firebase Hosting.
    - Enable Email/Password authentication.
-   - Enable Firestore.
-   - Do not add Firebase Storage.
-   - See `FIREBASE_SETUP.md` for the full setup guide.
+   - Create a Firestore database in Production mode.
+   - Do not configure Firebase Storage for this app.
 
-3. Create `.env` in the repo root
+3. Create `.env` in the repo root using the Firebase Web app config
    ```env
    EXPO_PUBLIC_FIREBASE_API_KEY=your_api_key
    EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
@@ -88,7 +89,56 @@ For Android photo persistence across app reinstalls, use a development build or 
    EXPO_PUBLIC_SENTRY_CAPTURE_CONSOLE=0
    ```
 
-4. Run the app
+4. Apply Firestore security rules
+   ```javascript
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       function signedIn() {
+         return request.auth != null;
+       }
+
+       function ownsDoc() {
+         return signedIn() && resource.data.user_id == request.auth.uid;
+       }
+
+       function ownsNewDoc() {
+         return signedIn() && request.resource.data.user_id == request.auth.uid;
+       }
+
+       match /plants/{plantId} {
+         allow create: if ownsNewDoc();
+         allow read, update, delete: if ownsDoc();
+       }
+
+       match /task_templates/{taskId} {
+         allow create: if ownsNewDoc();
+         allow read, update, delete: if ownsDoc();
+       }
+
+       match /task_logs/{logId} {
+         allow create: if ownsNewDoc();
+         allow read, update, delete: if ownsDoc();
+       }
+
+       match /journal_entries/{entryId} {
+         allow create: if ownsNewDoc();
+         allow read, update, delete: if ownsDoc();
+       }
+
+       match /user_settings/{userId} {
+         allow read, write: if signedIn() && request.auth.uid == userId;
+       }
+     }
+   }
+   ```
+
+5. Restart the dev server after changing environment values
+   ```bash
+   npx expo start --clear
+   ```
+
+6. Run the app
    ```bash
    npm start
    npm run android
@@ -101,7 +151,34 @@ For Android photo persistence across app reinstalls, use a development build or 
 - Importing images updates local image mappings without changing Firestore text data.
 - Data-only and full data-plus-images backup flows are not currently part of the app.
 
-See `BACKUP_GUIDE.md` for operational details.
+### What the images-only backup contains
+- Plant and journal image files currently referenced by the app.
+- A small manifest with export metadata.
+
+### What it does not contain
+- Firestore text data such as plants, tasks, task logs, journal content, locations, or catalog settings.
+- Authentication state or credentials.
+
+### Export images
+1. Open the app and go to `More -> Settings`.
+2. In the `Images-Only Backup` section, tap `Export Images Only (ZIP)`.
+3. Save the ZIP using the platform share sheet.
+
+### Import images
+1. Open the app and go to `More -> Settings`.
+2. In the `Images-Only Backup` section, tap `Import Images Only`.
+3. Select a ZIP previously exported by the app.
+4. The app restores local image files and remaps cached image URIs by filename.
+
+### Restoring on a new device
+1. Install the app and sign in with the same Firebase account.
+2. Let Firestore sync the text data.
+3. Import the images-only ZIP from Settings to restore local photos.
+
+### Backup notes
+- On Android, best long-term image persistence comes from a dev/prod build using MediaLibrary.
+- In Expo Go on Android, images use the fallback app-local file path instead.
+- Do not rename files inside the ZIP if you expect filename matching to work during import.
 
 ## Project Structure
 ```text
@@ -130,11 +207,34 @@ Local storage:
 - AsyncStorage caches for plants, tasks, logs, journal, locations, plant catalog, and care profiles.
 - Device-local image files or MediaLibrary assets, depending on platform.
 
+Stored image fields:
+- Plants store `photo_filename` in Firestore and derive `photo_url` locally for UI.
+- Journal entries store `photo_filenames` in Firestore and derive `photo_urls` locally for UI.
+
 ## Offline Behavior
 - Reads fetch from Firestore and fall back to AsyncStorage on failure.
 - Writes target Firestore first and update local cache on success.
 - Clearing cache from Settings only removes local cached data.
 - If the device is offline, create/update operations may need to be retried later.
+
+## Runtime Structure
+- App entry: `App.tsx`
+- Providers:
+  - `ErrorBoundary`
+  - `SafeAreaProvider`
+  - `ThemeProvider`
+- Main tabs:
+  - `Home`
+  - `Plants`
+  - `Care Plan`
+  - `Journal`
+  - `More`
+- Nested stacks:
+  - Plants: list, archived plants, plant detail, plant form
+  - Journal: list and form
+  - More: manage locations, manage plant catalog, settings
+
+Unauthenticated users see `AuthScreen`. Authenticated users see the tabbed application.
 
 ## Domain Notes
 - Seasonal logic follows a Kanyakumari four-season model:
@@ -144,6 +244,11 @@ Local storage:
   - `cool_dry`
 - Water scheduling, reminders, harvest estimates, and coconut care include Tamil Nadu-specific logic.
 
+Key domain modules:
+- `src/utils/seasonHelpers.ts`
+- `src/utils/plantHelpers.ts`
+- `src/utils/plantCareDefaults.ts`
+
 ## Current App Navigation
 - `Home`: today summary and urgent care view.
 - `Plants`: active plants, archived plants, plant detail, and plant form.
@@ -151,10 +256,68 @@ Local storage:
 - `Journal`: journal list and journal form.
 - `More`: locations, plant catalog, settings, and sign-out.
 
+## Core Data Flows
+### App startup
+- `App.tsx` initializes Sentry when configured.
+- Auth state controls whether the user sees `AuthScreen` or the app tabs.
+- Android image migration runs after successful authentication when supported.
+
+### Plant reads and writes
+- `src/services/plants.ts` handles paginated Firestore reads.
+- Firestore timestamps are normalized to ISO strings.
+- Local image URIs are resolved from stored filenames before UI render.
+- Active plants are cached in AsyncStorage and reads fall back to cache on failure.
+
+### Task scheduling and completion
+- `src/services/tasks.ts` creates and updates recurring care tasks.
+- `markTaskDone()` writes to `task_logs`, updates `task_templates.next_due_at`, and updates plant last-care fields.
+- `syncCareTasksForPlant()` keeps plant care frequencies in sync with task templates, including coconut harvest scheduling.
+
+### Settings-backed reference data
+- `src/services/locations.ts`, `src/services/plantCatalog.ts`, and `src/services/plantCareProfiles.ts` read and write `user_settings/{uid}`.
+- These settings are normalized, cached locally, and used by plant forms and management screens.
+
+### Images-only backup flow
+- `src/services/backup.ts` exports image ZIPs by collecting referenced filenames from plants and journal entries.
+- Import restores local files and remaps cached URIs by filename without changing Firestore text data.
+
+## Service Responsibilities
+- `src/services/plants.ts`: plant CRUD, archive/restore, image resolution, and task cascade cleanup.
+- `src/services/tasks.ts`: task templates, task logs, completion flow, and season-aware care scheduling.
+- `src/services/journal.ts`: journal CRUD with multi-photo and legacy single-photo compatibility.
+- `src/services/backup.ts`: images-only ZIP export/import and storage size calculation.
+- `src/services/locations.ts`: per-user location settings.
+- `src/services/plantCatalog.ts`: editable plant catalog and varieties.
+- `src/services/plantCareProfiles.ts`: editable care profile overrides.
+
+## Reliability and Lifecycle Notes
+- Firestore uses `memoryLocalCache()` from `src/lib/firebase.ts`.
+- Do not call `terminate()` on the Firestore client.
+- Auth persistence uses React Native AsyncStorage.
+- Sentry, global error handling, and unhandled promise rejection tracking are configured in `App.tsx`.
+- `clearAllData()` only clears app-managed local cache.
+
+## Key Files
+- `App.tsx`
+- `src/lib/firebase.ts`
+- `src/lib/imageStorage.ts`
+- `src/lib/storage.ts`
+- `src/services/plants.ts`
+- `src/services/tasks.ts`
+- `src/services/journal.ts`
+- `src/services/backup.ts`
+- `src/services/locations.ts`
+- `src/services/plantCatalog.ts`
+- `src/services/plantCareProfiles.ts`
+- `src/types/database.types.ts`
+
 ## Troubleshooting
+- `auth/invalid-api-key`: verify your `EXPO_PUBLIC_FIREBASE_*` values and restart Metro with `npx expo start --clear`.
+- Missing or insufficient permissions: confirm the Firestore rules above are published and that you are signed in.
 - Images missing on Android: confirm the app has photo/media permissions and, if testing with Expo Go, remember it uses the fallback file storage path.
 - Auth errors: verify the Email/Password provider is enabled and the `EXPO_PUBLIC_FIREBASE_*` values are correct.
 - Backup import errors: use an images-only ZIP created by this app.
+- Images still missing after import: make sure the ZIP contains the original filenames used by the app.
 - Cache issues: clear local cache from Settings and reload the app.
 
 ## Build for Production

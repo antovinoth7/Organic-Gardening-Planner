@@ -146,4 +146,4 @@ npm run lint
 
 ## When You Change Behavior
 - Update this file if contributor guidance changes.
-- Update `ARCHITECTURE.md`, `BACKUP_GUIDE.md`, `README.md`, or setup docs only if you also bring them in line with the code.
+- Keep `README.md` as the primary architecture and usage document, and update any remaining docs only if you also bring them in line with the code.
