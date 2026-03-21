@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { auth } from '../lib/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from '@firebase/auth';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
+import FloatingLabelInput from '../components/FloatingLabelInput';
 
 export default function AuthScreen() {
   const theme = useTheme();
@@ -68,10 +69,8 @@ export default function AuthScreen() {
         </View>
 
         <View style={styles.form}>
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor={theme.inputPlaceholder}
+          <FloatingLabelInput
+            label="Email"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -79,10 +78,8 @@ export default function AuthScreen() {
             editable={!loading}
           />
 
-          <TextInput
-            style={styles.input}
-            placeholder="Password (min 6 characters)"
-            placeholderTextColor={theme.inputPlaceholder}
+          <FloatingLabelInput
+            label="Password (min 6 characters)"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -142,16 +139,6 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   form: {
     width: '100%',
-  },
-  input: {
-    backgroundColor: theme.inputBackground,
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    fontSize: 16,
-    color: theme.inputText,
-    borderWidth: 1,
-    borderColor: theme.inputBorder,
   },
   button: {
     backgroundColor: theme.primary,

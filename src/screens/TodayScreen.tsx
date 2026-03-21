@@ -21,7 +21,7 @@ import {
   getTodayTasks,
   markTaskDone,
   updateTaskTemplate,
-  getTaskLogs,
+  getTodayTaskLogs,
 } from "../services/tasks";
 import { getAllPlants } from "../services/plants";
 import { TaskTemplate, Plant, TaskLog } from "../types/database.types";
@@ -31,6 +31,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, useThemeMode } from "../theme";
 import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 import Svg, { Circle } from "react-native-svg";
+import { useTabBarScroll, TAB_BAR_HEIGHT } from "../components/FloatingTabBar";
 
 type AttentionSeverity = "critical" | "high" | "medium";
 
@@ -101,9 +102,10 @@ const THEME_ICONS: Record<
 export default function TodayScreen({ navigation, route }: any) {
   const theme = useTheme();
   const { mode, setMode } = useThemeMode();
-  const styles = createStyles(theme);
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
+  const { onScroll: onTabBarScroll, resetTabBar } = useTabBarScroll();
   const [tasks, setTasks] = useState<TaskTemplate[]>([]);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,7 +113,8 @@ export default function TodayScreen({ navigation, route }: any) {
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<TaskTemplate | null>(null);
   const [skipReason, setSkipReason] = useState("");
-  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  const [completingTaskIds, setCompletingTaskIds] = useState<Set<string>>(new Set());
+  const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [optimisticCompletedTaskIds, setOptimisticCompletedTaskIds] = useState<
     string[]
   >([]);
@@ -131,34 +134,27 @@ export default function TodayScreen({ navigation, route }: any) {
       setLoading(true);
     }
     try {
-      const [tasksData, plantsData, logs] = await Promise.all([
+      const [tasksData, plantsData, todayLogs] = await Promise.all([
         getTodayTasks(),
         getAllPlants(),
-        getTaskLogs(),
+        getTodayTaskLogs(),
       ]);
 
       if (!isMountedRef.current) return;
 
-      // Filter logs for today only
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
       const plantIds = new Set(plantsData.map((plant) => plant.id));
       const filteredTasks = tasksData.filter(
         (task) => !task.plant_id || plantIds.has(task.plant_id),
       );
-      const todayLogs = logs
-        .filter((log) => {
-          const logDate = new Date(log.done_at);
-          logDate.setHours(0, 0, 0, 0);
-          return logDate.getTime() === today.getTime();
-        })
-        .filter((log) => !log.plant_id || plantIds.has(log.plant_id));
+      const filteredLogs = todayLogs.filter(
+        (log) => !log.plant_id || plantIds.has(log.plant_id),
+      );
 
       setTasks(filteredTasks);
       setPlants(plantsData);
-      setTaskLogs(todayLogs);
+      setTaskLogs(filteredLogs);
       setOptimisticCompletedTaskIds((prev) =>
-        prev.filter((id) => !todayLogs.some((log) => log.template_id === id)),
+        prev.filter((id) => !filteredLogs.some((log) => log.template_id === id)),
       );
     } catch (error: any) {
       if (!isMountedRef.current) return;
@@ -177,6 +173,7 @@ export default function TodayScreen({ navigation, route }: any) {
     loadData();
     return () => {
       isMountedRef.current = false;
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
     };
   }, [loadData]);
 
@@ -194,12 +191,20 @@ export default function TodayScreen({ navigation, route }: any) {
     React.useCallback(() => {
       // Reset scroll to top
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+      resetTabBar();
       void loadData({ silent: true });
-    }, [loadData]),
+    }, [loadData, resetTabBar]),
   );
 
+  const debouncedReload = useCallback(() => {
+    if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+    reloadTimerRef.current = setTimeout(() => {
+      void loadData({ silent: true });
+    }, 500);
+  }, [loadData]);
+
   const handleMarkDone = async (task: TaskTemplate) => {
-    if (completingTaskId) return; // Prevent multiple clicks
+    if (completingTaskIds.has(task.id)) return; // Already processing this task
     if (completedTemplateIds.has(task.id)) {
       Alert.alert(
         "Already Completed",
@@ -208,7 +213,7 @@ export default function TodayScreen({ navigation, route }: any) {
       return;
     }
 
-    setCompletingTaskId(task.id);
+    setCompletingTaskIds((prev) => new Set(prev).add(task.id));
     setOptimisticCompletedTaskIds((prev) =>
       prev.includes(task.id) ? prev : [...prev, task.id],
     );
@@ -221,17 +226,19 @@ export default function TodayScreen({ navigation, route }: any) {
           "Already Completed",
           "This task is already marked as done for today.",
         );
-        void loadData({ silent: true });
-        return;
       }
-      void loadData({ silent: true });
+      debouncedReload();
     } catch (error: any) {
       setOptimisticCompletedTaskIds((prev) =>
         prev.filter((id) => id !== task.id),
       );
       Alert.alert("Error", error.message);
     } finally {
-      setCompletingTaskId(null);
+      setCompletingTaskIds((prev) => {
+        const next = new Set(prev);
+        next.delete(task.id);
+        return next;
+      });
     }
   };
 
@@ -313,9 +320,18 @@ export default function TodayScreen({ navigation, route }: any) {
     const completed = completedTemplateIds.size;
     const completionRate =
       totalTasks > 0 ? Math.round((completed / totalTasks) * 100) : 0;
-    const unhealthyCount = (plants || []).filter(
-      (plant) =>
-        plant.health_status === "sick" || plant.health_status === "stressed",
+    // Pure health_status counts for Garden Health tiles
+    const healthyCount = (plants || []).filter(
+      (p) =>
+        !p.health_status ||
+        p.health_status === "healthy" ||
+        p.health_status === "recovering",
+    ).length;
+    const stressedCount = (plants || []).filter(
+      (p) => p.health_status === "stressed",
+    ).length;
+    const sickCount = (plants || []).filter(
+      (p) => p.health_status === "sick",
     ).length;
     const attentionByPlant = new Map<string, PlantAttentionItem>();
 
@@ -419,7 +435,9 @@ export default function TodayScreen({ navigation, route }: any) {
       totalTasks,
       completed,
       completionRate,
-      unhealthyCount,
+      healthyCount,
+      stressedCount,
+      sickCount,
       needsAttentionCount: plantAttention.length,
       plantAttention,
     };
@@ -460,6 +478,9 @@ export default function TodayScreen({ navigation, route }: any) {
     <ScrollView
       ref={scrollViewRef}
       style={styles.container}
+      contentContainerStyle={{ paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 48) + 16 }}
+      onScroll={onTabBarScroll}
+      scrollEventThrottle={16}
       refreshControl={
         <RefreshControl refreshing={loading} onRefresh={loadData} />
       }
@@ -536,38 +557,38 @@ export default function TodayScreen({ navigation, route }: any) {
         <View style={styles.gardenHealthRow}>
           <TouchableOpacity
             style={styles.healthColumn}
-            onPress={() => navigation.navigate("Plants")}
+            onPress={() => navigation.navigate("Plants", { screen: "PlantsList", params: { healthFilter: "healthy" } })}
           >
             <View
               style={[styles.healthDot, { backgroundColor: theme.success }]}
             />
             <Text style={styles.healthCount}>
-              {Math.max(0, plants.length - stats.needsAttentionCount)}
+              {stats.healthyCount}
             </Text>
             <Text style={styles.healthLabel}>Healthy</Text>
           </TouchableOpacity>
           <View style={styles.healthDivider} />
           <TouchableOpacity
             style={styles.healthColumn}
-            onPress={() => navigation.navigate("Plants")}
+            onPress={() => navigation.navigate("Plants", { screen: "PlantsList", params: { healthFilter: "stressed" } })}
           >
             <View
               style={[styles.healthDot, { backgroundColor: theme.warning }]}
             />
             <Text style={styles.healthCount}>
-              {Math.max(0, stats.needsAttentionCount - stats.unhealthyCount)}
+              {stats.stressedCount}
             </Text>
-            <Text style={styles.healthLabel}>Need Care</Text>
+            <Text style={styles.healthLabel}>Stressed</Text>
           </TouchableOpacity>
           <View style={styles.healthDivider} />
           <TouchableOpacity
             style={styles.healthColumn}
-            onPress={() => navigation.navigate("Plants")}
+            onPress={() => navigation.navigate("Plants", { screen: "PlantsList", params: { healthFilter: "sick" } })}
           >
             <View
               style={[styles.healthDot, { backgroundColor: theme.error }]}
             />
-            <Text style={styles.healthCount}>{stats.unhealthyCount}</Text>
+            <Text style={styles.healthCount}>{stats.sickCount}</Text>
             <Text style={styles.healthLabel}>Sick</Text>
           </TouchableOpacity>
         </View>
@@ -643,7 +664,7 @@ export default function TodayScreen({ navigation, route }: any) {
             const taskIcon = TASK_ICONS[task.task_type] || "ellipse";
             const taskColor = TASK_COLORS[task.task_type] || "#999";
             const isDone =
-              completingTaskId === task.id || completedTemplateIds.has(task.id);
+              completingTaskIds.has(task.id) || completedTemplateIds.has(task.id);
             return (
               <View key={task.id} style={styles.taskCardV}>
                 <View
@@ -734,7 +755,7 @@ export default function TodayScreen({ navigation, route }: any) {
             const taskIcon = TASK_ICONS[task.task_type] || "ellipse";
             const taskColor = TASK_COLORS[task.task_type] || "#999";
             const isDone =
-              completingTaskId === task.id || completedTemplateIds.has(task.id);
+              completingTaskIds.has(task.id) || completedTemplateIds.has(task.id);
             return (
               <View key={task.id} style={styles.taskCardV}>
                 <View

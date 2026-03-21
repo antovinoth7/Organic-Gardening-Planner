@@ -157,7 +157,7 @@ export default function SettingsScreen({ navigation }: any) {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView ref={scrollViewRef} style={styles.content}>
+      <ScrollView ref={scrollViewRef} style={styles.content} contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 48) + 16 }}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Images-Only Backup</Text>
           <Text style={styles.sectionDescription}>

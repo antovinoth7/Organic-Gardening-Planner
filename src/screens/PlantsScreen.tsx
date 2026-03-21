@@ -11,13 +11,12 @@ import {
   FlatList,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
   RefreshControl,
   Alert,
   ActivityIndicator,
   ScrollView,
   TextInput,
-  Modal,
-  Animated,
   LayoutAnimation,
   Platform,
   UIManager,
@@ -40,14 +39,12 @@ import PlantCard from "../components/PlantCard";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
+import {
+  useTabBarScroll,
+  TAB_BAR_HEIGHT,
+  AnimatedFAB,
+} from "../components/FloatingTabBar";
 
-type FilterCategory =
-  | "type"
-  | "health"
-  | "space"
-  | "sunlight"
-  | "water"
-  | "location";
 type FilterType = "all" | PlantType;
 type SortOption = "name" | "newest" | "oldest" | "health" | "age";
 
@@ -76,7 +73,7 @@ const getFilterLabel = (category: string, value: string): string => {
       vegetable: "🥕 Vegetable",
       herb: "🌿 Herb",
       flower: "🌸 Flower",
-      fruit_tree: "🍎 Fruit Tree",
+      fruit_tree: "� Fruit",
       timber_tree: "🌳 Timber Tree",
       coconut_tree: "🥥 Coconut Tree",
       shrub: "🪴 Shrub",
@@ -100,16 +97,21 @@ const getFilterLabel = (category: string, value: string): string => {
 
 export default function PlantsScreen({ navigation, route }: any) {
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const flatListRef = useRef<FlatList>(null);
   const loadMoreTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const { onScroll: onTabBarScroll, resetTabBar } = useTabBarScroll();
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
+  const [scrolledDown, setScrolledDown] = useState(false);
+  const scrollOffsetRef = useRef(0);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<FilterCategory>("type");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchActive, setSearchActive] = useState(false);
+  const searchInputRef = useRef<TextInput>(null);
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [filters, setFilters] = useState<ActiveFilters>({
@@ -122,12 +124,29 @@ export default function PlantsScreen({ navigation, route }: any) {
     childLocation: "",
   });
   const [showFilters, setShowFilters] = useState(false);
+  const [homeHealthFilter, setHomeHealthFilter] = useState<string | null>(null);
   const [parentLocations, setParentLocations] = useState<string[]>(
     DEFAULT_PARENT_LOCATIONS,
   );
   const [childLocations, setChildLocations] = useState<string[]>(
     DEFAULT_CHILD_LOCATIONS,
   );
+
+  const handleScroll = useCallback((e: any) => {
+    onTabBarScroll(e);
+    const offsetY = e.nativeEvent.contentOffset.y;
+    scrollOffsetRef.current = offsetY;
+    const isDown = offsetY > 300;
+    if (isDown !== scrolledDown) setScrolledDown(isDown);
+  }, [onTabBarScroll, scrolledDown]);
+
+  const scrollToTop = useCallback(() => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    flatListRef.current?.scrollToEnd({ animated: true });
+  }, []);
 
   const loadPlants = async (options?: { silent?: boolean }) => {
     if (!options?.silent) {
@@ -136,7 +155,9 @@ export default function PlantsScreen({ navigation, route }: any) {
     try {
       const data = await getAllPlants();
       setPlants(data);
-      setDisplayCount(ITEMS_PER_PAGE);
+      if (!options?.silent) {
+        setDisplayCount(ITEMS_PER_PAGE);
+      }
     } catch (error: any) {
       if (!options?.silent) {
         Alert.alert("Error", error.message);
@@ -167,8 +188,7 @@ export default function PlantsScreen({ navigation, route }: any) {
 
     const unsubscribe = navigation.addListener("focus", () => {
       if (isMounted) {
-        // Reset scroll and refresh so imported image updates are reflected.
-        flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+        resetTabBar();
         void loadPlants({ silent: true });
       }
     });
@@ -187,11 +207,31 @@ export default function PlantsScreen({ navigation, route }: any) {
   useEffect(() => {
     const refreshParam = route?.params?.refresh;
     if (refreshParam) {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
       loadPlants();
       // Clear the param to prevent repeated refreshes
       navigation.setParams({ refresh: undefined });
     }
   }, [route?.params?.refresh, navigation]);
+
+  // Handle healthFilter param from Home screen Garden Health tiles
+  useEffect(() => {
+    const healthFilter = route?.params?.healthFilter;
+    if (healthFilter) {
+      if (healthFilter === "healthy") {
+        setFilters((prev) => ({ ...prev, health: "healthy" as HealthStatus }));
+        setHomeHealthFilter("healthy");
+      } else if (healthFilter === "sick") {
+        setFilters((prev) => ({ ...prev, health: "sick" as HealthStatus }));
+        setHomeHealthFilter("sick");
+      } else if (healthFilter === "stressed") {
+        setFilters((prev) => ({ ...prev, health: "stressed" as HealthStatus }));
+        setHomeHealthFilter("stressed");
+      }
+      setShowFilters(true);
+      navigation.setParams({ healthFilter: undefined });
+    }
+  }, [route?.params?.healthFilter, navigation]);
 
   const handleDelete = async (id: string) => {
     Alert.alert("Delete Plant", "Are you sure you want to delete this plant?", [
@@ -236,7 +276,16 @@ export default function PlantsScreen({ navigation, route }: any) {
     }
 
     if (filters.health !== "all") {
-      filtered = filtered.filter((p) => p.health_status === filters.health);
+      if (filters.health === "healthy") {
+        filtered = filtered.filter(
+          (p) =>
+            !p.health_status ||
+            p.health_status === "healthy" ||
+            p.health_status === "recovering",
+        );
+      } else {
+        filtered = filtered.filter((p) => p.health_status === filters.health);
+      }
     }
 
     if (filters.space !== "all") {
@@ -358,11 +407,14 @@ export default function PlantsScreen({ navigation, route }: any) {
       childLocation: "",
     });
     setSearchQuery("");
+    setHomeHealthFilter(null);
     setDisplayCount(ITEMS_PER_PAGE);
   };
 
   const toggleFilters = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (!showFilters) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
     setShowFilters((prev) => !prev);
   };
 
@@ -452,67 +504,97 @@ export default function PlantsScreen({ navigation, route }: any) {
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View style={styles.searchWrapper}>
-          <Ionicons name="search" size={16} color={theme.textSecondary} />
-          <TextInput
-            style={styles.compactSearchInput}
-            placeholder="Search..."
-            value={searchQuery}
-            onChangeText={(text) => setSearchQuery(text)}
-            placeholderTextColor={theme.inputPlaceholder}
-          />
-          {searchQuery.trim() !== "" && (
-            <TouchableOpacity onPress={() => setSearchQuery("")}>
-              <Ionicons
-                name="close-circle"
-                size={16}
-                color={theme.textTertiary}
-              />
+        {searchActive ? (
+          /* ── Expanded search bar ── */
+          <View style={styles.searchExpandedRow}>
+            <TouchableOpacity
+              style={styles.searchBackBtn}
+              onPress={() => {
+                setSearchActive(false);
+                if (!searchQuery.trim()) setSearchQuery("");
+              }}
+            >
+              <Ionicons name="arrow-back" size={22} color={theme.text} />
             </TouchableOpacity>
-          )}
-        </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.archiveButton}
-            onPress={() => navigation.navigate("ArchivedPlants")}
-          >
-            <Ionicons name="archive" size={20} color={theme.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.filterToggleButton,
-              showFilters && styles.filterToggleButtonActive,
-            ]}
-            onPress={toggleFilters}
-          >
-            <Ionicons
-              name="options"
-              size={20}
-              color={showFilters ? "#fff" : theme.primary}
-            />
-            {activeFilterCount > 0 && !showFilters && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.sortButton}
-            onPress={() => setShowSortMenu(!showSortMenu)}
-          >
-            <Ionicons name="swap-vertical" size={22} color={theme.primary} />
-          </TouchableOpacity>
-        </View>
+            <View style={styles.searchExpandedWrapper}>
+              <Ionicons name="search" size={16} color={theme.textSecondary} />
+              <TextInput
+                ref={searchInputRef}
+                style={styles.searchExpandedInput}
+                placeholder="Search plants..."
+                value={searchQuery}
+                onChangeText={(text) => setSearchQuery(text)}
+                placeholderTextColor={theme.inputPlaceholder}
+                autoFocus
+                returnKeyType="search"
+              />
+              {searchQuery.trim() !== "" && (
+                <TouchableOpacity onPress={() => setSearchQuery("")}>
+                  <Ionicons name="close-circle" size={18} color={theme.textTertiary} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        ) : (
+          /* ── Collapsed header with action icons ── */
+          <>
+            <Text style={styles.headerTitle}>Plants</Text>
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                style={styles.headerIconBtn}
+                onPress={() => setSearchActive(true)}
+              >
+                <Ionicons name="search" size={20} color={searchQuery.trim() ? theme.primary : theme.primary} />
+                {searchQuery.trim() !== "" && <View style={styles.searchActiveDot} />}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.headerIconBtn}
+                onPress={() => navigation.navigate("ArchivedPlants")}
+              >
+                <Ionicons name="archive" size={20} color={theme.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.headerIconBtn}
+                onPress={() => setViewMode(v => v === 'list' ? 'grid' : 'list')}
+              >
+                <Ionicons
+                  name={viewMode === 'list' ? 'grid' : 'list'}
+                  size={20}
+                  color={theme.primary}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.headerIconBtn,
+                  showFilters && styles.headerIconBtnActive,
+                ]}
+                onPress={toggleFilters}
+              >
+                <Ionicons
+                  name="funnel"
+                  size={20}
+                  color={showFilters ? "#fff" : theme.primary}
+                />
+                {activeFilterCount > 0 && !showFilters && (
+                  <View style={styles.filterBadge}>
+                    <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.headerIconBtn}
+                onPress={() => setShowSortMenu(!showSortMenu)}
+              >
+                <Ionicons name="swap-vertical" size={22} color={theme.primary} />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
       </View>
 
       {/* Sort Menu */}
       {showSortMenu && (
-        <Modal
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowSortMenu(false)}
-          statusBarTranslucent
-        >
+        <View style={[StyleSheet.absoluteFill, { zIndex: 1000, elevation: 1000 }]} pointerEvents="box-none">
           <TouchableOpacity
             style={{ flex: 1 }}
             activeOpacity={1}
@@ -668,7 +750,7 @@ export default function PlantsScreen({ navigation, route }: any) {
               </TouchableOpacity>
             </TouchableOpacity>
           </TouchableOpacity>
-        </Modal>
+        </View>
       )}
 
       {attentionPlants.length > 0 && (
@@ -677,7 +759,6 @@ export default function PlantsScreen({ navigation, route }: any) {
           activeOpacity={0.85}
           onPress={() => {
             setSortBy("health");
-            setActiveCategory("health");
           }}
         >
           <Ionicons name="warning" size={16} color={theme.warning} />
@@ -718,778 +799,204 @@ export default function PlantsScreen({ navigation, route }: any) {
         </View>
       )}
 
-      {/* Collapsible Filter Panel */}
+      {/* Filter Bottom Sheet */}
       {showFilters && (
-        <>
-          <View style={styles.filterContainer}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.categoryScroll}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.categoryChip,
-                  activeCategory === "type" && styles.categoryChipActive,
-                ]}
-                onPress={() => setActiveCategory("type")}
-              >
-                <Ionicons
-                  name="apps"
-                  size={16}
-                  color={
-                    activeCategory === "type"
-                      ? theme.primary
-                      : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.categoryText,
-                    activeCategory === "type" && styles.categoryTextActive,
-                  ]}
-                >
-                  Plant Type
-                </Text>
-                {filters.type !== "all" && <View style={styles.activeDot} />}
+        <View style={[StyleSheet.absoluteFill, styles.sheetOverlay]}>
+            {/* Backdrop - tapping closes */}
+            <Pressable style={StyleSheet.absoluteFill} onPress={toggleFilters} />
+
+            {/* Sheet content - sits at bottom, not nested inside backdrop */}
+            <View style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+              {/* Handle bar */}
+              <TouchableOpacity activeOpacity={0.6} onPress={toggleFilters} style={styles.sheetHandleArea}>
+                <View style={styles.sheetHandle} />
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.categoryChip,
-                  activeCategory === "health" && styles.categoryChipActive,
-                ]}
-                onPress={() => setActiveCategory("health")}
-              >
-                <Ionicons
-                  name="fitness"
-                  size={16}
-                  color={
-                    activeCategory === "health"
-                      ? theme.primary
-                      : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.categoryText,
-                    activeCategory === "health" && styles.categoryTextActive,
-                  ]}
-                >
-                  Health
-                </Text>
-                {filters.health !== "all" && <View style={styles.activeDot} />}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.categoryChip,
-                  activeCategory === "space" && styles.categoryChipActive,
-                ]}
-                onPress={() => setActiveCategory("space")}
-              >
-                <Ionicons
-                  name="cube"
-                  size={16}
-                  color={
-                    activeCategory === "space"
-                      ? theme.primary
-                      : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.categoryText,
-                    activeCategory === "space" && styles.categoryTextActive,
-                  ]}
-                >
-                  Space
-                </Text>
-                {filters.space !== "all" && <View style={styles.activeDot} />}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.categoryChip,
-                  activeCategory === "sunlight" && styles.categoryChipActive,
-                ]}
-                onPress={() => setActiveCategory("sunlight")}
-              >
-                <Ionicons
-                  name="sunny"
-                  size={16}
-                  color={
-                    activeCategory === "sunlight"
-                      ? theme.primary
-                      : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.categoryText,
-                    activeCategory === "sunlight" && styles.categoryTextActive,
-                  ]}
-                >
-                  Sunlight
-                </Text>
-                {filters.sunlight !== "all" && (
-                  <View style={styles.activeDot} />
+
+              {/* Header */}
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetTitle}>Filter Plants</Text>
+                {hasActiveFilters && (
+                  <TouchableOpacity onPress={clearAllFilters} style={styles.sheetClearBtn}>
+                    <Text style={styles.sheetClearText}>Clear All</Text>
+                  </TouchableOpacity>
                 )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.categoryChip,
-                  activeCategory === "water" && styles.categoryChipActive,
-                ]}
-                onPress={() => setActiveCategory("water")}
+              </View>
+
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                style={styles.sheetScroll}
+                bounces={false}
+                nestedScrollEnabled
               >
-                <Ionicons
-                  name="water"
-                  size={16}
-                  color={
-                    activeCategory === "water"
-                      ? theme.primary
-                      : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.categoryText,
-                    activeCategory === "water" && styles.categoryTextActive,
-                  ]}
-                >
-                  Water
+                {/* Plant Type */}
+                <Text style={styles.sheetSectionTitle}>
+                  <Ionicons name="apps" size={14} color={theme.textSecondary} /> Plant Type
                 </Text>
-                {filters.water !== "all" && <View style={styles.activeDot} />}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.categoryChip,
-                  activeCategory === "location" && styles.categoryChipActive,
-                ]}
-                onPress={() => setActiveCategory("location")}
-              >
-                <Ionicons
-                  name="location"
-                  size={16}
-                  color={
-                    activeCategory === "location"
-                      ? theme.primary
-                      : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.categoryText,
-                    activeCategory === "location" && styles.categoryTextActive,
-                  ]}
-                >
-                  Location
+                <View style={styles.sheetChipWrap}>
+                  {([["all", "All"], ["vegetable", "🥕 Vegetable"], ["fruit_tree", "� Fruit"], ["coconut_tree", "🥥 Coconut"], ["herb", "🌿 Herb"], ["timber_tree", "🌳 Timber"], ["flower", "🌸 Flower"], ["shrub", "🪴 Shrub"]] as const).map(([val, label]) => (
+                    <TouchableOpacity
+                      key={val}
+                      style={[styles.sheetChip, filters.type === val && styles.sheetChipActive]}
+                      onPress={() => updateFilter("type", val as FilterType)}
+                    >
+                      <Text style={[styles.sheetChipText, filters.type === val && styles.sheetChipTextActive]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Health */}
+                <Text style={styles.sheetSectionTitle}>
+                  <Ionicons name="fitness" size={14} color={theme.textSecondary} /> Health
                 </Text>
-                {(filters.parentLocation !== "" ||
-                  filters.childLocation !== "") && (
-                  <View style={styles.activeDot} />
-                )}
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
+                <View style={styles.sheetChipWrap}>
+                  {([["all", "All"], ["healthy", "✅ Healthy"], ["stressed", "⚠️ Stressed"], ["recovering", "🔄 Recovering"], ["sick", "❌ Sick"]] as const).map(([val, label]) => (
+                    <TouchableOpacity
+                      key={val}
+                      style={[styles.sheetChip, filters.health === val && styles.sheetChipActive]}
+                      onPress={() => updateFilter("health", val as HealthStatus | "all")}
+                    >
+                      <Text style={[styles.sheetChipText, filters.health === val && styles.sheetChipTextActive]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
 
-          <View style={styles.filterOptionsContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {activeCategory === "type" && (
-                <>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.type === "all" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("type", "all")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.type === "all" && styles.filterTextActive,
-                      ]}
+                {/* Space */}
+                <Text style={styles.sheetSectionTitle}>
+                  <Ionicons name="cube" size={14} color={theme.textSecondary} /> Space Type
+                </Text>
+                <View style={styles.sheetChipWrap}>
+                  {([["all", "All"], ["pot", "Pot"], ["bed", "Bed"], ["ground", "Ground"]] as const).map(([val, label]) => (
+                    <TouchableOpacity
+                      key={val}
+                      style={[styles.sheetChip, filters.space === val && styles.sheetChipActive]}
+                      onPress={() => updateFilter("space", val as SpaceType | "all")}
                     >
-                      All
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.type === "vegetable" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("type", "vegetable")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.type === "vegetable" && styles.filterTextActive,
-                      ]}
-                    >
-                      🥕 Vegetable
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.type === "herb" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("type", "herb")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.type === "herb" && styles.filterTextActive,
-                      ]}
-                    >
-                      🌿 Herb
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.type === "flower" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("type", "flower")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.type === "flower" && styles.filterTextActive,
-                      ]}
-                    >
-                      🌸 Flower
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.type === "fruit_tree" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("type", "fruit_tree")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.type === "fruit_tree" &&
-                          styles.filterTextActive,
-                      ]}
-                    >
-                      🍎 Fruit Tree
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.type === "timber_tree" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("type", "timber_tree")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.type === "timber_tree" &&
-                          styles.filterTextActive,
-                      ]}
-                    >
-                      🌳 Timber Tree
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.type === "coconut_tree" &&
-                        styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("type", "coconut_tree")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.type === "coconut_tree" &&
-                          styles.filterTextActive,
-                      ]}
-                    >
-                      🥥 Coconut Tree
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.type === "shrub" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("type", "shrub")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.type === "shrub" && styles.filterTextActive,
-                      ]}
-                    >
-                      🪴 Shrub
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              )}
+                      <Text style={[styles.sheetChipText, filters.space === val && styles.sheetChipTextActive]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
 
-              {activeCategory === "health" && (
-                <>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.health === "all" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("health", "all")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.health === "all" && styles.filterTextActive,
-                      ]}
+                {/* Sunlight */}
+                <Text style={styles.sheetSectionTitle}>
+                  <Ionicons name="sunny" size={14} color={theme.textSecondary} /> Sunlight
+                </Text>
+                <View style={styles.sheetChipWrap}>
+                  {([["all", "All"], ["full_sun", "☀️ Full Sun"], ["partial_sun", "⛅ Partial"], ["shade", "🌤️ Shade"]] as const).map(([val, label]) => (
+                    <TouchableOpacity
+                      key={val}
+                      style={[styles.sheetChip, filters.sunlight === val && styles.sheetChipActive]}
+                      onPress={() => updateFilter("sunlight", val as SunlightLevel | "all")}
                     >
-                      All
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.health === "healthy" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("health", "healthy")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.health === "healthy" && styles.filterTextActive,
-                      ]}
-                    >
-                      ✅ Healthy
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.health === "stressed" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("health", "stressed")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.health === "stressed" &&
-                          styles.filterTextActive,
-                      ]}
-                    >
-                      ⚠️ Stressed
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.health === "recovering" &&
-                        styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("health", "recovering")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.health === "recovering" &&
-                          styles.filterTextActive,
-                      ]}
-                    >
-                      🔄 Recovering
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.health === "sick" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("health", "sick")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.health === "sick" && styles.filterTextActive,
-                      ]}
-                    >
-                      ❌ Sick
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              )}
+                      <Text style={[styles.sheetChipText, filters.sunlight === val && styles.sheetChipTextActive]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
 
-              {activeCategory === "space" && (
-                <>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.space === "all" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("space", "all")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.space === "all" && styles.filterTextActive,
-                      ]}
+                {/* Water */}
+                <Text style={styles.sheetSectionTitle}>
+                  <Ionicons name="water" size={14} color={theme.textSecondary} /> Water Requirement
+                </Text>
+                <View style={styles.sheetChipWrap}>
+                  {([["all", "All"], ["low", "💧 Low"], ["medium", "💧💧 Medium"], ["high", "💧💧💧 High"]] as const).map(([val, label]) => (
+                    <TouchableOpacity
+                      key={val}
+                      style={[styles.sheetChip, filters.water === val && styles.sheetChipActive]}
+                      onPress={() => updateFilter("water", val as WaterRequirement | "all")}
                     >
-                      All
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.space === "pot" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("space", "pot")}
-                  >
-                    <Ionicons
-                      name="cube-outline"
-                      size={14}
-                      color={
-                        filters.space === "pot"
-                          ? theme.primary
-                          : theme.textSecondary
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.space === "pot" && styles.filterTextActive,
-                      ]}
-                    >
-                      {" "}
-                      Pot
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.space === "bed" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("space", "bed")}
-                  >
-                    <Ionicons
-                      name="apps"
-                      size={14}
-                      color={
-                        filters.space === "bed"
-                          ? theme.primary
-                          : theme.textSecondary
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.space === "bed" && styles.filterTextActive,
-                      ]}
-                    >
-                      {" "}
-                      Bed
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.space === "ground" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("space", "ground")}
-                  >
-                    <Ionicons
-                      name="earth"
-                      size={14}
-                      color={
-                        filters.space === "ground"
-                          ? theme.primary
-                          : theme.textSecondary
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.space === "ground" && styles.filterTextActive,
-                      ]}
-                    >
-                      {" "}
-                      Ground
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              )}
+                      <Text style={[styles.sheetChipText, filters.water === val && styles.sheetChipTextActive]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
 
-              {activeCategory === "sunlight" && (
-                <>
+                {/* Location */}
+                <Text style={styles.sheetSectionTitle}>
+                  <Ionicons name="location" size={14} color={theme.textSecondary} /> Location
+                </Text>
+                <View style={styles.sheetChipWrap}>
                   <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.sunlight === "all" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("sunlight", "all")}
+                    style={[styles.sheetChip, filters.parentLocation === "" && styles.sheetChipActive]}
+                    onPress={() => { updateFilter("parentLocation", ""); updateFilter("childLocation", ""); }}
                   >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.sunlight === "all" && styles.filterTextActive,
-                      ]}
-                    >
-                      All
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.sunlight === "full_sun" &&
-                        styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("sunlight", "full_sun")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.sunlight === "full_sun" &&
-                          styles.filterTextActive,
-                      ]}
-                    >
-                      ☀️ Full Sun
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.sunlight === "partial_sun" &&
-                        styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("sunlight", "partial_sun")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.sunlight === "partial_sun" &&
-                          styles.filterTextActive,
-                      ]}
-                    >
-                      ⛅ Partial
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.sunlight === "shade" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("sunlight", "shade")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.sunlight === "shade" && styles.filterTextActive,
-                      ]}
-                    >
-                      🌤️ Shade
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              )}
-
-              {activeCategory === "water" && (
-                <>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.water === "all" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("water", "all")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.water === "all" && styles.filterTextActive,
-                      ]}
-                    >
-                      All
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.water === "low" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("water", "low")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.water === "low" && styles.filterTextActive,
-                      ]}
-                    >
-                      💧 Low
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.water === "medium" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("water", "medium")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.water === "medium" && styles.filterTextActive,
-                      ]}
-                    >
-                      💧💧 Medium
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.water === "high" && styles.filterChipActive,
-                    ]}
-                    onPress={() => updateFilter("water", "high")}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.water === "high" && styles.filterTextActive,
-                      ]}
-                    >
-                      💧💧💧 High
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              )}
-
-              {activeCategory === "location" && (
-                <>
-                  <Text style={styles.filterSectionLabel}>Main Location:</Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.filterChip,
-                      filters.parentLocation === "" && styles.filterChipActive,
-                    ]}
-                    onPress={() => {
-                      updateFilter("parentLocation", "");
-                      updateFilter("childLocation", "");
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        filters.parentLocation === "" &&
-                          styles.filterTextActive,
-                      ]}
-                    >
-                      All
-                    </Text>
+                    <Text style={[styles.sheetChipText, filters.parentLocation === "" && styles.sheetChipTextActive]}>All</Text>
                   </TouchableOpacity>
                   {parentLocations.map((loc) => (
                     <TouchableOpacity
                       key={loc}
-                      style={[
-                        styles.filterChip,
-                        filters.parentLocation === loc &&
-                          styles.filterChipActive,
-                      ]}
-                      onPress={() => {
-                        updateFilter("parentLocation", loc);
-                        updateFilter("childLocation", "");
-                      }}
+                      style={[styles.sheetChip, filters.parentLocation === loc && styles.sheetChipActive]}
+                      onPress={() => { updateFilter("parentLocation", loc); updateFilter("childLocation", ""); }}
                     >
-                      <Text
-                        style={[
-                          styles.filterText,
-                          filters.parentLocation === loc &&
-                            styles.filterTextActive,
-                        ]}
-                      >
-                        📍 {loc}
-                      </Text>
+                      <Text style={[styles.sheetChipText, filters.parentLocation === loc && styles.sheetChipTextActive]}>📍 {loc}</Text>
                     </TouchableOpacity>
                   ))}
-
-                  {filters.parentLocation !== "" && (
-                    <>
-                      <View style={styles.filterDivider} />
-                      <Text style={styles.filterSectionLabel}>Direction:</Text>
+                </View>
+                {filters.parentLocation !== "" && (
+                  <>
+                    <Text style={styles.sheetSubSectionTitle}>Direction</Text>
+                    <View style={styles.sheetChipWrap}>
                       <TouchableOpacity
-                        style={[
-                          styles.filterChip,
-                          filters.childLocation === "" &&
-                            styles.filterChipActive,
-                        ]}
+                        style={[styles.sheetChip, filters.childLocation === "" && styles.sheetChipActive]}
                         onPress={() => updateFilter("childLocation", "")}
                       >
-                        <Text
-                          style={[
-                            styles.filterText,
-                            filters.childLocation === "" &&
-                              styles.filterTextActive,
-                          ]}
-                        >
-                          All
-                        </Text>
+                        <Text style={[styles.sheetChipText, filters.childLocation === "" && styles.sheetChipTextActive]}>All</Text>
                       </TouchableOpacity>
                       {childLocations.map((loc) => (
                         <TouchableOpacity
                           key={loc}
-                          style={[
-                            styles.filterChip,
-                            filters.childLocation === loc &&
-                              styles.filterChipActive,
-                          ]}
+                          style={[styles.sheetChip, filters.childLocation === loc && styles.sheetChipActive]}
                           onPress={() => updateFilter("childLocation", loc)}
                         >
-                          <Text
-                            style={[
-                              styles.filterText,
-                              filters.childLocation === loc &&
-                                styles.filterTextActive,
-                            ]}
-                          >
-                            🧭 {loc}
-                          </Text>
+                          <Text style={[styles.sheetChipText, filters.childLocation === loc && styles.sheetChipTextActive]}>🧭 {loc}</Text>
                         </TouchableOpacity>
                       ))}
-                    </>
-                  )}
-                </>
-              )}
-            </ScrollView>
-          </View>
+                    </View>
+                  </>
+                )}
 
-          {hasActiveFilters && (
-            <View style={styles.filterPanelFooter}>
-              <TouchableOpacity
-                style={styles.clearFiltersButton}
-                onPress={clearAllFilters}
-              >
-                <Ionicons name="close-circle" size={16} color={theme.error} />
-                <Text style={styles.clearFiltersText}>Clear All</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.applyFiltersButton}
-                onPress={toggleFilters}
-              >
-                <Text style={styles.applyFiltersText}>Done</Text>
-              </TouchableOpacity>
+                <View style={{ height: 24 }} />
+              </ScrollView>
+
+              {/* Apply button */}
+              <View style={styles.sheetFooter}>
+                <TouchableOpacity style={styles.sheetApplyBtn} onPress={toggleFilters}>
+                  <Text style={styles.sheetApplyText}>
+                    Show {filteredPlants.length} {filteredPlants.length === 1 ? 'plant' : 'plants'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          )}
-        </>
+        </View>
       )}
 
       <View style={styles.resultsHeader}>
-        <Text style={styles.resultsText}>
-          {displayedPlants.length} of {filteredPlants.length} plants
-        </Text>
+        <View style={styles.resultsLeft}>
+          <Ionicons name="leaf" size={14} color={theme.primary} />
+          <Text style={styles.resultsCount}>{filteredPlants.length}</Text>
+          <Text style={styles.resultsLabel}>
+            {filteredPlants.length === 1 ? 'plant' : 'plants'}
+          </Text>
+          {hasActiveFilters && (
+            <View style={styles.resultsFilteredBadge}>
+              <Text style={styles.resultsFilteredText}>filtered</Text>
+            </View>
+          )}
+        </View>
+        {hasMore && (
+          <Text style={styles.resultsShowing}>
+            showing {displayedPlants.length}
+          </Text>
+        )}
       </View>
 
       <FlatList
         ref={flatListRef}
         data={displayedPlants}
+        key={viewMode}
+        numColumns={viewMode === 'grid' ? 2 : 1}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <PlantCard
             plant={item}
+            compact={viewMode === 'grid'}
             onPress={() =>
               navigation.navigate("PlantDetail", { plantId: item.id })
             }
@@ -1499,7 +1006,13 @@ export default function PlantsScreen({ navigation, route }: any) {
             onDelete={() => handleDelete(item.id)}
           />
         )}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 48) + 16 },
+        ]}
+        columnWrapperStyle={viewMode === 'grid' ? styles.gridRow : undefined}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={loadPlants} />
         }
@@ -1508,11 +1021,54 @@ export default function PlantsScreen({ navigation, route }: any) {
         ListEmptyComponent={
           !loading ? (
             <View style={styles.emptyState}>
-              <Ionicons name="leaf-outline" size={64} color="#ccc" />
-              <Text style={styles.emptyText}>No plants found</Text>
-              <Text style={styles.emptySubtext}>
-                Try adjusting your filters or add a new plant
+              <Ionicons
+                name={
+                  homeHealthFilter === "healthy"
+                    ? "happy-outline"
+                    : homeHealthFilter === "sick"
+                      ? "medkit-outline"
+                      : homeHealthFilter === "stressed"
+                        ? "warning-outline"
+                        : "leaf-outline"
+                }
+                size={64}
+                color={
+                  homeHealthFilter === "healthy"
+                    ? theme.success
+                    : homeHealthFilter === "sick"
+                      ? theme.error
+                      : homeHealthFilter === "stressed"
+                        ? theme.warning
+                        : theme.border
+                }
+              />
+              <Text style={styles.emptyText}>
+                {homeHealthFilter === "healthy"
+                  ? "No healthy plants yet"
+                  : homeHealthFilter === "sick"
+                    ? "No sick plants — great news!"
+                    : homeHealthFilter === "stressed"
+                      ? "No stressed plants — looking good!"
+                      : "No plants found"}
               </Text>
+              <Text style={styles.emptySubtext}>
+                {homeHealthFilter === "healthy"
+                  ? "Add plants and keep them thriving"
+                  : homeHealthFilter === "sick"
+                    ? "All your plants are doing well 🌱"
+                    : homeHealthFilter === "stressed"
+                      ? "Your garden is healthy and happy 🎉"
+                      : "Try adjusting your filters or add a new plant"}
+              </Text>
+              {homeHealthFilter && (
+                <TouchableOpacity
+                  style={styles.clearFiltersEmptyButton}
+                  onPress={clearAllFilters}
+                >
+                  <Ionicons name="arrow-back" size={16} color={theme.primary} />
+                  <Text style={styles.clearFiltersEmptyText}>Show All Plants</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : null
         }
@@ -1539,12 +1095,21 @@ export default function PlantsScreen({ navigation, route }: any) {
       />
 
       {/* Floating Action Button */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => navigation.navigate("PlantForm")}
-      >
-        <Ionicons name="add" size={28} color="#fff" />
-      </TouchableOpacity>
+      <AnimatedFAB onPress={() => navigation.navigate("PlantForm")} />
+
+      {/* Scroll navigation arrows */}
+      {displayedPlants.length > 0 && (
+        <View style={[styles.scrollNavContainer, { bottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 16) + 8 }]}>
+          {scrolledDown && (
+            <TouchableOpacity style={styles.scrollNavBtn} onPress={scrollToTop} activeOpacity={0.8}>
+              <Ionicons name="chevron-up" size={20} color={theme.primary} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.scrollNavBtn} onPress={scrollToBottom} activeOpacity={0.8}>
+            <Ionicons name="chevron-down" size={20} color={theme.primary} />
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -1559,16 +1124,16 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      paddingHorizontal: 16,
+      paddingHorizontal: 12,
       paddingTop: 12,
-      paddingBottom: 16,
+      paddingBottom: 12,
       backgroundColor: theme.backgroundSecondary,
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
     },
-    title: {
-      fontSize: 28,
-      fontWeight: "bold",
+    headerTitle: {
+      fontSize: 22,
+      fontWeight: "700",
       color: theme.text,
     },
     headerActions: {
@@ -1576,7 +1141,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       alignItems: "center",
       gap: 8,
     },
-    archiveButton: {
+    headerIconBtn: {
       width: 40,
       height: 40,
       borderRadius: 20,
@@ -1584,13 +1149,48 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       alignItems: "center",
       justifyContent: "center",
     },
-    sortButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: theme.primaryLight,
+    headerIconBtnActive: {
+      backgroundColor: theme.primary,
+    },
+    searchActiveDot: {
+      position: "absolute",
+      bottom: 6,
+      right: 6,
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: theme.primary,
+    },
+    searchExpandedRow: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    searchBackBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
       alignItems: "center",
       justifyContent: "center",
+    },
+    searchExpandedWrapper: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: theme.background,
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: theme.primary,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      gap: 8,
+    },
+    searchExpandedInput: {
+      flex: 1,
+      fontSize: 16,
+      color: theme.text,
+      padding: 0,
     },
     filterBadge: {
       position: "absolute",
@@ -1620,6 +1220,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     filterToggleButtonActive: {
       backgroundColor: theme.primary,
+    },
+    gridRow: {
+      justifyContent: "space-between",
     },
     activeFiltersRow: {
       backgroundColor: theme.background,
@@ -1657,64 +1260,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       color: theme.error,
       fontWeight: "600",
     },
-    filterPanelFooter: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      backgroundColor: theme.background,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-    },
-    applyFiltersButton: {
-      paddingHorizontal: 20,
-      paddingVertical: 6,
-      borderRadius: 16,
-      backgroundColor: theme.primary,
-    },
-    applyFiltersText: {
-      fontSize: 13,
-      color: theme.buttonText,
-      fontWeight: "600",
-    },
-    fab: {
-      position: "absolute",
-      right: 20,
-      bottom: 24,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      backgroundColor: theme.primary,
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 6,
-    },
-    searchWrapper: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: theme.border,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      marginRight: 12,
-      flex: 1,
-      minWidth: 0,
-      gap: 6,
-    },
-    compactSearchInput: {
-      fontSize: 14,
-      color: theme.text,
-      padding: 0,
-      flex: 1,
-      minWidth: 0,
-    },
     sortMenu: {
       backgroundColor: theme.backgroundSecondary,
       marginHorizontal: 16,
@@ -1750,123 +1295,158 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontWeight: "600",
       color: theme.primary,
     },
-    filterContainer: {
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      backgroundColor: theme.backgroundSecondary,
+    sheetOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.4)",
+      justifyContent: "flex-end",
+      zIndex: 1000,
+      elevation: 1000,
+    },
+    sheetContainer: {
+      backgroundColor: theme.background,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      maxHeight: "75%",
+    },
+    sheetHandle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: theme.border,
+    },
+    sheetHandleArea: {
+      alignItems: "center",
+      paddingTop: 10,
+      paddingBottom: 8,
+    },
+    sheetHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingBottom: 12,
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
     },
-    categoryScroll: {
-      flexDirection: "row",
+    sheetTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: theme.text,
     },
-    categoryChip: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 20,
-      backgroundColor: theme.background,
-      borderWidth: 1,
-      borderColor: theme.border,
-      marginRight: 8,
-      gap: 6,
-    },
-    categoryChipActive: {
-      backgroundColor: theme.primaryLight,
-      borderColor: theme.primary,
-    },
-    categoryText: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      fontWeight: "500",
-    },
-    categoryTextActive: {
-      color: theme.primary,
-      fontWeight: "600",
-    },
-    activeDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: theme.primary,
-      marginLeft: 4,
-    },
-    clearFiltersButton: {
-      flexDirection: "row",
-      alignItems: "center",
+    sheetClearBtn: {
       paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 20,
-      backgroundColor: theme.errorLight,
-      borderWidth: 1,
-      borderColor: theme.error,
-      gap: 4,
-    },
-    clearFiltersText: {
-      fontSize: 12,
-      color: theme.error,
-      fontWeight: "600",
-    },
-    filterOptionsContainer: {
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      backgroundColor: theme.background,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-    },
-    filterChip: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 20,
-      backgroundColor: theme.backgroundSecondary,
-      borderWidth: 1,
-      borderColor: theme.border,
-      marginRight: 8,
-    },
-    filterChipActive: {
-      backgroundColor: theme.primaryLight,
-      borderColor: theme.primary,
-    },
-    filterText: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      fontWeight: "500",
-    },
-    filterTextActive: {
-      color: theme.primary,
-      fontWeight: "600",
-    },
-    filterSectionLabel: {
-      fontSize: 12,
-      color: "#999",
-      fontWeight: "600",
-      paddingHorizontal: 8,
       paddingVertical: 4,
+      borderRadius: 14,
+      backgroundColor: theme.errorLight,
+    },
+    sheetClearText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: theme.error,
+    },
+    sheetScroll: {
+      paddingHorizontal: 20,
+    },
+    sheetSectionTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.textSecondary,
       textTransform: "uppercase",
       letterSpacing: 0.5,
+      marginTop: 16,
+      marginBottom: 8,
     },
-    filterDivider: {
-      width: 1,
-      height: 30,
-      backgroundColor: theme.border,
-      marginHorizontal: 8,
+    sheetSubSectionTitle: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: theme.textSecondary,
+      marginTop: 8,
+      marginBottom: 6,
+    },
+    sheetChipWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    sheetChip: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: theme.backgroundSecondary,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    sheetChipActive: {
+      backgroundColor: theme.primaryLight,
+      borderColor: theme.primary,
+    },
+    sheetChipText: {
+      fontSize: 14,
+      color: theme.textSecondary,
+      fontWeight: "500",
+    },
+    sheetChipTextActive: {
+      color: theme.primary,
+      fontWeight: "600",
+    },
+    sheetFooter: {
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: theme.border,
+    },
+    sheetApplyBtn: {
+      backgroundColor: theme.primary,
+      borderRadius: 14,
+      paddingVertical: 14,
+      alignItems: "center",
+    },
+    sheetApplyText: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: theme.buttonText,
     },
     resultsHeader: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
       paddingHorizontal: 16,
-      paddingTop: 4,
-      paddingBottom: 2,
+      paddingVertical: 8,
       backgroundColor: theme.background,
     },
-    resultsText: {
-      fontSize: 13,
+    resultsLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    resultsCount: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: theme.text,
+    },
+    resultsLabel: {
+      fontSize: 14,
       color: theme.textSecondary,
       fontWeight: "500",
+    },
+    resultsFilteredBadge: {
+      backgroundColor: theme.primaryLight,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: theme.primary,
+    },
+    resultsFilteredText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: theme.primary,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    resultsShowing: {
+      fontSize: 12,
+      color: theme.textTertiary,
     },
     listContent: {
       paddingHorizontal: 16,
@@ -1931,5 +1511,42 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontSize: 14,
       color: theme.textSecondary,
       marginTop: 4,
+    },
+    clearFiltersEmptyButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginTop: 20,
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      borderRadius: 20,
+      backgroundColor: theme.primaryLight,
+    },
+    clearFiltersEmptyText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: theme.primary,
+    },
+    scrollNavContainer: {
+      position: "absolute",
+      left: 12,
+      flexDirection: "column",
+      gap: 6,
+      zIndex: 50,
+    },
+    scrollNavBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: theme.backgroundSecondary,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: theme.border,
+      elevation: 3,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.15,
+      shadowRadius: 2,
     },
   });

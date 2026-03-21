@@ -3,8 +3,10 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
+import { TAB_BAR_HEIGHT } from "../components/FloatingTabBar";
 import { auth } from "../lib/firebase";
 import { signOut } from "@firebase/auth";
+import { invalidateAll } from "../lib/dataCache";
 
 export default function MoreScreen({ navigation }: any) {
   const theme = useTheme();
@@ -12,6 +14,7 @@ export default function MoreScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const handleSignOut = async () => {
     try {
+      invalidateAll();
       await signOut(auth);
     } catch (error: any) {
       Alert.alert("Error", error?.message || "Failed to sign out");
@@ -34,7 +37,12 @@ export default function MoreScreen({ navigation }: any) {
         </View>
       </View>
 
-      <View style={styles.content}>
+      <View
+        style={[
+          styles.content,
+          { paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 8) + 16 },
+        ]}
+      >
         <TouchableOpacity
           style={styles.menuItem}
           onPress={() => navigation.navigate("ManageLocations")}

@@ -11,11 +11,11 @@ import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
 
 export const PLANT_CATEGORIES: PlantType[] = [
   "vegetable",
-  "herb",
-  "flower",
   "fruit_tree",
-  "timber_tree",
   "coconut_tree",
+  "herb",
+  "timber_tree",
+  "flower",
   "shrub",
 ];
 

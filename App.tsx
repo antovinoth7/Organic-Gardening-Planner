@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
+import * as NavigationBar from "expo-navigation-bar";
 import { auth } from "./src/lib/firebase";
 import { onAuthStateChanged, User } from "@firebase/auth";
 import { ThemeProvider, useTheme, useThemeMode } from "./src/theme";
@@ -31,6 +32,10 @@ import SettingsScreen from "./src/screens/SettingsScreen";
 import MoreScreen from "./src/screens/MoreScreen";
 import ManageLocationsScreen from "./src/screens/ManageLocationsScreen";
 import ManagePlantCatalogScreen from "./src/screens/ManagePlantCatalogScreen";
+import {
+  FloatingTabBarProvider,
+  FloatingTabBar,
+} from "./src/components/FloatingTabBar";
 
 const expoExtra = (Constants.expoConfig?.extra ?? {}) as Record<
   string,
@@ -88,17 +93,21 @@ Sentry.init({
 
     // Add image-related context for debugging native crashes
     if (event.exception?.values?.[0]) {
-      const errorValue = event.exception.values[0].value?.toLowerCase() || '';
-      const errorType = event.exception.values[0].type?.toLowerCase() || '';
-      
-      if (errorValue.includes('abort') || errorValue.includes('shadownode') || 
-          errorType.includes('scudo') || errorValue.includes('image')) {
+      const errorValue = event.exception.values[0].value?.toLowerCase() || "";
+      const errorType = event.exception.values[0].type?.toLowerCase() || "";
+
+      if (
+        errorValue.includes("abort") ||
+        errorValue.includes("shadownode") ||
+        errorType.includes("scudo") ||
+        errorValue.includes("image")
+      ) {
         event.tags = event.tags || {};
-        event.tags['likely_image_related'] = 'true';
+        event.tags["likely_image_related"] = "true";
         event.contexts = event.contexts || {};
-        event.contexts['image_info'] = {
-          note: 'Native crash likely related to image memory management',
-          mitigation: 'Using expo-image and stale URI detection',
+        event.contexts["image_info"] = {
+          note: "Native crash likely related to image memory management",
+          mitigation: "Using expo-image and stale URI detection",
         };
       }
     }
@@ -119,7 +128,11 @@ Sentry.init({
   // Filter noisy breadcrumbs
   beforeBreadcrumb(breadcrumb, _hint) {
     // Skip console logs in production
-    if (!isDev && !captureConsoleBreadcrumbs && breadcrumb.category === "console") {
+    if (
+      !isDev &&
+      !captureConsoleBreadcrumbs &&
+      breadcrumb.category === "console"
+    ) {
       return null;
     }
     return breadcrumb;
@@ -142,20 +155,20 @@ if (isDev) {
 }
 
 // Global error handlers to prevent silent crashes
-if (typeof ErrorUtils !== 'undefined') {
+if (typeof ErrorUtils !== "undefined") {
   const originalHandler = ErrorUtils.getGlobalHandler();
   ErrorUtils.setGlobalHandler((error, isFatal) => {
-    console.error('🔴 Global error caught:', {
+    console.error("🔴 Global error caught:", {
       error: error?.message || error,
       stack: error?.stack,
       isFatal,
     });
-    
+
     // Send to Sentry
     Sentry.captureException(error, {
-      tags: { fatal: isFatal ? 'true' : 'false' },
+      tags: { fatal: isFatal ? "true" : "false" },
     });
-    
+
     // Call original handler
     if (originalHandler) {
       originalHandler(error, isFatal);
@@ -165,24 +178,24 @@ if (typeof ErrorUtils !== 'undefined') {
 
 // Handle unhandled promise rejections
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const rejectionTracking = require('promise/setimmediate/rejection-tracking');
+const rejectionTracking = require("promise/setimmediate/rejection-tracking");
 rejectionTracking.enable({
   allRejections: true,
   onUnhandled: (id: string, error: Error) => {
-    console.error('🔴 Unhandled promise rejection:', {
+    console.error("🔴 Unhandled promise rejection:", {
       id,
       error: error?.message || error,
       stack: error?.stack,
     });
-    
+
     // Send to Sentry
     Sentry.captureException(error, {
-      tags: { type: 'unhandled_promise_rejection' },
+      tags: { type: "unhandled_promise_rejection" },
     });
   },
   onHandled: (id: string) => {
     if (isDev) {
-      console.log('✅ Promise rejection handled:', id);
+      console.log("✅ Promise rejection handled:", id);
     }
   },
 });
@@ -222,70 +235,70 @@ const AppTabs = () => {
   const theme = useTheme();
 
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap = "home";
-          if (route.name === "Home") iconName = "home";
-          else if (route.name === "Plants") iconName = "leaf";
-          else if (route.name === "Care Plan") iconName = "calendar";
-          else if (route.name === "Journal") iconName = "book";
-          else if (route.name === "More") iconName = "ellipsis-vertical";
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: theme.tabBarActive,
-        tabBarInactiveTintColor: theme.tabBarInactive,
-        tabBarStyle: {
-          backgroundColor: theme.tabBarBackground,
-          borderTopColor: theme.border,
-        },
-        headerShown: false,
-      })}
-    >
-      <Tab.Screen name="Home" component={TodayScreen} />
-      <Tab.Screen
-        name="Plants"
-        component={PlantStack}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            e.preventDefault();
-            // Always reset to the root of Plants stack when tab is pressed
-            navigation.navigate("Plants", {
-              screen: "PlantsList",
-              params: {},
-            });
+    <FloatingTabBarProvider>
+      <Tab.Navigator
+        tabBar={(props) => <FloatingTabBar {...props} />}
+        screenOptions={({ route }) => ({
+          tabBarIcon: ({ color, size }) => {
+            let iconName: keyof typeof Ionicons.glyphMap = "home";
+            if (route.name === "Home") iconName = "home";
+            else if (route.name === "Plants") iconName = "leaf";
+            else if (route.name === "Care Plan") iconName = "calendar";
+            else if (route.name === "Journal") iconName = "book";
+            else if (route.name === "More") iconName = "ellipsis-vertical";
+            return <Ionicons name={iconName} size={size} color={color} />;
           },
+          tabBarActiveTintColor: theme.tabBarActive,
+          tabBarInactiveTintColor: theme.tabBarInactive,
+          tabBarHideOnKeyboard: true,
+          headerShown: false,
         })}
-      />
-      <Tab.Screen name="Care Plan" component={CalendarScreen} />
-      <Tab.Screen
-        name="Journal"
-        component={JournalStack}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            e.preventDefault();
-            // Always reset to the root of Journal stack when tab is pressed
-            navigation.navigate("Journal", {
-              screen: "JournalList",
-              params: {},
-            });
-          },
-        })}
-      />
-      <Tab.Screen
-        name="More"
-        component={MoreStack}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            e.preventDefault();
-            navigation.navigate("More", {
-              screen: "MoreHome",
-              params: {},
-            });
-          },
-        })}
-      />
-    </Tab.Navigator>
+      >
+        <Tab.Screen name="Home" component={TodayScreen} />
+        <Tab.Screen
+          name="Plants"
+          component={PlantStack}
+          listeners={({ navigation }) => ({
+            tabPress: (e) => {
+              e.preventDefault();
+              // Always reset to the root of Plants stack when tab is pressed
+              navigation.navigate("Plants", {
+                screen: "PlantsList",
+                params: {},
+              });
+            },
+          })}
+        />
+        <Tab.Screen name="Care Plan" component={CalendarScreen} />
+        <Tab.Screen
+          name="Journal"
+          component={JournalStack}
+          listeners={({ navigation }) => ({
+            tabPress: (e) => {
+              e.preventDefault();
+              // Always reset to the root of Journal stack when tab is pressed
+              navigation.navigate("Journal", {
+                screen: "JournalList",
+                params: {},
+              });
+            },
+          })}
+        />
+        <Tab.Screen
+          name="More"
+          component={MoreStack}
+          listeners={({ navigation }) => ({
+            tabPress: (e) => {
+              e.preventDefault();
+              navigation.navigate("More", {
+                screen: "MoreHome",
+                params: {},
+              });
+            },
+          })}
+        />
+      </Tab.Navigator>
+    </FloatingTabBarProvider>
   );
 };
 
@@ -294,6 +307,15 @@ const AppRoot = () => {
   const [loading, setLoading] = useState(true);
   const theme = useTheme();
   const { resolvedMode } = useThemeMode();
+
+  // Update Android navigation bar button style to match theme
+  useEffect(() => {
+    if (Platform.OS === "android") {
+      NavigationBar.setButtonStyleAsync(
+        resolvedMode === "dark" ? "light" : "dark",
+      );
+    }
+  }, [resolvedMode]);
 
   // Configure navigation theme
   const navigationTheme = {
@@ -336,37 +358,39 @@ const AppRoot = () => {
 
     // Run image migration once on Android
     const runImageMigration = async () => {
-      if (Platform.OS !== 'android') return;
-      
+      if (Platform.OS !== "android") return;
+
       try {
         // Check if migration has already run
-        const migrationComplete = await AsyncStorage.getItem('@image_migration_complete');
-        if (migrationComplete === 'true') {
-          console.log('Image migration already completed');
+        const migrationComplete = await AsyncStorage.getItem(
+          "@image_migration_complete",
+        );
+        if (migrationComplete === "true") {
+          console.log("Image migration already completed");
           return;
         }
 
-        console.log('Starting image migration to MediaLibrary...');
+        console.log("Starting image migration to MediaLibrary...");
         const result = await migrateImagesToMediaLibrary();
-        
+
         if (result.success || result.migratedCount > 0) {
-          console.log('✅ Migration completed:', result.message);
+          console.log("✅ Migration completed:", result.message);
           if (result.completed) {
-            await AsyncStorage.setItem('@image_migration_complete', 'true');
+            await AsyncStorage.setItem("@image_migration_complete", "true");
           }
-          
+
           if (result.migratedCount > 0) {
             Alert.alert(
-              'Images Updated',
+              "Images Updated",
               `${result.migratedCount} image(s) moved to persistent storage. Your photos will now survive app reinstalls.`,
-              [{ text: 'OK' }]
+              [{ text: "OK" }],
             );
           }
         } else if (!result.success) {
-          console.warn('⚠️ Migration had issues:', result.message);
+          console.warn("⚠️ Migration had issues:", result.message);
         }
       } catch (error) {
-        console.error('Migration error:', error);
+        console.error("Migration error:", error);
       }
     };
 
@@ -379,7 +403,7 @@ const AppRoot = () => {
         if (isDev) {
           console.log(
             "Auth state changed:",
-            user ? `Logged in as ${user.email}` : "Logged out"
+            user ? `Logged in as ${user.email}` : "Logged out",
           );
         }
         setUser(user);
@@ -395,7 +419,7 @@ const AppRoot = () => {
             email: user.email || undefined,
           });
           Sentry.setTag("user_authenticated", "true");
-          
+
           // Run migration after successful authentication
           runImageMigration();
         } else {
@@ -412,7 +436,7 @@ const AppRoot = () => {
 
         // Handle network errors silently - just show login screen
         const errorCode = (error as any)?.code;
-        if (errorCode === 'auth/network-request-failed') {
+        if (errorCode === "auth/network-request-failed") {
           setUser(null);
           return;
         }
@@ -424,13 +448,13 @@ const AppRoot = () => {
           Alert.alert(
             "Authentication Error",
             "There was a problem with your session. Please sign in again.",
-            [{ text: "OK" }]
+            [{ text: "OK" }],
           );
         }
-        
+
         // Sign out user on persistent auth errors
         setUser(null);
-      }
+      },
     );
 
     return () => {
@@ -446,8 +470,8 @@ const AppRoot = () => {
     <>
       <StatusBar
         style={resolvedMode === "dark" ? "light" : "dark"}
-        backgroundColor={theme.backgroundSecondary}
-        translucent={false}
+        backgroundColor="transparent"
+        translucent={true}
       />
       <NavigationContainer theme={navigationTheme}>
         <Stack.Navigator screenOptions={{ headerShown: false }}>

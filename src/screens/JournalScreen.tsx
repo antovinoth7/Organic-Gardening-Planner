@@ -35,20 +35,28 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
+import {
+  useTabBarScroll,
+  TAB_BAR_HEIGHT,
+  AnimatedFAB,
+} from "../components/FloatingTabBar";
 
 const { width } = Dimensions.get("window");
 
 export default function JournalScreen({ navigation, route }: any) {
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
+  const { onScroll: onTabBarScroll, resetTabBar } = useTabBarScroll();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchActive, setSearchActive] = useState(false);
+  const searchInputRef = useRef<TextInput>(null);
   const [selectedType, setSelectedType] = useState<JournalEntryType | null>(
     null,
   );
@@ -97,6 +105,7 @@ export default function JournalScreen({ navigation, route }: any) {
       if (isMounted) {
         // Reset scroll and refresh data so imported image URIs render immediately.
         scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+        resetTabBar();
         void loadData({ silent: true });
       }
     });
@@ -337,90 +346,91 @@ export default function JournalScreen({ navigation, route }: any) {
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.headerTop}>
-          <View style={styles.searchContainer}>
-            <Ionicons
-              name="search"
-              size={16}
-              color={theme.textSecondary}
-              style={styles.searchIcon}
-            />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search..."
-              placeholderTextColor={theme.textSecondary}
-              value={searchQuery}
-              onChangeText={(text) =>
-                setSearchQuery(sanitizeAlphaNumericSpaces(text))
-              }
-            />
-            {searchQuery !== "" && (
-              <TouchableOpacity onPress={() => setSearchQuery("")}>
-                <Ionicons
-                  name="close-circle"
-                  size={16}
-                  color={theme.textSecondary}
-                />
+          {searchActive ? (
+            <View style={styles.searchExpandedRow}>
+              <TouchableOpacity
+                style={styles.searchBackBtn}
+                onPress={() => {
+                  setSearchActive(false);
+                  if (!searchQuery.trim()) setSearchQuery("");
+                }}
+              >
+                <Ionicons name="arrow-back" size={22} color={theme.text} />
               </TouchableOpacity>
-            )}
-          </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={[
-                styles.filterToggleButton,
-                showFilters && styles.filterToggleButtonActive,
-              ]}
-              onPress={toggleFilters}
-            >
-              <Ionicons
-                name="options"
-                size={20}
-                color={showFilters ? "#fff" : theme.primary}
-              />
-              {activeFilterCount > 0 && !showFilters && (
-                <View style={styles.filterBadge}>
-                  <Text style={styles.filterBadgeText}>
-                    {activeFilterCount}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.viewToggle,
-                viewMode === "list" && styles.viewToggleActive,
-              ]}
-              onPress={() => setViewMode("list")}
-            >
-              <Ionicons
-                name="list"
-                size={20}
-                color={
-                  viewMode === "list" ? theme.primary : theme.textSecondary
-                }
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.viewToggle,
-                viewMode === "gallery" && styles.viewToggleActive,
-              ]}
-              onPress={() => setViewMode("gallery")}
-            >
-              <Ionicons
-                name="grid"
-                size={20}
-                color={
-                  viewMode === "gallery" ? theme.primary : theme.textSecondary
-                }
-              />
-            </TouchableOpacity>
-          </View>
+              <View style={styles.searchExpandedWrapper}>
+                <Ionicons name="search" size={16} color={theme.textSecondary} />
+                <TextInput
+                  ref={searchInputRef}
+                  style={styles.searchExpandedInput}
+                  placeholder="Search journal..."
+                  placeholderTextColor={theme.inputPlaceholder}
+                  value={searchQuery}
+                  onChangeText={(text) =>
+                    setSearchQuery(sanitizeAlphaNumericSpaces(text))
+                  }
+                  autoFocus
+                  returnKeyType="search"
+                />
+                {searchQuery !== "" && (
+                  <TouchableOpacity onPress={() => setSearchQuery("")}>
+                    <Ionicons name="close-circle" size={18} color={theme.textTertiary} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.headerTitle}>Journal</Text>
+              <View style={styles.headerActions}>
+                <TouchableOpacity
+                  style={styles.searchIconBtn}
+                  onPress={() => setSearchActive(true)}
+                >
+                  <Ionicons name="search" size={20} color={theme.primary} />
+                  {searchQuery !== "" && <View style={styles.searchActiveDot} />}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.filterToggleButton,
+                    showFilters && styles.filterToggleButtonActive,
+                  ]}
+                  onPress={toggleFilters}
+                >
+                  <Ionicons
+                    name="funnel"
+                    size={20}
+                    color={showFilters ? "#fff" : theme.primary}
+                  />
+                  {activeFilterCount > 0 && !showFilters && (
+                    <View style={styles.filterBadge}>
+                      <Text style={styles.filterBadgeText}>
+                        {activeFilterCount}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.viewToggle}
+                  onPress={() => setViewMode(v => v === "list" ? "gallery" : "list")}
+                >
+                  <Ionicons
+                    name={viewMode === "list" ? "grid" : "list"}
+                    size={20}
+                    color={theme.primary}
+                  />
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
         </View>
       </View>
 
       <ScrollView
         ref={scrollViewRef}
         style={styles.content}
+        contentContainerStyle={{ paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 48) + 16 }}
+        onScroll={onTabBarScroll}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={loadData} />
         }
@@ -906,12 +916,7 @@ export default function JournalScreen({ navigation, route }: any) {
       </ScrollView>
 
       {/* Floating Action Button */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => navigation.navigate("JournalForm")}
-      >
-        <Ionicons name="add" size={28} color="#fff" />
-      </TouchableOpacity>
+      <AnimatedFAB onPress={() => navigation.navigate("JournalForm")} />
 
       {/* Image Modal */}
       <Modal
@@ -962,10 +967,63 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       justifyContent: "space-between",
       alignItems: "center",
     },
+    headerTitle: {
+      fontSize: 22,
+      fontWeight: "700",
+      color: theme.text,
+    },
     headerActions: {
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
+    },
+    searchIconBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: theme.primaryLight,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    searchActiveDot: {
+      position: "absolute",
+      bottom: 6,
+      right: 6,
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: theme.primary,
+    },
+    searchExpandedRow: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    searchBackBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    searchExpandedWrapper: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: theme.background,
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: theme.primary,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      gap: 8,
+    },
+    searchExpandedInput: {
+      flex: 1,
+      fontSize: 16,
+      color: theme.text,
+      padding: 0,
     },
     viewToggle: {
       width: 40,
@@ -973,13 +1031,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderRadius: 20,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: theme.backgroundSecondary,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    viewToggleActive: {
       backgroundColor: theme.primaryLight,
-      borderColor: theme.primary,
     },
     filterToggleButton: {
       width: 40,
@@ -987,13 +1039,10 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderRadius: 20,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: theme.backgroundSecondary,
-      borderWidth: 1,
-      borderColor: theme.border,
+      backgroundColor: theme.primaryLight,
     },
     filterToggleButtonActive: {
       backgroundColor: theme.primary,
-      borderColor: theme.primary,
     },
     filterBadge: {
       position: "absolute",
@@ -1046,22 +1095,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       color: theme.error,
       fontWeight: "600",
     },
-    fab: {
-      position: "absolute",
-      right: 20,
-      bottom: 24,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      backgroundColor: theme.primary,
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 6,
-    },
     statsRow: {
       flexDirection: "row",
       marginTop: 8,
@@ -1094,29 +1127,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     searchFilterRow: {
       marginTop: 6,
       marginBottom: 8,
-    },
-    searchContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: theme.border,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      marginRight: 12,
-      flex: 1,
-      minWidth: 0,
-    },
-    searchIcon: {
-      marginRight: 6,
-    },
-    searchInput: {
-      flex: 1,
-      fontSize: 14,
-      color: theme.text,
-      padding: 0,
-      minWidth: 0,
     },
     filtersScroll: {
       flex: 1,

@@ -22,6 +22,12 @@ import { getData, setData, KEYS } from "../lib/storage";
 import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
 import { logError } from "../utils/errorLogging";
 import {
+  getCached,
+  setCached,
+  invalidate,
+  CACHE_KEYS,
+} from "../lib/dataCache";
+import {
   getCurrentSeason,
   getWateringFrequencyMultiplier,
 } from "../utils/seasonHelpers";
@@ -53,6 +59,11 @@ type MarkTaskDoneOptions = {
 export const getTaskTemplates = async (): Promise<TaskTemplate[]> => {
   const user = auth.currentUser;
   if (!user) throw new Error("Not authenticated");
+
+  // Return fresh in-memory data if available
+  const cached = getCached<TaskTemplate[]>(CACHE_KEYS.TASK_TEMPLATES);
+  if (cached) return cached;
+
   // Refresh token to prevent expiration issues
   await refreshAuthToken();
   try {
@@ -80,6 +91,7 @@ export const getTaskTemplates = async (): Promise<TaskTemplate[]> => {
 
     // Cache locally
     await setData(KEYS.TASKS, tasks);
+    setCached(CACHE_KEYS.TASK_TEMPLATES, tasks);
 
     return tasks;
   } catch (error) {
@@ -92,6 +104,10 @@ export const getTaskTemplates = async (): Promise<TaskTemplate[]> => {
 export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
   const user = auth.currentUser;
   if (!user) throw new Error("Not authenticated");
+
+  // Return fresh in-memory data if available
+  const cached = getCached<TaskTemplate[]>(CACHE_KEYS.TODAY_TASKS);
+  if (cached) return cached;
 
   // Refresh token to prevent expiration issues
   await refreshAuthToken();
@@ -142,6 +158,7 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
 
     tasks.sort((a, b) => a.next_due_at.localeCompare(b.next_due_at));
 
+    setCached(CACHE_KEYS.TODAY_TASKS, tasks);
     return tasks;
   } catch (error) {
     console.warn("Failed to fetch from Firestore, using cached data:", error);
@@ -186,7 +203,7 @@ export const createTaskTemplate = async (
     { timeoutMs: 15000, maxRetries: 2 },
   );
 
-  return {
+  const result = {
     id: docRef.id,
     ...template,
     user_id: user.uid,
@@ -195,6 +212,10 @@ export const createTaskTemplate = async (
       ? newTemplate.next_due_at.toDate().toISOString()
       : template.next_due_at,
   } as TaskTemplate;
+
+  invalidate(CACHE_KEYS.TASK_TEMPLATES, CACHE_KEYS.TODAY_TASKS);
+
+  return result;
 };
 
 export const updateTaskTemplate = async (
@@ -226,7 +247,7 @@ export const updateTaskTemplate = async (
   if (!docSnap.exists()) throw new Error("Task template not found");
 
   const doc_data = docSnap.data();
-  return {
+  const result = {
     id,
     ...doc_data,
     created_at:
@@ -234,6 +255,10 @@ export const updateTaskTemplate = async (
     next_due_at:
       doc_data.next_due_at?.toDate?.()?.toISOString() || doc_data.next_due_at,
   } as TaskTemplate;
+
+  invalidate(CACHE_KEYS.TASK_TEMPLATES, CACHE_KEYS.TODAY_TASKS);
+
+  return result;
 };
 
 export const deleteTasksForPlantIds = async (
@@ -295,6 +320,12 @@ export const deleteTasksForPlantIds = async (
     );
     await setData(KEYS.TASK_LOGS, filteredLogs);
   }
+
+  invalidate(
+    CACHE_KEYS.TASK_TEMPLATES,
+    CACHE_KEYS.TODAY_TASKS,
+    CACHE_KEYS.TODAY_TASK_LOGS,
+  );
 };
 
 export const markTaskDone = async (
@@ -445,6 +476,14 @@ export const markTaskDone = async (
     }
   }
 
+  // Invalidate caches after mutation
+  invalidate(
+    CACHE_KEYS.TODAY_TASKS,
+    CACHE_KEYS.TASK_TEMPLATES,
+    CACHE_KEYS.TODAY_TASK_LOGS,
+    CACHE_KEYS.ALL_PLANTS,
+  );
+
   return true;
 };
 
@@ -500,6 +539,63 @@ export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {
       (a, b) => new Date(b.done_at).getTime() - new Date(a.done_at).getTime(),
     );
     return filtered;
+  }
+};
+
+/**
+ * Get only today's task logs — much cheaper than getTaskLogs() which
+ * fetches the entire history.  Uses a Firestore date-range filter so
+ * only relevant docs cross the wire.
+ */
+export const getTodayTaskLogs = async (): Promise<TaskLog[]> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Not authenticated");
+
+  // Return fresh in-memory data if available
+  const cached = getCached<TaskLog[]>(CACHE_KEYS.TODAY_TASK_LOGS);
+  if (cached) return cached;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(today);
+  todayEnd.setHours(23, 59, 59, 999);
+
+  try {
+    const q = query(
+      collection(db, TASK_LOGS_COLLECTION),
+      where("user_id", "==", user.uid),
+      where("done_at", ">=", Timestamp.fromDate(today)),
+      where("done_at", "<=", Timestamp.fromDate(todayEnd)),
+    );
+
+    const snapshot = await withTimeoutAndRetry(() => getDocs(q), {
+      timeoutMs: 15000,
+      maxRetries: 2,
+    });
+
+    const logs = snapshot.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+      done_at:
+        d.data().done_at?.toDate?.()?.toISOString() || d.data().done_at,
+      created_at:
+        d.data().created_at?.toDate?.()?.toISOString() ||
+        d.data().created_at,
+    })) as TaskLog[];
+
+    logs.sort(
+      (a, b) => new Date(b.done_at).getTime() - new Date(a.done_at).getTime(),
+    );
+
+    setCached(CACHE_KEYS.TODAY_TASK_LOGS, logs);
+    return logs;
+  } catch (error) {
+    console.warn("Failed to fetch today logs, using cached data:", error);
+    const cachedLogs = await getData<TaskLog>(KEYS.TASK_LOGS);
+    return cachedLogs.filter((log) => {
+      const logDate = new Date(log.done_at);
+      return logDate >= today && logDate <= todayEnd;
+    });
   }
 };
 

@@ -57,6 +57,8 @@ export type GrowthStage =
 export interface LocationConfig {
   parentLocations: string[];
   childLocations: string[];
+  /** Short names (3–5 chars) keyed by parent location name, used in auto-generated plant names. */
+  parentLocationShortNames?: Record<string, string>;
 }
 
 export interface PlantCatalogCategory {
@@ -77,6 +79,11 @@ export interface PlantCareProfile {
   soilType: SoilType;
   preferredFertiliser: FertiliserType;
   initialGrowthStage: GrowthStage;
+  pruningTips?: string[];
+  shapePruningTip?: string;
+  shapePruningMonths?: string;
+  flowerPruningTip?: string;
+  flowerPruningMonths?: string;
 }
 
 export type PlantCareProfileOverride = Partial<PlantCareProfile>;

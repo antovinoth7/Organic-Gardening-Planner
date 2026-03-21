@@ -13,6 +13,8 @@ import {
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import PhotoSourceModal from "../components/PhotoSourceModal";
+import FloatingLabelInput from "../components/FloatingLabelInput";
+import ThemedDropdown from "../components/ThemedDropdown";
 import {
   createJournalEntry,
   updateJournalEntry,
@@ -75,9 +77,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
   );
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(false);
-  const [showPlantPicker, setShowPlantPicker] = useState(false);
   const [showPhotoSourceModal, setShowPhotoSourceModal] = useState(false);
-  const [plantSearch, setPlantSearch] = useState("");
 
   // Harvest-specific fields
   const [harvestQuantity, setHarvestQuantity] = useState(
@@ -293,7 +293,6 @@ export default function JournalFormScreen({ navigation, route }: any) {
     }
   };
 
-  const selectedPlant = plants.find((p) => p.id === selectedPlantId);
   const styles = createStyles(theme);
 
   return (
@@ -460,77 +459,17 @@ export default function JournalFormScreen({ navigation, route }: any) {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.plantSelector}
-          onPress={() => setShowPlantPicker(!showPlantPicker)}
-        >
-          <Ionicons name="leaf" size={20} color="#2e7d32" />
-          <Text style={styles.plantSelectorText}>
-            {selectedPlant ? selectedPlant.name : "Link to plant (optional)"}
-          </Text>
-          {selectedPlantId && (
-            <TouchableOpacity onPress={() => setSelectedPlantId(null)}>
-              <Ionicons name="close-circle" size={20} color="#999" />
-            </TouchableOpacity>
-          )}
-        </TouchableOpacity>
-
-        {showPlantPicker && (
-          <View style={styles.plantPicker}>
-            <View style={styles.plantSearchRow}>
-              <Ionicons name="search" size={16} color={theme.textSecondary} />
-              <TextInput
-                style={styles.plantSearchInput}
-                placeholder="Search plants..."
-                placeholderTextColor={theme.inputPlaceholder}
-                value={plantSearch}
-                onChangeText={setPlantSearch}
-                autoFocus
-              />
-              {plantSearch !== "" && (
-                <TouchableOpacity onPress={() => setPlantSearch("")}>
-                  <Ionicons
-                    name="close-circle"
-                    size={16}
-                    color={theme.textTertiary}
-                  />
-                </TouchableOpacity>
-              )}
-            </View>
-            <ScrollView
-              style={styles.plantList}
-              nestedScrollEnabled
-              keyboardShouldPersistTaps="handled"
-            >
-              {plants
-                .filter((p) =>
-                  p.name.toLowerCase().includes(plantSearch.toLowerCase()),
-                )
-                .map((plant) => (
-                  <TouchableOpacity
-                    key={plant.id}
-                    style={[
-                      styles.plantOption,
-                      selectedPlantId === plant.id &&
-                        styles.plantOptionSelected,
-                    ]}
-                    onPress={() => {
-                      setSelectedPlantId(plant.id);
-                      setShowPlantPicker(false);
-                      setPlantSearch("");
-                    }}
-                  >
-                    <Text style={styles.plantOptionText}>{plant.name}</Text>
-                  </TouchableOpacity>
-                ))}
-              {plants.filter((p) =>
-                p.name.toLowerCase().includes(plantSearch.toLowerCase()),
-              ).length === 0 && (
-                <Text style={styles.plantNoResults}>No plants found</Text>
-              )}
-            </ScrollView>
-          </View>
-        )}
+        <ThemedDropdown
+          items={[
+            { label: "No plant linked", value: "" },
+            ...plants.map((p) => ({ label: p.name, value: p.id })),
+          ]}
+          selectedValue={selectedPlantId || ""}
+          onValueChange={(value) => setSelectedPlantId(value || null)}
+          label="Link to plant"
+          placeholder="Link to plant (optional)"
+          searchable
+        />
 
         {/* Harvest-specific fields */}
         {entryType === JournalEntryType.Harvest && (
@@ -607,30 +546,24 @@ export default function JournalFormScreen({ navigation, route }: any) {
               ))}
             </View>
 
-            <Text style={styles.label}>Storage / Notes</Text>
-            <TextInput
-              style={styles.harvestNotesInput}
-              placeholder="Storage method, taste notes, etc. (optional)"
-              placeholderTextColor={theme.inputPlaceholder}
+            <FloatingLabelInput
+              label="Storage / Notes"
               value={harvestNotes}
               onChangeText={(text) =>
                 setHarvestNotes(sanitizeAlphaNumericSpaces(text))
               }
               multiline
               numberOfLines={2}
-              textAlignVertical="top"
             />
           </View>
         )}
 
-        <TextInput
-          style={styles.textArea}
-          placeholder="What's happening in your garden today?"
+        <FloatingLabelInput
+          label="What's happening in your garden today?"
           value={content}
           onChangeText={(text) => setContent(sanitizeAlphaNumericSpaces(text))}
           multiline
-          textAlignVertical="top"
-          placeholderTextColor="#999"
+          numberOfLines={6}
         />
 
         {/* Extra spacing for keyboard */}
@@ -718,66 +651,6 @@ const createStyles = (theme: any) =>
       color: theme.primary,
       marginLeft: 8,
       fontWeight: "600",
-    },
-    plantSelector: {
-      flexDirection: "row",
-      alignItems: "center",
-      padding: 16,
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 12,
-      marginBottom: 16,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    plantSelectorText: {
-      flex: 1,
-      fontSize: 16,
-      color: theme.text,
-      marginLeft: 8,
-    },
-    plantPicker: {
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 12,
-      marginBottom: 16,
-      overflow: "hidden",
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    plantSearchRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-      gap: 8,
-    },
-    plantSearchInput: {
-      flex: 1,
-      fontSize: 15,
-      color: theme.inputText,
-      padding: 0,
-    },
-    plantList: {
-      maxHeight: 200,
-    },
-    plantNoResults: {
-      padding: 16,
-      fontSize: 14,
-      color: theme.textSecondary,
-      textAlign: "center",
-    },
-    plantOption: {
-      padding: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.borderLight,
-    },
-    plantOptionSelected: {
-      backgroundColor: theme.primaryLight,
-    },
-    plantOptionText: {
-      fontSize: 16,
-      color: theme.text,
     },
     textArea: {
       backgroundColor: theme.inputBackground,

@@ -9,15 +9,17 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
-  Platform,
 } from "react-native";
+import FloatingLabelInput from "../components/FloatingLabelInput";
 import { Ionicons } from "@expo/vector-icons";
-import { Picker } from "@react-native-picker/picker";
+import ThemedDropdown from "../components/ThemedDropdown";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import {
   DEFAULT_CHILD_LOCATIONS,
   DEFAULT_PARENT_LOCATIONS,
+  DEFAULT_PARENT_LOCATION_SHORT_NAMES,
+  generateShortName,
   getLocationConfig,
   saveLocationConfig,
 } from "../services/locations";
@@ -29,6 +31,7 @@ type EditModalState = {
   type: "parent" | "child";
   original: string;
   value: string;
+  shortName?: string;
 };
 
 type ReassignModalState = {
@@ -66,23 +69,21 @@ export default function ManageLocationsScreen({ navigation }: any) {
   const theme = useTheme();
   const styles = createStyles(theme);
   const insets = useSafeAreaInsets();
-  const androidPickerProps =
-    Platform.OS === "android"
-      ? {
-          mode: "dropdown" as const,
-          dropdownIconColor: theme.textSecondary,
-        }
-      : {};
+
   const [parentLocations, setParentLocations] = useState<string[]>(
     DEFAULT_PARENT_LOCATIONS,
   );
   const [childLocations, setChildLocations] = useState<string[]>(
     DEFAULT_CHILD_LOCATIONS,
   );
+  const [shortNames, setShortNames] = useState<Record<string, string>>(
+    DEFAULT_PARENT_LOCATION_SHORT_NAMES,
+  );
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [newParentName, setNewParentName] = useState("");
+  const [newParentShortName, setNewParentShortName] = useState("");
   const [newChildName, setNewChildName] = useState("");
   const [editModal, setEditModal] = useState<EditModalState | null>(null);
   const [reassignModal, setReassignModal] = useState<ReassignModalState | null>(
@@ -98,6 +99,7 @@ export default function ManageLocationsScreen({ navigation }: any) {
       ]);
       setParentLocations(config.parentLocations);
       setChildLocations(config.childLocations);
+      setShortNames(config.parentLocationShortNames ?? {});
       setPlants(allPlants);
     } catch (error: any) {
       Alert.alert(
@@ -184,13 +186,20 @@ export default function ManageLocationsScreen({ navigation }: any) {
     return targets.length;
   };
 
-  const saveConfig = async (parents: string[], children: string[]) => {
+  const saveConfig = async (
+    parents: string[],
+    children: string[],
+    updatedShortNames?: Record<string, string>,
+  ) => {
+    const names = updatedShortNames ?? shortNames;
     const saved = await saveLocationConfig({
       parentLocations: parents,
       childLocations: children,
+      parentLocationShortNames: names,
     });
     setParentLocations(saved.parentLocations);
     setChildLocations(saved.childLocations);
+    setShortNames(saved.parentLocationShortNames ?? {});
   };
 
   const handleAddParent = async () => {
@@ -213,8 +222,11 @@ export default function ManageLocationsScreen({ navigation }: any) {
 
     setSaving(true);
     try {
-      await saveConfig([...parentLocations, name], childLocations);
+      const sn = sanitizeLocationName(newParentShortName).toUpperCase().slice(0, 5) || generateShortName(name);
+      const updatedShortNames = { ...shortNames, [name]: sn };
+      await saveConfig([...parentLocations, name], childLocations, updatedShortNames);
       setNewParentName("");
+      setNewParentShortName("");
     } catch (error: any) {
       Alert.alert(
         "Error",
@@ -296,7 +308,12 @@ export default function ManageLocationsScreen({ navigation }: any) {
           const updatedParents = parentLocations.map((item) =>
             item === editModal.original ? name : item,
           );
-          await saveConfig(updatedParents, childLocations);
+          // Update short name: carry over or use new value from modal
+          const updatedShortNames = { ...shortNames };
+          delete updatedShortNames[editModal.original];
+          const sn = editModal.shortName?.trim().toUpperCase().slice(0, 5);
+          updatedShortNames[name] = (sn && sn.length >= 2) ? sn : generateShortName(name);
+          await saveConfig(updatedParents, childLocations, updatedShortNames);
         } else {
           if (count > 0) {
             await updatePlantsForChild(editModal.original, name);
@@ -381,7 +398,9 @@ export default function ManageLocationsScreen({ navigation }: any) {
           await updatePlantsForParent(name, replacement);
         }
         const updatedParents = parentLocations.filter((item) => item !== name);
-        await saveConfig(updatedParents, childLocations);
+        const updatedShortNames = { ...shortNames };
+        delete updatedShortNames[name];
+        await saveConfig(updatedParents, childLocations, updatedShortNames);
       } else {
         if (replacement) {
           await updatePlantsForChild(name, replacement);
@@ -453,6 +472,7 @@ export default function ManageLocationsScreen({ navigation }: any) {
           style={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 48) + 16 }}
         >
           <View style={styles.infoCard}>
             <Ionicons name="map-outline" size={20} color={theme.primary} />
@@ -483,6 +503,18 @@ export default function ManageLocationsScreen({ navigation }: any) {
                 cursorColor={theme.primary}
                 underlineColorAndroid="transparent"
               />
+              <TextInput
+                style={styles.shortNameInput}
+                placeholder="ABC"
+                value={newParentShortName}
+                onChangeText={(text) => setNewParentShortName(text.replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, 5))}
+                placeholderTextColor={theme.textTertiary}
+                selectionColor={theme.primary}
+                cursorColor={theme.primary}
+                underlineColorAndroid="transparent"
+                maxLength={5}
+                autoCapitalize="characters"
+              />
               <TouchableOpacity
                 style={styles.addButton}
                 onPress={handleAddParent}
@@ -499,7 +531,14 @@ export default function ManageLocationsScreen({ navigation }: any) {
               parentLocations.map((location) => (
                 <View key={location} style={styles.locationRow}>
                   <View style={styles.locationInfo}>
-                    <Text style={styles.locationName}>{location}</Text>
+                    <View style={styles.locationNameRow}>
+                      <Text style={styles.locationName}>{location}</Text>
+                      {shortNames[location] ? (
+                        <View style={styles.shortNameBadge}>
+                          <Text style={styles.shortNameBadgeText}>{shortNames[location]}</Text>
+                        </View>
+                      ) : null}
+                    </View>
                     <Text style={styles.locationMeta}>
                       {parentCounts[location] || 0} plant
                       {(parentCounts[location] || 0) === 1 ? "" : "s"}
@@ -513,6 +552,7 @@ export default function ManageLocationsScreen({ navigation }: any) {
                           type: "parent",
                           original: location,
                           value: location,
+                          shortName: shortNames[location] ?? "",
                         })
                       }
                     >
@@ -630,20 +670,35 @@ export default function ManageLocationsScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
 
-            <TextInput
-              style={styles.modalInput}
+            <FloatingLabelInput
+              label="New name"
               value={editModal?.value ?? ""}
               onChangeText={(text) =>
                 setEditModal((prev) => (prev ? { ...prev, value: text } : prev))
               }
-              placeholder="New name"
-              placeholderTextColor={theme.inputPlaceholder}
-              selectionColor={theme.primary}
-              cursorColor={theme.primary}
-              underlineColorAndroid="transparent"
               autoFocus
               autoCorrect={false}
             />
+
+            {editModal?.type === "parent" && (
+              <View style={{ marginTop: 8 }}>
+                <FloatingLabelInput
+                  label="Short name (3–5 letters)"
+                  value={editModal?.shortName ?? ""}
+                  onChangeText={(text) =>
+                    setEditModal((prev) =>
+                      prev ? { ...prev, shortName: text.replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, 5) } : prev,
+                    )
+                  }
+                  autoCorrect={false}
+                  maxLength={5}
+                  autoCapitalize="characters"
+                />
+                <Text style={styles.modalHint}>
+                  Used in auto-generated plant names, e.g. Tomato ({editModal?.shortName || "ABC"})
+                </Text>
+              </View>
+            )}
 
             {editModal && (
               <Text style={styles.modalHint}>
@@ -690,22 +745,17 @@ export default function ManageLocationsScreen({ navigation }: any) {
               {reassignCount === 1 ? "" : "s"}. Choose a replacement.
             </Text>
 
-            <View style={styles.pickerContainer}>
-              <Picker
-                {...androidPickerProps}
-                selectedValue={reassignModal?.replacement}
-                onValueChange={(value) =>
-                  setReassignModal((prev) =>
-                    prev ? { ...prev, replacement: value } : prev,
-                  )
-                }
-                style={styles.picker}
-              >
-                {reassignOptions.map((option) => (
-                  <Picker.Item key={option} label={option} value={option} />
-                ))}
-              </Picker>
-            </View>
+            <ThemedDropdown
+              items={reassignOptions.map((option) => ({ label: option, value: option }))}
+              selectedValue={reassignModal?.replacement ?? ""}
+              onValueChange={(value) =>
+                setReassignModal((prev) =>
+                  prev ? { ...prev, replacement: value } : prev,
+                )
+              }
+              label="Replacement location"
+              placeholder="Replacement location"
+            />
 
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -868,10 +918,42 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     locationInfo: {
       flex: 1,
     },
+    locationNameRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
     locationName: {
       fontSize: 15,
       fontWeight: "600",
       color: theme.text,
+    },
+    shortNameBadge: {
+      backgroundColor: theme.primary + "20",
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    shortNameBadgeText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: theme.primary,
+      letterSpacing: 0.5,
+    },
+    shortNameInput: {
+      width: 56,
+      backgroundColor: theme.inputBackground,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.inputBorder,
+      paddingHorizontal: 8,
+      height: 44,
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.inputText,
+      textAlign: "center",
+      textAlignVertical: "center",
+      letterSpacing: 1,
     },
     locationMeta: {
       fontSize: 12,
@@ -984,18 +1066,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontWeight: "600",
       color: theme.textInverse,
     },
-    pickerContainer: {
-      backgroundColor: theme.pickerBackground,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: theme.pickerBorder,
-      marginBottom: 4,
-      overflow: "hidden",
-    },
-    picker: {
-      height: 50,
-      color: theme.pickerText,
-    },
+
     savingOverlay: {
       flex: 1,
       backgroundColor: theme.overlay,

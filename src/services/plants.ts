@@ -25,6 +25,12 @@ import {
 import { getData, setData, KEYS } from "../lib/storage";
 import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
 import { logError } from "../utils/errorLogging";
+import {
+  getCached,
+  setCached,
+  invalidate,
+  CACHE_KEYS,
+} from "../lib/dataCache";
 
 const PLANTS_COLLECTION = "plants";
 const DEFAULT_PAGE_SIZE = 50;
@@ -160,6 +166,10 @@ export const getPlants = async (
 export const getAllPlants = async (
   pageSize: number = FETCH_ALL_PAGE_SIZE,
 ): Promise<Plant[]> => {
+  // Return fresh in-memory data if available (< 30s old)
+  const cached = getCached<Plant[]>(CACHE_KEYS.ALL_PLANTS);
+  if (cached) return cached;
+
   const allPlants: Plant[] = [];
   let lastDoc: QueryDocumentSnapshot | undefined = undefined;
   let hasMore = true;
@@ -184,6 +194,7 @@ export const getAllPlants = async (
     }
   }
 
+  setCached(CACHE_KEYS.ALL_PLANTS, allPlants);
   return allPlants;
 };
 
@@ -319,6 +330,9 @@ export const createPlant = async (
     created_at: newPlant.created_at.toDate().toISOString(),
   } as Plant;
 
+  // Invalidate in-memory cache so next getAllPlants re-fetches
+  invalidate(CACHE_KEYS.ALL_PLANTS);
+
   // Update local cache
   const cachedPlants = await getData<Plant>(KEYS.PLANTS);
   await setData(KEYS.PLANTS, [...cachedPlants, result]);
@@ -346,6 +360,9 @@ export const updatePlant = async (
   const updated = await getPlant(id);
   if (!updated) throw new Error("Plant not found");
 
+  // Invalidate in-memory cache so next getAllPlants re-fetches
+  invalidate(CACHE_KEYS.ALL_PLANTS);
+
   // Update local cache
   const cachedPlants = await getData<Plant>(KEYS.PLANTS);
   const index = cachedPlants.findIndex((p) => p.id === id);
@@ -367,6 +384,8 @@ export const updatePlantLocation = async (
     maxRetries: 2,
   });
 
+  invalidate(CACHE_KEYS.ALL_PLANTS);
+
   const cachedPlants = await getData<Plant>(KEYS.PLANTS);
   const index = cachedPlants.findIndex((plant) => plant.id === id);
   if (index !== -1) {
@@ -384,6 +403,8 @@ export const updatePlantVariety = async (
     () => updateDoc(docRef, { plant_variety: plantVariety }),
     { timeoutMs: 10000, maxRetries: 2 },
   );
+
+  invalidate(CACHE_KEYS.ALL_PLANTS);
 
   const cachedPlants = await getData<Plant>(KEYS.PLANTS);
   const index = cachedPlants.findIndex((plant) => plant.id === id);
@@ -406,6 +427,9 @@ export const deletePlant = async (id: string): Promise<void> => {
       }),
     { timeoutMs: 10000, maxRetries: 2 },
   );
+
+  // Invalidate in-memory cache
+  invalidate(CACHE_KEYS.ALL_PLANTS);
 
   // Update local cache
   const cachedPlants = await getData<Plant>(KEYS.PLANTS);
@@ -454,6 +478,8 @@ export const restorePlant = async (id: string): Promise<Plant> => {
     deleted_at: data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
     is_deleted: data.is_deleted ?? false,
   } as Plant;
+
+  invalidate(CACHE_KEYS.ALL_PLANTS);
 
   const cachedPlants = await getData<Plant>(KEYS.PLANTS);
   const index = cachedPlants.findIndex((p) => p.id === id);

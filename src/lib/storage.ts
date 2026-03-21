@@ -1,5 +1,6 @@
 import { safeGetData, safeSetData } from '../utils/safeStorage';
 import { logStorageError } from '../utils/errorLogging';
+import { invalidateAll } from './dataCache';
 
 const STORAGE_KEYS = {
   PLANTS: '@garden_plants',
@@ -40,6 +41,7 @@ export const setData = async <T>(key: string, value: T[]): Promise<void> => {
  */
 export const clearAllData = async (): Promise<void> => {
   try {
+    invalidateAll();
     const keys = Object.values(STORAGE_KEYS);
     for (const key of keys) {
       await safeSetData(key, []);

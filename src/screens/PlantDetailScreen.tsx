@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -24,7 +24,7 @@ import { getYearsOld } from "../utils/dateHelpers";
 
 export default function PlantDetailScreen({ route, navigation }: any) {
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const { plantId } = route.params || {};
   const [plant, setPlant] = useState<Plant | null>(null);
@@ -134,7 +134,7 @@ export default function PlantDetailScreen({ route, navigation }: any) {
   const seasonalReminder = getSeasonalCareReminder(plant);
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 48) + 16 }}>
       <View style={[styles.header, { top: insets.top + 12 }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}

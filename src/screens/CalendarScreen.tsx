@@ -1,5 +1,4 @@
 import React, {
-  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -39,7 +38,7 @@ import {
   deleteTasksForPlantIds,
 } from "../services/tasks";
 import { getAllPlants, plantExists } from "../services/plants";
-import { getJournalEntries } from "../services/journal";
+import { getJournalMetadata } from "../services/journal";
 import {
   TaskTemplate,
   Plant,
@@ -48,12 +47,15 @@ import {
   JournalEntryType,
 } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
-import { Picker } from "@react-native-picker/picker";
+import ThemedDropdown from "../components/ThemedDropdown";
+import FloatingLabelInput from "../components/FloatingLabelInput";
+import type { DropdownItem } from "../components/ThemedDropdown";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import { isNetworkAvailable } from "../utils/networkState";
 import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
+import { useTabBarScroll, TAB_BAR_HEIGHT, AnimatedFAB } from "../components/FloatingTabBar";
 
 const TASK_COLORS: Record<TaskType, string> = {
   water: "#2196F3",
@@ -77,15 +79,17 @@ const GROUP_OPTIONS: {
 
 export default function CalendarScreen() {
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
-  const androidPickerProps =
-    Platform.OS === "android"
-      ? {
-          mode: "dropdown" as const,
-          dropdownIconColor: theme.textSecondary,
-        }
-      : {};
+  const { onScroll: onTabBarScroll, resetTabBar } = useTabBarScroll();
+  const TASK_TYPE_ITEMS: DropdownItem[] = [
+    { label: "💧 Water", value: "water" },
+    { label: "🌱 Fertilize", value: "fertilise" },
+    { label: "✂️ Prune", value: "prune" },
+    { label: "🪴 Repot", value: "repot" },
+    { label: "🧴 Spray (Pesticide/Neem)", value: "spray" },
+    { label: "🍂 Mulch", value: "mulch" },
+  ];
   const scrollViewRef = useRef<ScrollView>(null);
   const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
   const [tasks, setTasks] = useState<TaskTemplate[]>([]);
@@ -102,6 +106,10 @@ export default function CalendarScreen() {
   const [taskNotes, setTaskNotes] = useState("");
   const [productUsed, setProductUsed] = useState("");
   const [isCompletingTask, setIsCompletingTask] = useState(false);
+  const [isCompletingAll, setIsCompletingAll] = useState(false);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [showCompleteAllModal, setShowCompleteAllModal] = useState(false);
+  const [completeAllTasks, setCompleteAllTasks] = useState<TaskTemplate[]>([]);
   const [taskType, setTaskType] = useState<TaskType>("water");
   const [selectedPlant, setSelectedPlant] = useState<string>("");
   const [frequencyDays, setFrequencyDays] = useState("7");
@@ -117,6 +125,8 @@ export default function CalendarScreen() {
   const [groupBy, setGroupBy] = useState<"none" | "location" | "type">("none");
   const [showGroupMenu, setShowGroupMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchActive, setSearchActive] = useState(false);
+  const searchInputRef = React.useRef<TextInput>(null);
   const isMountedRef = React.useRef(true);
   const lastLoadTimeRef = React.useRef(0);
   const normalizeSearchText = (value: string) =>
@@ -140,7 +150,7 @@ export default function CalendarScreen() {
       const [tasksData, plantsData, journalData] = await Promise.all([
         getTaskTemplates(),
         getAllPlants(),
-        getJournalEntries(),
+        getJournalMetadata(),
       ]);
 
       if (!isMountedRef.current) return;
@@ -219,12 +229,13 @@ export default function CalendarScreen() {
   useFocusEffect(
     React.useCallback(() => {
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+      resetTabBar();
       const today = new Date();
       setSelectedDate(today);
       setCurrentWeekStart(getStartOfWeek(today));
       setCurrentMonth(today);
       void loadData(); // debounced — skips if loaded recently
-    }, [loadData]),
+    }, [loadData, resetTabBar]),
   );
 
   const handleTaskComplete = async (task: TaskTemplate) => {
@@ -269,6 +280,34 @@ export default function CalendarScreen() {
     } finally {
       setIsCompletingTask(false);
     }
+  };
+
+  const handleCompleteAllForDate = (date: Date) => {
+    const dateTasks = getTasksForDate(date);
+    if (dateTasks.length === 0) return;
+    setCompleteAllTasks(dateTasks);
+    setShowCompleteAllModal(true);
+  };
+
+  const confirmCompleteAll = async () => {
+    if (isCompletingAll || completeAllTasks.length === 0) return;
+    setIsCompletingAll(true);
+    setCompletedCount(0);
+    let succeeded = 0;
+    for (const task of completeAllTasks) {
+      try {
+        await markTaskDone(task);
+        succeeded++;
+        setCompletedCount(succeeded);
+      } catch {
+        // skip failed tasks silently; user can retry individually
+      }
+    }
+    setIsCompletingAll(false);
+    setCompletedCount(0);
+    setShowCompleteAllModal(false);
+    setCompleteAllTasks([]);
+    loadData({ force: true });
   };
 
   const getMonthTasks = () => {
@@ -509,7 +548,9 @@ export default function CalendarScreen() {
     if (!task || !task.next_due_at) return null;
     const plantDetails = getPlantDetails(task.plant_id);
     const dueDate = new Date(task.next_due_at);
-    const isOverdue = dueDate < new Date();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const isOverdue = dueDate < todayStart;
 
     const renderRightActions = (
       progress: Animated.AnimatedInterpolation<number>,
@@ -902,7 +943,16 @@ export default function CalendarScreen() {
     () => (selectedView === "week" ? getWeekTasks() : getMonthTasks()),
     [selectedView, filteredTasks, currentWeekStart, currentMonth],
   );
-  const tasksForDisplay = isSearching ? filteredTasks : weekTasks;
+  const tasksForDisplay = useMemo(() => {
+    if (isSearching) return filteredTasks;
+    if (!selectedDate) return weekTasks;
+    // Exclude tasks already shown under the selected-date header
+    const selectedKey = selectedDate.toDateString();
+    return weekTasks.filter((t) => {
+      if (!t.next_due_at) return true;
+      return new Date(t.next_due_at).toDateString() !== selectedKey;
+    });
+  }, [isSearching, filteredTasks, weekTasks, selectedDate]);
   const groupedTasks = useMemo(
     () => groupTasks(tasksForDisplay),
     [tasksForDisplay, groupBy, plants],
@@ -923,70 +973,93 @@ export default function CalendarScreen() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={styles.container}>
-        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-          <View style={styles.headerTop}>
-            <View style={styles.searchWrapper}>
-              <Ionicons name="search" size={16} color={theme.textSecondary} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search..."
-                value={searchQuery}
-                onChangeText={(text) =>
-                  setSearchQuery(sanitizeAlphaNumericSpaces(text))
-                }
-                placeholderTextColor={theme.inputPlaceholder}
-              />
-              {searchQuery.trim() !== "" && (
-                <TouchableOpacity onPress={() => setSearchQuery("")}>
-                  <Ionicons
-                    name="close-circle"
-                    size={16}
-                    color={theme.textTertiary}
-                  />
-                </TouchableOpacity>
-              )}
-            </View>
-            <View style={styles.headerActions}>
-              {!isViewingToday && (
+        <View style={styles.header}>
+          <View style={[styles.headerTop, { paddingTop: insets.top + 12 }]}>
+            {searchActive ? (
+              <View style={styles.searchExpandedRow}>
                 <TouchableOpacity
-                  style={styles.todayButton}
-                  onPress={setTodayView}
+                  style={styles.searchBackBtn}
+                  onPress={() => {
+                    setSearchActive(false);
+                    if (!searchQuery.trim()) setSearchQuery("");
+                  }}
                 >
-                  <Text style={styles.todayButtonText}>Today</Text>
+                  <Ionicons name="arrow-back" size={22} color={theme.text} />
                 </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.viewToggle}
-                onPress={() => {
-                  LayoutAnimation.configureNext(
-                    LayoutAnimation.Presets.easeInEaseOut,
-                  );
-                  setSelectedView(selectedView === "week" ? "month" : "week");
-                }}
-              >
-                <Ionicons
-                  name={selectedView === "week" ? "list" : "calendar"}
-                  size={18}
-                  color={theme.primary}
-                />
-                <Text style={styles.viewToggleText}>
-                  {selectedView === "week" ? "Week" : "Month"}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.groupMenuButton,
-                  groupBy !== "none" && styles.groupMenuButtonActive,
-                ]}
-                onPress={() => setShowGroupMenu(!showGroupMenu)}
-              >
-                <Ionicons
-                  name="options"
-                  size={20}
-                  color={groupBy !== "none" ? "#fff" : theme.textSecondary}
-                />
-              </TouchableOpacity>
-            </View>
+                <View style={styles.searchExpandedWrapper}>
+                  <Ionicons name="search" size={16} color={theme.textSecondary} />
+                  <TextInput
+                    ref={searchInputRef}
+                    style={styles.searchExpandedInput}
+                    placeholder="Search tasks..."
+                    value={searchQuery}
+                    onChangeText={(text) =>
+                      setSearchQuery(sanitizeAlphaNumericSpaces(text))
+                    }
+                    placeholderTextColor={theme.inputPlaceholder}
+                    autoFocus
+                    returnKeyType="search"
+                  />
+                  {searchQuery.trim() !== "" && (
+                    <TouchableOpacity onPress={() => setSearchQuery("")}>
+                      <Ionicons name="close-circle" size={18} color={theme.textTertiary} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.headerTitle}>Care Plan</Text>
+                <View style={styles.headerActions}>
+                  <TouchableOpacity
+                    style={styles.searchIconBtn}
+                    onPress={() => setSearchActive(true)}
+                  >
+                    <Ionicons name="search" size={20} color={theme.primary} />
+                    {searchQuery.trim() !== "" && <View style={styles.searchActiveDot} />}
+                  </TouchableOpacity>
+                  {!isViewingToday && (
+                    <TouchableOpacity
+                      style={styles.todayButton}
+                      onPress={setTodayView}
+                    >
+                      <Text style={styles.todayButtonText}>Today</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={styles.viewToggle}
+                    onPress={() => {
+                      LayoutAnimation.configureNext(
+                        LayoutAnimation.Presets.easeInEaseOut,
+                      );
+                      setSelectedView(selectedView === "week" ? "month" : "week");
+                    }}
+                  >
+                    <Ionicons
+                      name={selectedView === "week" ? "list" : "calendar"}
+                      size={18}
+                      color={theme.primary}
+                    />
+                    <Text style={styles.viewToggleText}>
+                      {selectedView === "week" ? "Week" : "Month"}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.groupMenuButton,
+                      groupBy !== "none" && styles.groupMenuButtonActive,
+                    ]}
+                    onPress={() => setShowGroupMenu(!showGroupMenu)}
+                  >
+                    <Ionicons
+                      name="funnel"
+                      size={20}
+                      color={groupBy !== "none" ? "#fff" : theme.primary}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
         </View>
 
@@ -1040,6 +1113,9 @@ export default function CalendarScreen() {
         <ScrollView
           ref={scrollViewRef}
           style={styles.content}
+          contentContainerStyle={{ paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 48) + 16 }}
+          onScroll={onTabBarScroll}
+          scrollEventThrottle={16}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
           }
@@ -1048,17 +1124,38 @@ export default function CalendarScreen() {
           {!isSearching && selectedDate && (
             <View style={styles.section}>
               <View style={styles.selectedDateHeader}>
-                <Text style={styles.sectionTitle}>
+                <Text style={styles.selectedDateTitle}>
                   📅{" "}
                   {selectedDate.toLocaleDateString("en-US", {
-                    weekday: "long",
-                    month: "long",
+                    weekday: "short",
+                    month: "short",
                     day: "numeric",
                   })}
                 </Text>
-                <TouchableOpacity onPress={() => setSelectedDate(null)}>
-                  <Ionicons name="close-circle" size={24} color="#999" />
-                </TouchableOpacity>
+                <View style={styles.selectedDateActions}>
+                  {getTasksForDate(selectedDate).length > 1 && (
+                    <TouchableOpacity
+                      style={[
+                        styles.completeAllBtn,
+                        isCompletingAll && styles.completeAllBtnDisabled,
+                      ]}
+                      onPress={() => handleCompleteAllForDate(selectedDate)}
+                      disabled={isCompletingAll}
+                      activeOpacity={0.7}
+                    >
+                      {isCompletingAll ? (
+                        <Text style={styles.completeAllProgress}>
+                          {completedCount}/{getTasksForDate(selectedDate).length}
+                        </Text>
+                      ) : (
+                        <Ionicons name="checkmark-done" size={18} color="#fff" />
+                      )}
+                      <Text style={styles.completeAllText}>
+                        {isCompletingAll ? "Completing..." : "All Done"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
               {(() => {
                 const selectedDateTasks = getTasksForDate(selectedDate);
@@ -1161,8 +1258,9 @@ export default function CalendarScreen() {
             </View>
           )}
 
-          {/* Today's Tasks */}
-          {todayTasks.length > 0 && (
+          {/* Today's Tasks — hidden when today is already the selected date */}
+          {todayTasks.length > 0 &&
+            !(selectedDate && selectedDate.toDateString() === new Date().toDateString()) && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>
                 Today ({todayTasks.length})
@@ -1230,9 +1328,7 @@ export default function CalendarScreen() {
         </ScrollView>
 
         {/* Floating Action Button */}
-        <TouchableOpacity style={styles.fab} onPress={() => setShowModal(true)}>
-          <Ionicons name="add" size={28} color="#fff" />
-        </TouchableOpacity>
+        <AnimatedFAB onPress={() => setShowModal(true)} />
 
         {/* Create Task Modal */}
         <Modal
@@ -1246,7 +1342,7 @@ export default function CalendarScreen() {
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Create Task</Text>
                 <TouchableOpacity onPress={() => setShowModal(false)}>
-                  <Ionicons name="close" size={24} color="#333" />
+                  <Ionicons name="close" size={24} color={theme.text} />
                 </TouchableOpacity>
               </View>
 
@@ -1257,72 +1353,25 @@ export default function CalendarScreen() {
                 }}
               >
                 <View style={styles.modalBody}>
-                  <Text style={styles.label}>Task Type *</Text>
-                  <View style={styles.pickerContainer}>
-                    <Picker
-                      {...androidPickerProps}
-                      selectedValue={taskType}
-                      onValueChange={setTaskType}
-                      style={styles.picker}
-                      itemStyle={styles.pickerItem}
-                    >
-                      <Picker.Item
-                        label="💧 Water"
-                        value="water"
-                        color={theme.pickerText}
-                      />
-                      <Picker.Item
-                        label="🌱 Fertilize"
-                        value="fertilise"
-                        color={theme.pickerText}
-                      />
-                      <Picker.Item
-                        label="✂️ Prune"
-                        value="prune"
-                        color={theme.pickerText}
-                      />
-                      <Picker.Item
-                        label="🪴 Repot"
-                        value="repot"
-                        color={theme.pickerText}
-                      />
-                      <Picker.Item
-                        label="🧴 Spray (Pesticide/Neem)"
-                        value="spray"
-                        color={theme.pickerText}
-                      />
-                      <Picker.Item
-                        label="🍂 Mulch"
-                        value="mulch"
-                        color={theme.pickerText}
-                      />
-                    </Picker>
-                  </View>
+                  <ThemedDropdown
+                    items={TASK_TYPE_ITEMS}
+                    selectedValue={taskType}
+                    onValueChange={(v) => setTaskType(v as TaskType)}
+                    label="Task Type *"
+                    placeholder="Task Type"
+                  />
 
-                  <Text style={styles.label}>Plant (Optional)</Text>
-                  <View style={styles.pickerContainer}>
-                    <Picker
-                      {...androidPickerProps}
-                      selectedValue={selectedPlant}
-                      onValueChange={setSelectedPlant}
-                      style={styles.picker}
-                      itemStyle={styles.pickerItem}
-                    >
-                      <Picker.Item
-                        label="General Task"
-                        value=""
-                        color={theme.pickerText}
-                      />
-                      {plants.map((plant) => (
-                        <Picker.Item
-                          key={plant.id}
-                          label={plant.name}
-                          value={plant.id}
-                          color={theme.pickerText}
-                        />
-                      ))}
-                    </Picker>
-                  </View>
+                  <ThemedDropdown
+                    items={[
+                      { label: "General Task", value: "" },
+                      ...plants.map((p) => ({ label: p.name, value: p.id })),
+                    ]}
+                    selectedValue={selectedPlant}
+                    onValueChange={setSelectedPlant}
+                    label="Plant (Optional)"
+                    placeholder="Plant"
+                    searchable
+                  />
 
                   <Text style={styles.label}>Start Date</Text>
                   <TouchableOpacity
@@ -1531,13 +1580,11 @@ export default function CalendarScreen() {
                         </TouchableOpacity>
                       </View>
 
-                      <TextInput
-                        style={styles.input}
-                        placeholder="7"
+                      <FloatingLabelInput
+                        label="Frequency (days)"
                         value={frequencyDays}
                         onChangeText={setFrequencyDays}
                         keyboardType="numeric"
-                        placeholderTextColor={theme.inputPlaceholder}
                       />
 
                       {/* Preview */}
@@ -1608,6 +1655,94 @@ export default function CalendarScreen() {
           </View>
         </Modal>
 
+        {/* Complete All Modal */}
+        <Modal
+          visible={showCompleteAllModal}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => {
+            if (!isCompletingAll) {
+              setShowCompleteAllModal(false);
+              setCompleteAllTasks([]);
+            }
+          }}
+        >
+          <View style={styles.completeAllOverlay}>
+            <View style={styles.completeAllCard}>
+              <View style={styles.completeAllIconRow}>
+                <View style={styles.completeAllIconCircle}>
+                  <Ionicons
+                    name={isCompletingAll ? "hourglass" : "checkmark-done"}
+                    size={28}
+                    color="#fff"
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.completeAllTitle}>
+                {isCompletingAll
+                  ? `Completing... ${completedCount}/${completeAllTasks.length}`
+                  : `Complete ${completeAllTasks.length} Tasks`}
+              </Text>
+
+              {isCompletingAll && (
+                <View style={styles.progressBarOuter}>
+                  <View
+                    style={[
+                      styles.progressBarInner,
+                      {
+                        width: `${completeAllTasks.length > 0 ? (completedCount / completeAllTasks.length) * 100 : 0}%`,
+                      },
+                    ]}
+                  />
+                </View>
+              )}
+
+              {!isCompletingAll && (
+                <View style={styles.completeAllTaskList}>
+                  {completeAllTasks.map((task) => {
+                    const plant = getPlantDetails(task.plant_id);
+                    const color = TASK_COLORS[task.task_type] || theme.textSecondary;
+                    return (
+                      <View key={task.id} style={styles.completeAllTaskRow}>
+                        <View style={[styles.completeAllDot, { backgroundColor: color }]} />
+                        <Text style={styles.completeAllTaskType} numberOfLines={1}>
+                          {task.task_type.charAt(0).toUpperCase() + task.task_type.slice(1)}
+                        </Text>
+                        <Text style={styles.completeAllTaskPlant} numberOfLines={1}>
+                          {plant.name}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {!isCompletingAll && (
+                <View style={styles.completeAllActions}>
+                  <TouchableOpacity
+                    style={styles.completeAllCancelBtn}
+                    onPress={() => {
+                      setShowCompleteAllModal(false);
+                      setCompleteAllTasks([]);
+                    }}
+                  >
+                    <Text style={styles.completeAllCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.completeAllConfirmBtn}
+                    onPress={confirmCompleteAll}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="checkmark-done" size={18} color="#fff" />
+                    <Text style={styles.completeAllConfirmText}>Complete All</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
+
         {/* Task Notes Modal */}
         <Modal
           visible={showNotesModal}
@@ -1646,29 +1781,22 @@ export default function CalendarScreen() {
                     </View>
                   )}
 
-                  <Text style={styles.label}>Notes (Optional)</Text>
-                  <TextInput
-                    style={[styles.input, styles.notesInput]}
-                    placeholder="e.g., Soil was dry, found some pests..."
+                  <FloatingLabelInput
+                    label="Notes (Optional)"
                     value={taskNotes}
                     onChangeText={(text) =>
                       setTaskNotes(sanitizeAlphaNumericSpaces(text))
                     }
                     multiline
                     numberOfLines={3}
-                    textAlignVertical="top"
-                    placeholderTextColor={theme.inputPlaceholder}
                   />
 
-                  <Text style={styles.label}>Product Used (Optional)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g., Neem oil, Compost..."
+                  <FloatingLabelInput
+                    label="Product Used (Optional)"
                     value={productUsed}
                     onChangeText={(text) =>
                       setProductUsed(sanitizeAlphaNumericSpaces(text))
                     }
-                    placeholderTextColor={theme.inputPlaceholder}
                   />
 
                   <View style={styles.modalActions}>
@@ -1712,8 +1840,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     header: {
       paddingHorizontal: 16,
-      paddingTop: 12,
-      paddingBottom: 16,
+      paddingBottom: 12,
       backgroundColor: theme.backgroundSecondary,
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
@@ -1723,26 +1850,58 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       justifyContent: "space-between",
       alignItems: "center",
     },
-    searchWrapper: {
+    headerTitle: {
+      fontSize: 22,
+      fontWeight: "700",
+      color: theme.text,
+    },
+    searchIconBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: theme.primaryLight,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    searchActiveDot: {
+      position: "absolute",
+      bottom: 6,
+      right: 6,
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: theme.primary,
+    },
+    searchExpandedRow: {
+      flex: 1,
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: theme.border,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      marginRight: 12,
-      flex: 1,
-      minWidth: 0,
-      gap: 6,
+      gap: 8,
     },
-    searchInput: {
-      fontSize: 14,
+    searchBackBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    searchExpandedWrapper: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: theme.background,
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: theme.primary,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      gap: 8,
+    },
+    searchExpandedInput: {
+      flex: 1,
+      fontSize: 16,
       color: theme.text,
       padding: 0,
-      flex: 1,
-      minWidth: 0,
     },
     headerActions: {
       flexDirection: "row",
@@ -1785,12 +1944,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       backgroundColor: theme.primaryLight,
       alignItems: "center",
       justifyContent: "center",
-      borderWidth: 1,
-      borderColor: theme.border,
     },
     groupMenuButtonActive: {
       backgroundColor: theme.primary,
-      borderColor: theme.primary,
     },
     groupMenu: {
       backgroundColor: theme.backgroundSecondary,
@@ -2049,11 +2205,12 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      marginBottom: 16,
-      padding: 16,
+      marginBottom: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
       backgroundColor: theme.primaryLight,
-      borderRadius: 16,
-      borderLeftWidth: 4,
+      borderRadius: 10,
+      borderLeftWidth: 3,
       borderLeftColor: theme.primary,
     },
     sectionTitle: {
@@ -2062,6 +2219,148 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       color: theme.text,
       marginBottom: 16,
       letterSpacing: 0.3,
+    },
+    selectedDateTitle: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: theme.text,
+    },
+    selectedDateActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    completeAllBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: theme.primary,
+      paddingVertical: 5,
+      paddingHorizontal: 10,
+      borderRadius: 8,
+    },
+    completeAllBtnDisabled: {
+      opacity: 0.6,
+    },
+    completeAllText: {
+      color: "#fff",
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    completeAllProgress: {
+      color: "#fff",
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    completeAllOverlay: {
+      flex: 1,
+      backgroundColor: theme.overlay,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 32,
+    },
+    completeAllCard: {
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 20,
+      padding: 24,
+      width: "100%",
+      maxWidth: 340,
+      alignItems: "center",
+    },
+    completeAllIconRow: {
+      marginBottom: 12,
+    },
+    completeAllIconCircle: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: theme.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    completeAllTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: theme.text,
+      marginBottom: 16,
+      textAlign: "center",
+    },
+    progressBarOuter: {
+      width: "100%",
+      height: 6,
+      backgroundColor: theme.border,
+      borderRadius: 3,
+      overflow: "hidden",
+      marginBottom: 16,
+    },
+    progressBarInner: {
+      height: 6,
+      backgroundColor: theme.primary,
+      borderRadius: 3,
+    },
+    completeAllTaskList: {
+      width: "100%",
+      marginBottom: 20,
+      gap: 8,
+    },
+    completeAllTaskRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      backgroundColor: theme.background,
+      borderRadius: 8,
+    },
+    completeAllDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    completeAllTaskType: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: theme.text,
+      width: 80,
+    },
+    completeAllTaskPlant: {
+      fontSize: 13,
+      color: theme.textSecondary,
+      flex: 1,
+    },
+    completeAllActions: {
+      flexDirection: "row",
+      gap: 12,
+      width: "100%",
+    },
+    completeAllCancelBtn: {
+      flex: 1,
+      padding: 14,
+      borderRadius: 12,
+      alignItems: "center",
+      backgroundColor: theme.background,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    completeAllCancelText: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: theme.textSecondary,
+    },
+    completeAllConfirmBtn: {
+      flex: 1,
+      padding: 14,
+      borderRadius: 12,
+      alignItems: "center",
+      backgroundColor: theme.primary,
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: 6,
+    },
+    completeAllConfirmText: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: "#fff",
     },
     emptyState: {
       alignItems: "center",
@@ -2125,9 +2424,9 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       elevation: 3,
     },
     taskCardOverdue: {
-      borderWidth: 1,
-      borderColor: theme.error + "40",
-      backgroundColor: theme.error + "08",
+      borderWidth: 1.5,
+      borderColor: theme.error + "60",
+      backgroundColor: theme.errorLight,
     },
     taskColorBar: {
       width: 5,
@@ -2246,22 +2545,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontSize: 14,
       color: theme.textSecondary,
     },
-    fab: {
-      position: "absolute",
-      right: 20,
-      bottom: 24,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      backgroundColor: theme.primary,
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 6,
-    },
     modalOverlay: {
       flex: 1,
       backgroundColor: theme.overlay,
@@ -2296,24 +2579,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       color: theme.textSecondary,
       marginBottom: 8,
     },
-    pickerContainer: {
-      backgroundColor: theme.pickerBackground,
-      borderRadius: 12,
-      marginBottom: 16,
-      borderWidth: 1,
-      borderColor: theme.pickerBorder,
-      overflow: "hidden",
-      minHeight: 56,
-      justifyContent: "center",
-    },
-    picker: {
-      height: 56,
-      color: theme.pickerText,
-    },
-    pickerItem: {
-      fontSize: 16,
-      color: theme.pickerText,
-    },
+
     input: {
       backgroundColor: theme.inputBackground,
       padding: 16,

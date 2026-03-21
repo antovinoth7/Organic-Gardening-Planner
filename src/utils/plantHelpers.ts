@@ -233,7 +233,7 @@ export function calculateExpectedHarvestDate(
   // Comprehensive null checks
   if (!plantVariety || !plantingDate || !plantType) return null;
 
-  const plantDate = new Date(plantingDate);
+  const plantDate = new Date(plantingDate + "T12:00:00");
   if (Number.isNaN(plantDate.getTime())) return null;
 
   let daysToAdd = 0;
@@ -261,7 +261,10 @@ export function calculateExpectedHarvestDate(
     // Validate the resulting date
     if (Number.isNaN(harvestDate.getTime())) return null;
 
-    return harvestDate.toISOString().split("T")[0];
+    const y = harvestDate.getFullYear();
+    const m = String(harvestDate.getMonth() + 1).padStart(2, "0");
+    const d = String(harvestDate.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
   } catch (error) {
     console.warn("Error calculating harvest date:", error);
     return null;
@@ -663,7 +666,7 @@ export function getCoconutAgeInfo(
   plantingDate: string | null | undefined,
 ): CoconutAgeInfo | null {
   if (!plantingDate) return null;
-  const planted = new Date(plantingDate);
+  const planted = new Date(plantingDate + "T12:00:00");
   if (isNaN(planted.getTime())) return null;
 
   const now = new Date();

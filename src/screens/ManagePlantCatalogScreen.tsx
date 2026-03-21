@@ -1,3 +1,4 @@
+import FloatingLabelInput from "../components/FloatingLabelInput";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -9,10 +10,9 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
-  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Picker } from "@react-native-picker/picker";
+import ThemedDropdown from "../components/ThemedDropdown";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import {
@@ -37,7 +37,7 @@ import {
   SunlightLevel,
   WaterRequirement,
 } from "../types/database.types";
-import { getPlantCareProfile } from "../utils/plantCareDefaults";
+import { getPlantCareProfile, getStaticPruningDefaults } from "../utils/plantCareDefaults";
 import { sanitizeLandmarkText } from "../utils/textSanitizer";
 
 type EditPlantState = {
@@ -67,15 +67,20 @@ type CareFormState = {
   soilType: SoilType;
   preferredFertiliser: FertiliserType;
   initialGrowthStage: GrowthStage;
+  pruningTips: string;
+  shapePruningTip: string;
+  shapePruningMonths: string;
+  flowerPruningTip: string;
+  flowerPruningMonths: string;
 };
 
 const CATEGORY_LABELS: Record<PlantType, string> = {
   vegetable: "🥬 Vegetable",
-  herb: "🌿 Herb",
-  flower: "🌸 Flower",
-  fruit_tree: "🥭 Fruit Tree",
-  timber_tree: "🌲 Timber Tree",
+  fruit_tree: "🍇 Fruit",
   coconut_tree: "🥥 Coconut Tree",
+  herb: "🌿 Herb",
+  timber_tree: "🌲 Timber Tree",
+  flower: "🌸 Flower",
   shrub: "🌱 Shrub",
 };
 
@@ -140,13 +145,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
   const theme = useTheme();
   const styles = createStyles(theme);
   const insets = useSafeAreaInsets();
-  const androidPickerProps =
-    Platform.OS === "android"
-      ? {
-          mode: "dropdown" as const,
-          dropdownIconColor: theme.textSecondary,
-        }
-      : {};
+
   const [catalog, setCatalog] = useState<PlantCatalog>(DEFAULT_PLANT_CATALOG);
   const [careProfiles, setCareProfiles] = useState<PlantCareProfiles>(
     {} as PlantCareProfiles,
@@ -287,6 +286,29 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
       ...(override ?? {}),
     };
 
+    // Pruning techniques: user override fields take priority, else static defaults
+    const hasUserPruning =
+      override?.pruningTips ||
+      override?.shapePruningTip ||
+      override?.flowerPruningTip;
+    const staticPruning = getStaticPruningDefaults(activeCategory, plantName);
+
+    const tips = hasUserPruning
+      ? (override?.pruningTips ?? []).join("\n")
+      : staticPruning.tips.join("\n");
+    const shapeTip = hasUserPruning
+      ? override?.shapePruningTip ?? ""
+      : staticPruning.shapePruning?.tip ?? "";
+    const shapeMonths = hasUserPruning
+      ? override?.shapePruningMonths ?? ""
+      : staticPruning.shapePruning?.months ?? "";
+    const flowerTip = hasUserPruning
+      ? override?.flowerPruningTip ?? ""
+      : staticPruning.flowerPruning?.tip ?? "";
+    const flowerMonths = hasUserPruning
+      ? override?.flowerPruningMonths ?? ""
+      : staticPruning.flowerPruning?.months ?? "";
+
     return {
       waterRequirement: merged.waterRequirement,
       wateringFrequencyDays: merged.wateringFrequencyDays.toString(),
@@ -298,6 +320,11 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
       soilType: merged.soilType,
       preferredFertiliser: merged.preferredFertiliser,
       initialGrowthStage: merged.initialGrowthStage,
+      pruningTips: tips,
+      shapePruningTip: shapeTip,
+      shapePruningMonths: shapeMonths,
+      flowerPruningTip: flowerTip,
+      flowerPruningMonths: flowerMonths,
     };
   };
 
@@ -341,6 +368,12 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
     const pruningValue =
       Number.isNaN(pruningDays) || pruningDays < 1 ? undefined : pruningDays;
 
+    // Parse pruning tips (one per line)
+    const pruningTips = careForm.pruningTips
+      .split("\n")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+
     const nextProfiles: PlantCareProfiles = {
       ...careProfiles,
       [activeCategory]: {
@@ -354,6 +387,11 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
           soilType: careForm.soilType,
           preferredFertiliser: careForm.preferredFertiliser,
           initialGrowthStage: careForm.initialGrowthStage,
+          pruningTips: pruningTips.length > 0 ? pruningTips : undefined,
+          shapePruningTip: careForm.shapePruningTip.trim() || undefined,
+          shapePruningMonths: careForm.shapePruningMonths.trim() || undefined,
+          flowerPruningTip: careForm.flowerPruningTip.trim() || undefined,
+          flowerPruningMonths: careForm.flowerPruningMonths.trim() || undefined,
         },
       },
     };
@@ -763,6 +801,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
             style={styles.content}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 48) + 16 }}
           >
             <View style={styles.infoCard}>
               <Ionicons name="leaf-outline" size={20} color={theme.primary} />
@@ -889,17 +928,12 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
 
-            <TextInput
-              style={styles.modalInput}
+            <FloatingLabelInput
+              label="New name"
               value={editPlant?.value ?? ""}
               onChangeText={(text) =>
                 setEditPlant((prev) => (prev ? { ...prev, value: text } : prev))
               }
-              placeholder="New name"
-              placeholderTextColor={theme.inputPlaceholder}
-              selectionColor={theme.primary}
-              cursorColor={theme.primary}
-              underlineColorAndroid="transparent"
               autoFocus
               autoCorrect={false}
             />
@@ -1153,42 +1187,30 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                 <Text style={styles.formSectionTitle}>Water & Feeding</Text>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Water requirement</Text>
-                  <View style={styles.pickerContainer}>
-                    <Picker
-                      {...androidPickerProps}
-                      selectedValue={careForm?.waterRequirement}
-                      onValueChange={(value) =>
-                        setCareForm((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                waterRequirement: value as WaterRequirement,
-                              }
-                            : prev,
-                        )
-                      }
-                      style={styles.picker}
-                    >
-                      {Object.entries(WATER_REQUIREMENT_LABELS).map(
-                        ([value, label]) => (
-                          <Picker.Item
-                            key={value}
-                            label={label}
-                            value={value}
-                          />
-                        ),
-                      )}
-                    </Picker>
-                  </View>
+                  <ThemedDropdown
+                    items={Object.entries(WATER_REQUIREMENT_LABELS).map(
+                      ([value, label]) => ({ label, value }),
+                    )}
+                    selectedValue={careForm?.waterRequirement ?? ""}
+                    onValueChange={(value) =>
+                      setCareForm((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              waterRequirement: value as WaterRequirement,
+                            }
+                          : prev,
+                      )
+                    }
+                    label="Water requirement"
+                    placeholder="Water requirement"
+                    compact
+                  />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>
-                    Watering frequency (days)
-                  </Text>
-                  <TextInput
-                    style={styles.careInput}
+                  <FloatingLabelInput
+                    label="Watering frequency (days)"
                     keyboardType="numeric"
                     value={careForm?.wateringFrequencyDays ?? ""}
                     onChangeText={(text) =>
@@ -1201,17 +1223,12 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                           : prev,
                       )
                     }
-                    placeholder="e.g., 3"
-                    placeholderTextColor={theme.inputPlaceholder}
                   />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>
-                    Fertilising frequency (days)
-                  </Text>
-                  <TextInput
-                    style={styles.careInput}
+                  <FloatingLabelInput
+                    label="Fertilising frequency (days)"
                     keyboardType="numeric"
                     value={careForm?.fertilisingFrequencyDays ?? ""}
                     onChangeText={(text) =>
@@ -1225,17 +1242,12 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                           : prev,
                       )
                     }
-                    placeholder="e.g., 14"
-                    placeholderTextColor={theme.inputPlaceholder}
                   />
                 </View>
 
                 <View style={[styles.fieldGroup, styles.fieldGroupLast]}>
-                  <Text style={styles.fieldLabel}>
-                    Pruning frequency (days, optional)
-                  </Text>
-                  <TextInput
-                    style={styles.careInput}
+                  <FloatingLabelInput
+                    label="Pruning frequency (days)"
                     keyboardType="numeric"
                     value={careForm?.pruningFrequencyDays ?? ""}
                     onChangeText={(text) =>
@@ -1248,119 +1260,179 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
                           : prev,
                       )
                     }
-                    placeholder="Leave blank if not needed"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formSection}>
+                <Text style={styles.formSectionTitle}>✂️ Pruning Techniques</Text>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={{ fontSize: 12, color: theme.textTertiary, marginBottom: 6 }}>
+                    Tips (one per line)
+                  </Text>
+                  <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: theme.borderLight,
+                      borderRadius: 8,
+                      padding: 10,
+                      minHeight: 80,
+                      color: theme.text,
+                      fontSize: 14,
+                      textAlignVertical: "top",
+                      backgroundColor: theme.backgroundSecondary,
+                    }}
+                    multiline
+                    value={careForm?.pruningTips ?? ""}
+                    onChangeText={(text) =>
+                      setCareForm((prev) =>
+                        prev ? { ...prev, pruningTips: text } : prev,
+                      )
+                    }
+                    placeholder="e.g. Remove yellowing lower leaves"
                     placeholderTextColor={theme.inputPlaceholder}
                   />
                 </View>
+
+                <View style={styles.fieldGroup}>
+                  <FloatingLabelInput
+                    label="Shape pruning tip"
+                    value={careForm?.shapePruningTip ?? ""}
+                    onChangeText={(text) =>
+                      setCareForm((prev) =>
+                        prev ? { ...prev, shapePruningTip: text } : prev,
+                      )
+                    }
+                  />
+                </View>
+
+                {careForm?.shapePruningTip ? (
+                  <View style={styles.fieldGroup}>
+                    <FloatingLabelInput
+                      label="Shape pruning — best months"
+                      value={careForm?.shapePruningMonths ?? ""}
+                      onChangeText={(text) =>
+                        setCareForm((prev) =>
+                          prev ? { ...prev, shapePruningMonths: text } : prev,
+                        )
+                      }
+                      placeholder="e.g. Jan–Feb"
+                    />
+                  </View>
+                ) : null}
+
+                <View style={styles.fieldGroup}>
+                  <FloatingLabelInput
+                    label="Flower pruning tip"
+                    value={careForm?.flowerPruningTip ?? ""}
+                    onChangeText={(text) =>
+                      setCareForm((prev) =>
+                        prev ? { ...prev, flowerPruningTip: text } : prev,
+                      )
+                    }
+                  />
+                </View>
+
+                {careForm?.flowerPruningTip ? (
+                  <View style={[styles.fieldGroup, styles.fieldGroupLast]}>
+                    <FloatingLabelInput
+                      label="Flower pruning — best months"
+                      value={careForm?.flowerPruningMonths ?? ""}
+                      onChangeText={(text) =>
+                        setCareForm((prev) =>
+                          prev ? { ...prev, flowerPruningMonths: text } : prev,
+                        )
+                      }
+                      placeholder="e.g. Year-round"
+                    />
+                  </View>
+                ) : null}
               </View>
 
               <View style={styles.formSection}>
                 <Text style={styles.formSectionTitle}>Environment</Text>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Sunlight</Text>
-                  <View style={styles.pickerContainer}>
-                    <Picker
-                      {...androidPickerProps}
-                      selectedValue={careForm?.sunlight}
-                      onValueChange={(value) =>
-                        setCareForm((prev) =>
-                          prev
-                            ? { ...prev, sunlight: value as SunlightLevel }
-                            : prev,
-                        )
-                      }
-                      style={styles.picker}
-                    >
-                      {Object.entries(SUNLIGHT_LABELS).map(([value, label]) => (
-                        <Picker.Item key={value} label={label} value={value} />
-                      ))}
-                    </Picker>
-                  </View>
+                  <ThemedDropdown
+                    items={Object.entries(SUNLIGHT_LABELS).map(
+                      ([value, label]) => ({ label, value }),
+                    )}
+                    selectedValue={careForm?.sunlight ?? ""}
+                    onValueChange={(value) =>
+                      setCareForm((prev) =>
+                        prev
+                          ? { ...prev, sunlight: value as SunlightLevel }
+                          : prev,
+                      )
+                    }
+                    label="Sunlight"
+                    placeholder="Sunlight"
+                    compact
+                  />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Soil type</Text>
-                  <View style={styles.pickerContainer}>
-                    <Picker
-                      {...androidPickerProps}
-                      selectedValue={careForm?.soilType}
-                      onValueChange={(value) =>
-                        setCareForm((prev) =>
-                          prev
-                            ? { ...prev, soilType: value as SoilType }
-                            : prev,
-                        )
-                      }
-                      style={styles.picker}
-                    >
-                      {Object.entries(SOIL_LABELS).map(([value, label]) => (
-                        <Picker.Item key={value} label={label} value={value} />
-                      ))}
-                    </Picker>
-                  </View>
+                  <ThemedDropdown
+                    items={Object.entries(SOIL_LABELS).map(
+                      ([value, label]) => ({ label, value }),
+                    )}
+                    selectedValue={careForm?.soilType ?? ""}
+                    onValueChange={(value) =>
+                      setCareForm((prev) =>
+                        prev
+                          ? { ...prev, soilType: value as SoilType }
+                          : prev,
+                      )
+                    }
+                    label="Soil type"
+                    placeholder="Soil type"
+                    compact
+                  />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Preferred fertiliser</Text>
-                  <View style={styles.pickerContainer}>
-                    <Picker
-                      {...androidPickerProps}
-                      selectedValue={careForm?.preferredFertiliser}
-                      onValueChange={(value) =>
-                        setCareForm((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                preferredFertiliser: value as FertiliserType,
-                              }
-                            : prev,
-                        )
-                      }
-                      style={styles.picker}
-                    >
-                      {Object.entries(FERTILISER_LABELS).map(
-                        ([value, label]) => (
-                          <Picker.Item
-                            key={value}
-                            label={label}
-                            value={value}
-                          />
-                        ),
-                      )}
-                    </Picker>
-                  </View>
+                  <ThemedDropdown
+                    items={Object.entries(FERTILISER_LABELS).map(
+                      ([value, label]) => ({ label, value }),
+                    )}
+                    selectedValue={careForm?.preferredFertiliser ?? ""}
+                    onValueChange={(value) =>
+                      setCareForm((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              preferredFertiliser: value as FertiliserType,
+                            }
+                          : prev,
+                      )
+                    }
+                    label="Preferred fertiliser"
+                    placeholder="Preferred fertiliser"
+                    compact
+                  />
                 </View>
 
                 <View style={[styles.fieldGroup, styles.fieldGroupLast]}>
-                  <Text style={styles.fieldLabel}>Initial growth stage</Text>
-                  <View style={styles.pickerContainer}>
-                    <Picker
-                      {...androidPickerProps}
-                      selectedValue={careForm?.initialGrowthStage}
-                      onValueChange={(value) =>
-                        setCareForm((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                initialGrowthStage: value as GrowthStage,
-                              }
-                            : prev,
-                        )
-                      }
-                      style={styles.picker}
-                    >
-                      {Object.entries(GROWTH_STAGE_LABELS).map(
-                        ([value, label]) => (
-                          <Picker.Item
-                            key={value}
-                            label={label}
-                            value={value}
-                          />
-                        ),
-                      )}
-                    </Picker>
-                  </View>
+                  <ThemedDropdown
+                    items={Object.entries(GROWTH_STAGE_LABELS).map(
+                      ([value, label]) => ({ label, value }),
+                    )}
+                    selectedValue={careForm?.initialGrowthStage ?? ""}
+                    onValueChange={(value) =>
+                      setCareForm((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              initialGrowthStage: value as GrowthStage,
+                            }
+                          : prev,
+                      )
+                    }
+                    label="Initial growth stage"
+                    placeholder="Initial growth stage"
+                    compact
+                  />
                 </View>
               </View>
             </ScrollView>
@@ -1744,20 +1816,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       color: theme.inputText,
       textAlignVertical: "center",
     },
-    pickerContainer: {
-      backgroundColor: theme.pickerBackground,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: theme.pickerBorder,
-      minHeight: Platform.OS === "android" ? 56 : 50,
-      justifyContent: "center",
-      overflow: "hidden",
-    },
-    picker: {
-      height: Platform.OS === "android" ? 56 : 50,
-      paddingHorizontal: Platform.OS === "android" ? 8 : 0,
-      color: theme.pickerText,
-    },
+
     reassignList: {
       flexDirection: "row",
       flexWrap: "wrap",

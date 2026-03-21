@@ -97,6 +97,27 @@ const normalizeOverride = (
   const pruningDays = normalizeNumber(override.pruningFrequencyDays);
   if (pruningDays) normalized.pruningFrequencyDays = pruningDays;
 
+  // Pruning techniques
+  if (Array.isArray(override.pruningTips)) {
+    const tips = override.pruningTips
+      .filter((t): t is string => typeof t === "string")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+    if (tips.length > 0) normalized.pruningTips = tips;
+  }
+  if (typeof override.shapePruningTip === "string" && override.shapePruningTip.trim()) {
+    normalized.shapePruningTip = override.shapePruningTip.trim();
+  }
+  if (typeof override.shapePruningMonths === "string" && override.shapePruningMonths.trim()) {
+    normalized.shapePruningMonths = override.shapePruningMonths.trim();
+  }
+  if (typeof override.flowerPruningTip === "string" && override.flowerPruningTip.trim()) {
+    normalized.flowerPruningTip = override.flowerPruningTip.trim();
+  }
+  if (typeof override.flowerPruningMonths === "string" && override.flowerPruningMonths.trim()) {
+    normalized.flowerPruningMonths = override.flowerPruningMonths.trim();
+  }
+
   return normalized;
 };
 

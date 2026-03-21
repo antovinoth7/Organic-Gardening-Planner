@@ -124,7 +124,7 @@ export default function ArchivedPlantsScreen({ navigation }: any) {
           data={plants}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: Math.max(insets.bottom, 48) + 16 }]}
         />
       )}
     </View>

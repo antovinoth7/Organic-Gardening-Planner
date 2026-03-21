@@ -8,7 +8,6 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 
 type PhotoSourceModalProps = {
@@ -29,7 +28,6 @@ export default function PhotoSourceModal({
   subtitle = "Choose a source",
 }: PhotoSourceModalProps) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const styles = createStyles(theme);
 
   const handleAction = (action: () => void) => {
@@ -46,7 +44,7 @@ export default function PhotoSourceModal({
     >
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={[styles.sheet, { marginTop: 16 + insets.top }]}>
+        <View style={styles.sheet}>
           <View style={styles.header}>
             <View>
               <Text style={styles.title}>{title}</Text>
@@ -98,7 +96,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
   StyleSheet.create({
     overlay: {
       flex: 1,
-      justifyContent: "flex-start",
+      justifyContent: "center",
     },
     backdrop: {
       ...StyleSheet.absoluteFillObject,

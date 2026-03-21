@@ -24,6 +24,12 @@ import {
 import { getData, setData, KEYS } from '../lib/storage';
 import { withTimeoutAndRetry } from '../utils/firestoreTimeout';
 import { logError } from '../utils/errorLogging';
+import {
+  getCached,
+  setCached,
+  invalidate,
+  CACHE_KEYS,
+} from '../lib/dataCache';
 const JOURNAL_COLLECTION = 'journal_entries';
 
 /**
@@ -32,6 +38,10 @@ const JOURNAL_COLLECTION = 'journal_entries';
 export const getJournalEntries = async (): Promise<JournalEntry[]> => {
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
+
+  // Return fresh in-memory data if available
+  const cached = getCached<JournalEntry[]>(CACHE_KEYS.JOURNAL_ENTRIES);
+  if (cached) return cached;
 
   // Refresh token to prevent expiration issues
   await refreshAuthToken();
@@ -91,6 +101,7 @@ export const getJournalEntries = async (): Promise<JournalEntry[]> => {
     
     // Cache locally
     await setData(KEYS.JOURNAL, entries);
+    setCached(CACHE_KEYS.JOURNAL_ENTRIES, entries);
     
     return entries;
   } catch (error) {
@@ -171,6 +182,8 @@ export const createJournalEntry = async (
   const cachedEntries = await getData<JournalEntry>(KEYS.JOURNAL);
   cachedEntries.unshift(result);
   await setData(KEYS.JOURNAL, cachedEntries);
+
+  invalidate(CACHE_KEYS.JOURNAL_ENTRIES, CACHE_KEYS.JOURNAL_METADATA);
   
   return result;
 };
@@ -237,6 +250,8 @@ export const updateJournalEntry = async (
     cachedEntries[index] = result;
     await setData(KEYS.JOURNAL, cachedEntries);
   }
+
+  invalidate(CACHE_KEYS.JOURNAL_ENTRIES, CACHE_KEYS.JOURNAL_METADATA);
   
   return result;
 };
@@ -290,6 +305,8 @@ export const deleteJournalEntry = async (id: string): Promise<void> => {
   // Update local cache
   const filtered = cachedEntries.filter(e => e.id !== id);
   await setData(KEYS.JOURNAL, filtered);
+
+  invalidate(CACHE_KEYS.JOURNAL_ENTRIES, CACHE_KEYS.JOURNAL_METADATA);
 };
 
 /**
@@ -300,6 +317,62 @@ export const deleteJournalEntry = async (id: string): Promise<void> => {
  */
 export const saveJournalImage = async (sourceUri: string): Promise<SavedImage> => {
   return saveImageLocallyWithFilename(sourceUri, 'journal');
+};
+
+/**
+ * Lightweight journal fetch — returns entries WITHOUT resolving images.
+ * Ideal for CalendarScreen which only needs entry_type and metadata
+ * (e.g. harvest entries), avoiding O(entries × photos) filesystem work.
+ */
+export const getJournalMetadata = async (): Promise<JournalEntry[]> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+
+  // Return fresh in-memory data if available
+  const cached = getCached<JournalEntry[]>(CACHE_KEYS.JOURNAL_METADATA);
+  if (cached) return cached;
+
+  // If full entries are already fresh, derive metadata from them
+  const fullCached = getCached<JournalEntry[]>(CACHE_KEYS.JOURNAL_ENTRIES);
+  if (fullCached) {
+    setCached(CACHE_KEYS.JOURNAL_METADATA, fullCached);
+    return fullCached;
+  }
+
+  await refreshAuthToken();
+
+  try {
+    const q = query(
+      collection(db, JOURNAL_COLLECTION),
+      where('user_id', '==', user.uid),
+      orderBy('created_at', 'desc')
+    );
+
+    const snapshot = await withTimeoutAndRetry(
+      () => getDocs(q),
+      { timeoutMs: 15000, maxRetries: 2 }
+    );
+
+    const entries = snapshot.docs.map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        ...data,
+        // Skip image resolution — just keep filenames for metadata
+        photo_filenames: data.photo_filenames || [],
+        photo_urls: [],
+        photo_url: null,
+        created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at,
+      } as unknown as JournalEntry;
+    });
+
+    setCached(CACHE_KEYS.JOURNAL_METADATA, entries);
+    return entries;
+  } catch (error) {
+    console.warn('Failed to fetch journal metadata, using cache:', error);
+    const cachedEntries = await getData<JournalEntry>(KEYS.JOURNAL);
+    return cachedEntries;
+  }
 };
 
 

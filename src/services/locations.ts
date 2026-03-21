@@ -12,6 +12,35 @@ export const DEFAULT_PARENT_LOCATIONS = [
   "Palappallam",
 ];
 
+export const DEFAULT_PARENT_LOCATION_SHORT_NAMES: Record<string, string> = {
+  Mangarai: "MNG",
+  "Velliavilai Home": "VVH",
+  "Velliavilai Near Pond": "VVP",
+  Palappallam: "PPM",
+};
+
+/**
+ * Auto-generate a short name from a location name.
+ * Takes consonants first (up to 3), then fills with remaining chars. Always uppercase, 3 chars.
+ */
+export const generateShortName = (name: string): string => {
+  const cleaned = name.replace(/[^a-zA-Z]/g, "").toUpperCase();
+  if (!cleaned) return "LOC";
+  const consonants = cleaned.replace(/[AEIOU]/g, "");
+  if (consonants.length >= 3) return consonants.slice(0, 3);
+  // Fill remainder from the full string
+  const chars: string[] = [...consonants];
+  for (const ch of cleaned) {
+    if (chars.length >= 3) break;
+    if (!chars.includes(ch)) chars.push(ch);
+  }
+  // If still short, just take first 3 chars of the cleaned name
+  while (chars.length < 3) {
+    chars.push(cleaned[chars.length] ?? "X");
+  }
+  return chars.join("").slice(0, 3);
+};
+
 export const DEFAULT_CHILD_LOCATIONS = [
   "North",
   "South",
@@ -44,19 +73,42 @@ const normalizeList = (values: string[] | undefined | null): string[] => {
 const SETTINGS_COLLECTION = "user_settings";
 const LOCATIONS_FIELD = "locations";
 
+const normalizeShortNames = (
+  shortNames: Record<string, string> | undefined | null,
+  parentLocations: string[],
+): Record<string, string> => {
+  const result: Record<string, string> = {};
+  for (const loc of parentLocations) {
+    const existing = shortNames?.[loc]?.trim().toUpperCase().slice(0, 5);
+    if (existing && existing.length >= 2) {
+      result[loc] = existing;
+    } else {
+      result[loc] = DEFAULT_PARENT_LOCATION_SHORT_NAMES[loc] ?? generateShortName(loc);
+    }
+  }
+  return result;
+};
+
 const normalizeConfig = (config?: LocationConfig | null): LocationConfig => {
   const normalizedParents = normalizeList(config?.parentLocations);
   const normalizedChildren = normalizeList(config?.childLocations);
 
+  const parents =
+    normalizedParents.length > 0
+      ? normalizedParents
+      : DEFAULT_PARENT_LOCATIONS;
+  const children =
+    normalizedChildren.length > 0
+      ? normalizedChildren
+      : DEFAULT_CHILD_LOCATIONS;
+
   return {
-    parentLocations:
-      normalizedParents.length > 0
-        ? normalizedParents
-        : DEFAULT_PARENT_LOCATIONS,
-    childLocations:
-      normalizedChildren.length > 0
-        ? normalizedChildren
-        : DEFAULT_CHILD_LOCATIONS,
+    parentLocations: parents,
+    childLocations: children,
+    parentLocationShortNames: normalizeShortNames(
+      config?.parentLocationShortNames,
+      parents,
+    ),
   };
 };
 

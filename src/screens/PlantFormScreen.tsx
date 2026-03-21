@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -15,7 +15,8 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { Picker } from "@react-native-picker/picker";
+import ThemedDropdown from "../components/ThemedDropdown";
+import FloatingLabelInput from "../components/FloatingLabelInput";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -57,6 +58,7 @@ import {
 import {
   getPlantCareProfile,
   hasPlantCareProfile,
+  getPruningTechniques,
 } from "../utils/plantCareDefaults";
 import { useTheme } from "../theme";
 import CollapsibleSection from "../components/CollapsibleSection";
@@ -75,10 +77,11 @@ import {
   sanitizeAlphaNumericSpaces,
   sanitizeLandmarkText,
 } from "../utils/textSanitizer";
+import { toLocalDateString, formatDateDisplay } from "../utils/dateHelpers";
 
 const NOTES_MAX_LENGTH = 500;
 type FormMode = "quick" | "advanced";
-type FormSectionKey = "basic" | "care" | "harvest" | "coconut" | "history";
+type FormSectionKey = "basic" | "location" | "care" | "health" | "harvest" | "coconut" | "history" | "notes";
 const sanitizeNumberText = (value: string) => value.replace(/[^0-9]/g, "");
 const TAMIL_NADU_HARVEST_SEASONS = [
   "Year Round",
@@ -108,8 +111,9 @@ const ISSUE_SEVERITY_OPTIONS: {
  *    date, append the two-digit year — primary disambiguator for a grove
  *    where you track multiple trees planted in different years.
  *    e.g. "Tall Coconut '95", "Dwarf Coconut '21"
- * 3. If a parentLocation is provided, append a short location token.
- *    e.g. "Tomato (South)", "Tall Coconut '95 (Field)"
+ * 3. If a parentLocation is provided, append the configured short name
+ *    (or a short location token as fallback).
+ *    e.g. "Tomato (MNG)", "Tall Coconut '95 (VLH)"
  */
 const buildGeneratedPlantNameBase = (
   plantType: PlantType | string,
@@ -117,6 +121,7 @@ const buildGeneratedPlantNameBase = (
   variety: string,
   plantingDate?: string,
   parentLocation?: string,
+  locationShortName?: string,
 ): string => {
   const pv = plantVariety.trim();
   const v = variety.trim();
@@ -144,10 +149,10 @@ const buildGeneratedPlantNameBase = (
     }
   }
 
-  // 3. Append short location token (first word, up to 10 chars).
+  // 3. Append short location name (configured) or fallback to first word.
   const loc = parentLocation?.trim();
   if (loc) {
-    const token = loc.split(/\s+/)[0].slice(0, 10);
+    const token = locationShortName?.trim() || loc.split(/\s+/)[0].slice(0, 10);
     if (token) base = `${base} (${token})`;
   }
 
@@ -215,17 +220,11 @@ const buildGeneratedPlantName = (
 export default function PlantFormScreen({ route, navigation }: any) {
   const { plantId } = route.params || {};
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const isCompactScreen = screenWidth <= 380;
-  const androidPickerProps =
-    Platform.OS === "android"
-      ? {
-          mode: "dropdown" as const,
-          dropdownIconColor: theme.textSecondary,
-        }
-      : {};
+
   const [name, setName] = useState("");
   const [existingPlants, setExistingPlants] = useState<Plant[]>([]);
   const [loadedGeneratedName, setLoadedGeneratedName] = useState("");
@@ -248,6 +247,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
   const [childLocations, setChildLocations] = useState<string[]>(
     DEFAULT_CHILD_LOCATIONS,
   );
+  const [locationShortNames, setLocationShortNames] = useState<Record<string, string>>({});
   const [landmarks, setLandmarks] = useState("");
   const [bedName, setBedName] = useState("");
   const [potSize, setPotSize] = useState("");
@@ -282,6 +282,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
     PestDiseaseRecord[]
   >([]);
   const [showPestDiseaseModal, setShowPestDiseaseModal] = useState(false);
+  const [showDiscardModal, setShowDiscardModal] = useState(false);
   const [showPestOccurredDatePicker, setShowPestOccurredDatePicker] =
     useState(false);
   const [showPhotoSourceModal, setShowPhotoSourceModal] = useState(false);
@@ -291,17 +292,20 @@ export default function PlantFormScreen({ route, navigation }: any) {
     Record<FormSectionKey, boolean>
   >({
     basic: true,
+    location: true,
     care: true,
+    health: false,
     harvest: false,
     coconut: false,
     history: false,
+    notes: false,
   });
   const [autoApplyCareDefaults, setAutoApplyCareDefaults] = useState(true);
   const [currentPestDisease, setCurrentPestDisease] =
     useState<PestDiseaseRecord>({
       type: "pest",
       name: "",
-      occurredAt: new Date().toISOString().split("T")[0],
+      occurredAt: toLocalDateString(new Date()),
       severity: "medium",
       resolved: false,
     });
@@ -328,6 +332,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const initialDataLoaded = useRef(false);
   const isSaving = useRef(false);
+  const isDiscarding = useRef(false);
   const autoSuggestApplied = useRef(false);
 
   useEffect(() => {
@@ -342,7 +347,6 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
       return () => clearTimeout(timeoutId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plantId]);
 
   const loadLocations = async () => {
@@ -350,6 +354,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
       const config = await getLocationConfig();
       setParentLocations(config.parentLocations);
       setChildLocations(config.childLocations);
+      setLocationShortNames(config.parentLocationShortNames ?? {});
     } catch (error) {
       console.error("Error loading locations:", error);
     }
@@ -410,10 +415,13 @@ export default function PlantFormScreen({ route, navigation }: any) {
   const getValidationErrors = React.useCallback(() => {
     const errors: Record<FormSectionKey, string[]> = {
       basic: [],
+      location: [],
       care: [],
+      health: [],
       harvest: [],
       coconut: [],
       history: [],
+      notes: [],
     };
 
     if (!plantVariety.trim()) {
@@ -421,11 +429,11 @@ export default function PlantFormScreen({ route, navigation }: any) {
     }
 
     if (!parentLocation.trim()) {
-      errors.basic.push("Please select a main location");
+      errors.location.push("Please select a main location");
     }
 
     if (!childLocation.trim()) {
-      errors.basic.push("Please select a direction/section");
+      errors.location.push("Please select a direction/section");
     }
 
     if (
@@ -449,7 +457,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
     }
 
     if (notes.length > NOTES_MAX_LENGTH) {
-      errors.harvest.push(
+      errors.notes.push(
         `Notes must be ${NOTES_MAX_LENGTH} characters or less`,
       );
     }
@@ -555,8 +563,9 @@ export default function PlantFormScreen({ route, navigation }: any) {
         variety,
         plantingDate,
         parentLocation,
+        locationShortNames[parentLocation],
       ),
-    [plantType, plantVariety, variety, plantingDate, parentLocation],
+    [plantType, plantVariety, variety, plantingDate, parentLocation, locationShortNames],
   );
 
   const generatedPlantName = React.useMemo(
@@ -569,11 +578,6 @@ export default function PlantFormScreen({ route, navigation }: any) {
       ),
     [existingPlants, generatedPlantNameBase, loadedGeneratedName, plantId],
   );
-
-  const resolvedPlantName = React.useMemo(() => {
-    const nickname = name.trim();
-    return nickname || generatedPlantName;
-  }, [generatedPlantName, name]);
 
   // AUTO-SUGGEST: Apply smart defaults when plant variety is selected
   useEffect(() => {
@@ -643,9 +647,12 @@ export default function PlantFormScreen({ route, navigation }: any) {
       setSectionExpanded((prev) => ({
         ...prev,
         basic: true,
+        location: true,
         care: true,
+        health: false,
         harvest: false,
         history: false,
+        notes: false,
       }));
     }
   }, [formMode]);
@@ -679,17 +686,12 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
   const basicFieldCount = React.useMemo(() => {
     // Always shown in Basic Information
-    // 1) Photo, 2) Display name, 3) Plant Category, 4) Specific Plant, 5) Main Location
-    let count = 5;
-
-    // Direction/section picker appears after main location is selected
-    if (parentLocation !== "") {
-      count += 1;
-    }
+    // 1) Photo, 2) Display name, 3) Plant Category, 4) Specific Plant
+    let count = 4;
 
     if (formMode === "advanced") {
-      // Variety control + Planting Date + Landmarks
-      count += 3;
+      // Variety control + Planting Date
+      count += 2;
 
       // Extra custom variety input appears in advanced mode when "Other" is selected
       if (varietySuggestions.length > 0 && customVarietyMode) {
@@ -698,7 +700,21 @@ export default function PlantFormScreen({ route, navigation }: any) {
     }
 
     return count;
-  }, [formMode, parentLocation, varietySuggestions.length, customVarietyMode]);
+  }, [formMode, varietySuggestions.length, customVarietyMode]);
+
+  const locationFieldCount = React.useMemo(() => {
+    // 1) Main Location
+    let count = 1;
+    // Direction/section picker appears after main location is selected
+    if (parentLocation !== "") {
+      count += 1;
+    }
+    if (formMode === "advanced") {
+      // Landmarks
+      count += 1;
+    }
+    return count;
+  }, [formMode, parentLocation]);
 
   const harvestSeasonOptions = React.useMemo(() => {
     if (!harvestSeason) return TAMIL_NADU_HARVEST_SEASONS;
@@ -733,7 +749,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
     // Handle navigation back button
     const unsubscribe = navigation.addListener("beforeRemove", (e: any) => {
-      if (!hasUnsavedChanges || isSaving.current) {
+      if (!hasUnsavedChanges || isSaving.current || isDiscarding.current) {
         return;
       }
 
@@ -745,45 +761,28 @@ export default function PlantFormScreen({ route, navigation }: any) {
       backHandler.remove();
       unsubscribe();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasUnsavedChanges, navigation]);
 
   const handleBackPress = () => {
     if (isSaving.current) {
       return; // Don't show alert if save is in progress
     }
-
-    // Reset immediately to prevent duplicate alerts
-    setHasUnsavedChanges(false);
-
-    Alert.alert(
-      "Discard Changes?",
-      "You have unsaved changes. Are you sure you want to discard them?",
-      [
-        {
-          text: "Keep Editing",
-          style: "cancel",
-          onPress: () => {
-            // Re-enable if user cancels
-            setHasUnsavedChanges(true);
-          },
-        },
-        {
-          text: "Discard",
-          style: "destructive",
-          onPress: () => {
-            navigation.goBack();
-          },
-        },
-      ],
-      { cancelable: false },
-    );
+    setShowDiscardModal(true);
   };
 
   const loadPlant = async () => {
     try {
       const plant = await getPlant(plantId);
       if (plant) {
+        // Load short names for name detection
+        let loadedShortNames = locationShortNames;
+        if (Object.keys(loadedShortNames).length === 0) {
+          try {
+            const config = await getLocationConfig();
+            loadedShortNames = config.parentLocationShortNames ?? {};
+          } catch {}
+        }
+
         // Derive the parent location from the stored composite location string.
         const locationParts = plant.location?.split(" - ") || [];
         const existingParentLoc =
@@ -799,6 +798,16 @@ export default function PlantFormScreen({ route, navigation }: any) {
           plant.variety || "",
           plant.planting_date || undefined,
           existingParentLoc || undefined,
+          loadedShortNames[existingParentLoc] || undefined,
+        );
+        // Also try with no short name (old style first-word token) for backward compat
+        const richBaseOld = buildGeneratedPlantNameBase(
+          plant.plant_type,
+          plant.plant_variety || "",
+          plant.variety || "",
+          plant.planting_date || undefined,
+          existingParentLoc || undefined,
+          undefined,
         );
         const simpleBase = buildGeneratedPlantNameBase(
           plant.plant_type,
@@ -807,9 +816,11 @@ export default function PlantFormScreen({ route, navigation }: any) {
         );
         const generatedName = isGeneratedPlantName(plant.name, richBase)
           ? plant.name
-          : isGeneratedPlantName(plant.name, simpleBase)
+          : isGeneratedPlantName(plant.name, richBaseOld)
             ? plant.name
-            : "";
+            : isGeneratedPlantName(plant.name, simpleBase)
+              ? plant.name
+              : "";
 
         setName(generatedName ? "" : plant.name);
         setLoadedGeneratedName(generatedName);
@@ -936,16 +947,19 @@ export default function PlantFormScreen({ route, navigation }: any) {
     setShowValidationErrors(true);
     const sectionOrder: FormSectionKey[] = [
       "basic",
+      "location",
       "care",
+      "health",
       "harvest",
       "coconut",
       "history",
+      "notes",
     ];
     const firstErrorSection = sectionOrder.find(
       (section) => validationErrors[section].length > 0,
     );
     if (firstErrorSection) {
-      if (firstErrorSection === "harvest" && formMode === "quick") {
+      if (["harvest", "health", "notes"].includes(firstErrorSection) && formMode === "quick") {
         setFormMode("advanced");
       }
       setSectionExpandedState(firstErrorSection, true);
@@ -1169,214 +1183,255 @@ export default function PlantFormScreen({ route, navigation }: any) {
             )}
           </TouchableOpacity>
 
-          <Text style={styles.label}>Plant Category *</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              {...androidPickerProps}
-              selectedValue={plantType}
-              onValueChange={(value) => {
-                setPlantType(value);
-                setPlantVariety("");
-                setVariety("");
-                setCustomVarietyMode(false);
-              }}
-              style={styles.picker}
-              itemStyle={styles.pickerItem}
-            >
-              <Picker.Item label="🥬 Vegetable" value="vegetable" />
-              <Picker.Item label="🌿 Herb" value="herb" />
-              <Picker.Item label="🌸 Flower" value="flower" />
-              <Picker.Item label="🥭 Fruit Tree" value="fruit_tree" />
-              <Picker.Item label="🌲 Timber Tree" value="timber_tree" />
-              <Picker.Item label="🥥 Coconut Tree" value="coconut_tree" />
-              <Picker.Item label="🌱 Shrub" value="shrub" />
-            </Picker>
-          </View>
+          <Text style={styles.fieldGroupLabel}>Plant Category *</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoryChipsScroll}
+            contentContainerStyle={styles.categoryChipsContent}
+          >
+            {[
+              { label: "🥬 Vegetable", value: "vegetable" },
+              { label: "🍇 Fruit", value: "fruit_tree" },
+              { label: "🥥 Coconut", value: "coconut_tree" },
+              { label: "🌿 Herb", value: "herb" },
+              { label: "🌲 Timber", value: "timber_tree" },
+              { label: "🌸 Flower", value: "flower" },
+              { label: "🌱 Shrub", value: "shrub" },
+            ].map((cat) => (
+              <TouchableOpacity
+                key={cat.value}
+                style={[
+                  styles.categoryChip,
+                  plantType === cat.value && styles.categoryChipActive,
+                ]}
+                onPress={() => {
+                  setPlantType(cat.value as PlantType);
+                  setPlantVariety("");
+                  setVariety("");
+                  setCustomVarietyMode(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.categoryChipText,
+                    plantType === cat.value && styles.categoryChipTextActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
 
-          <Text style={styles.label}>Specific Plant *</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              {...androidPickerProps}
-              selectedValue={plantVariety}
-              onValueChange={setPlantVariety}
-              style={styles.picker}
-              itemStyle={styles.pickerItem}
-              enabled={!!plantType}
-            >
-              <Picker.Item label="Select plant type" value="" color="#999" />
-              {specificPlantOptions.length === 0 ? (
-                <Picker.Item
-                  label="No plants yet - add in More"
-                  value=""
-                  color="#999"
-                />
-              ) : (
-                specificPlantOptions.map((variety) => (
-                  <Picker.Item key={variety} label={variety} value={variety} />
-                ))
-              )}
-            </Picker>
-          </View>
+          <ThemedDropdown
+            items={[
+              { label: "Select plant type", value: "" },
+              ...(specificPlantOptions.length === 0
+                ? [{ label: "No plants yet - add in More", value: "" }]
+                : specificPlantOptions.map((v) => ({ label: v, value: v }))),
+            ]}
+            selectedValue={plantVariety}
+            onValueChange={setPlantVariety}
+            label="Specific Plant *"
+            placeholder="Specific Plant"
+            enabled={!!plantType}
+            searchable
+          />
 
           {formMode === "advanced" &&
             (varietySuggestions.length > 0 ? (
               <>
-                <Text style={styles.label}>Variety</Text>
-                <View style={styles.pickerContainer}>
-                  <Picker
-                    {...androidPickerProps}
-                    selectedValue={customVarietyMode ? "__custom__" : variety}
-                    onValueChange={(value) => {
-                      if (value === "__custom__") {
-                        setCustomVarietyMode(true);
-                        setVariety("");
-                        return;
-                      }
-                      setCustomVarietyMode(false);
-                      setVariety(value);
-                    }}
-                    style={styles.picker}
-                    itemStyle={styles.pickerItem}
-                    enabled={varietySuggestions.length > 0}
-                  >
-                    <Picker.Item
-                      label="Select variety (optional)"
-                      value=""
-                      color="#999"
-                    />
-                    {varietySuggestions.map((suggestion) => (
-                      <Picker.Item
-                        key={suggestion}
-                        label={suggestion}
-                        value={suggestion}
-                      />
-                    ))}
-                    <Picker.Item
-                      label="Other (enter manually)"
-                      value="__custom__"
-                    />
-                  </Picker>
-                </View>
+                <ThemedDropdown
+                  items={[
+                    { label: "Select variety (optional)", value: "" },
+                    ...varietySuggestions.map((s) => ({ label: s, value: s })),
+                    { label: "Other (enter manually)", value: "__custom__" },
+                  ]}
+                  selectedValue={customVarietyMode ? "__custom__" : variety}
+                  onValueChange={(value) => {
+                    if (value === "__custom__") {
+                      setCustomVarietyMode(true);
+                      setVariety("");
+                      return;
+                    }
+                    setCustomVarietyMode(false);
+                    setVariety(value);
+                  }}
+                  label="Variety"
+                  placeholder="Variety"
+                  enabled={varietySuggestions.length > 0}
+                  searchable
+                />
                 {customVarietyMode && (
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter custom variety"
+                  <FloatingLabelInput
+                    label="Enter custom variety"
                     value={variety}
                     onChangeText={(text) =>
                       setVariety(sanitizeAlphaNumericSpaces(text))
                     }
-                    placeholderTextColor={theme.inputPlaceholder}
                   />
                 )}
               </>
             ) : (
-              <TextInput
-                style={styles.input}
-                placeholder="Variety (e.g., Alphonso, Dwarf)"
+              <FloatingLabelInput
+                label="Variety (e.g., Alphonso, Dwarf)"
                 value={variety}
                 onChangeText={(text) =>
                   setVariety(sanitizeAlphaNumericSpaces(text))
                 }
-                placeholderTextColor={theme.inputPlaceholder}
               />
             ))}
 
-          <Text style={styles.label}>Display Name</Text>
-          <View style={styles.nicknameInputWrapper}>
-            <TextInput
-              style={styles.nicknameInput}
-              placeholder={
-                generatedPlantName || "Auto-generated from plant type"
-              }
-              value={name}
-              onChangeText={(text) => setName(sanitizeAlphaNumericSpaces(text))}
-              placeholderTextColor={theme.inputPlaceholder}
-            />
-            {name.trim().length > 0 && (
-              <TouchableOpacity
-                onPress={() => setName("")}
-                style={styles.nicknameClearButton}
-                accessibilityLabel="Reset to auto-generated name"
-              >
-                <Ionicons
-                  name="close-circle"
-                  size={20}
-                  color={theme.textSecondary}
-                />
-              </TouchableOpacity>
-            )}
+          <View style={styles.displayNameCard}>
+            <View style={styles.displayNameHeader}>
+              <View style={styles.displayNameLabelRow}>
+                <Ionicons name="pricetag-outline" size={16} color={theme.textTertiary} />
+                <Text style={styles.displayNameLabel}>Display Name</Text>
+              </View>
+              {!name.trim() && (
+                <View style={styles.autoGenBadge}>
+                  <Ionicons name="sparkles" size={12} color={theme.primary} />
+                  <Text style={styles.autoGenBadgeText}>Auto</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.nicknameInputWrapper}>
+              <TextInput
+                style={styles.nicknameInput}
+                placeholder={
+                  generatedPlantName || "Auto-generated from plant type"
+                }
+                value={name}
+                onChangeText={(text) => setName(sanitizeAlphaNumericSpaces(text))}
+                placeholderTextColor={theme.inputPlaceholder}
+              />
+              {name.trim().length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setName("")}
+                  style={styles.nicknameClearButton}
+                  accessibilityLabel="Reset to auto-generated name"
+                >
+                  <Ionicons
+                    name="close-circle"
+                    size={20}
+                    color={theme.textSecondary}
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+            <Text style={styles.displayNameHelper}>
+              {name.trim()
+                ? `Auto-generated: "${generatedPlantName || "pending selection"}"`
+                : "Auto-generated from plant type and location. Tap to customise."}
+            </Text>
           </View>
-          <Text style={styles.helperText}>
-            {name.trim()
-              ? `Auto-generated: "${generatedPlantName || "pending selection"}"`
-              : "Auto-generated from plant type and location. Tap to customise."}
-          </Text>
 
           {formMode === "advanced" && (
             <>
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => setShowPlantingDatePicker(true)}
-              >
-                <Text
-                  style={
-                    plantingDate ? styles.dateText : styles.datePlaceholder
-                  }
+              <View style={styles.fieldGroupDivider} />
+              <View style={styles.dateCard}>
+                <TouchableOpacity
+                  style={styles.dateCardTouchable}
+                  onPress={() => setShowPlantingDatePicker(true)}
+                  activeOpacity={0.7}
                 >
-                  {plantingDate || "Planting Date (tap to select)"}
-                </Text>
-                <Ionicons name="calendar-outline" size={20} color="#666" />
-              </TouchableOpacity>
+                  <View style={styles.dateCardIconWrap}>
+                    <Ionicons name="calendar" size={20} color={theme.primary} />
+                  </View>
+                  <View style={styles.dateCardContent}>
+                    <Text style={styles.dateCardLabel}>Planting Date</Text>
+                    <Text
+                      style={
+                        plantingDate ? styles.dateCardValue : styles.dateCardPlaceholder
+                      }
+                    >
+                      {plantingDate ? formatDateDisplay(plantingDate) : "Tap to select date"}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
+                </TouchableOpacity>
+              </View>
               {showPlantingDatePicker && (
                 <DateTimePicker
                   value={plantingDate ? new Date(plantingDate) : new Date()}
                   mode="date"
-                  display="default"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
                   onChange={(event, selectedDate) => {
-                    setShowPlantingDatePicker(false);
+                    setShowPlantingDatePicker(Platform.OS === "ios");
                     if (selectedDate) {
-                      setPlantingDate(selectedDate.toISOString().split("T")[0]);
+                      setPlantingDate(toLocalDateString(selectedDate));
                     }
                   }}
                 />
               )}
             </>
           )}
+        </CollapsibleSection>
 
-          <Text style={styles.label}>Location *</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              {...androidPickerProps}
-              selectedValue={parentLocation}
-              onValueChange={(value) => {
-                setParentLocation(value);
-                // Reset child location when parent changes
-                if (!value) setChildLocation("");
-              }}
-              style={styles.picker}
-            >
-              <Picker.Item label="Select Main Location" value="" />
-              {parentLocationOptions.map((loc) => (
-                <Picker.Item key={loc} label={loc} value={loc} />
-              ))}
-            </Picker>
-          </View>
+        <CollapsibleSection
+          title="Location & Placement"
+          icon="location"
+          fieldCount={locationFieldCount}
+          defaultExpanded={true}
+          expanded={sectionExpanded.location}
+          onExpandedChange={(expanded) =>
+            setSectionExpandedState("location", expanded)
+          }
+          hasError={showValidationErrors && validationErrors.location.length > 0}
+        >
+          <Text style={styles.fieldGroupLabel}>Location *</Text>
+
+          <ThemedDropdown
+            items={[
+              { label: "Select Main Location", value: "" },
+              ...parentLocationOptions.map((loc) => ({ label: loc, value: loc })),
+            ]}
+            selectedValue={parentLocation}
+            onValueChange={(value) => {
+              setParentLocation(value);
+              if (!value) setChildLocation("");
+            }}
+            placeholder="Location"
+          />
 
           {parentLocation !== "" && (
             <>
-              <Text style={styles.label}>Direction / Section *</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  {...androidPickerProps}
-                  selectedValue={childLocation}
-                  onValueChange={setChildLocation}
-                  style={styles.picker}
-                >
-                  <Picker.Item label="Select Direction" value="" />
-                  {childLocationOptions.map((loc) => (
-                    <Picker.Item key={loc} label={loc} value={loc} />
-                  ))}
-                </Picker>
+              <Text style={styles.fieldGroupLabel}>Direction / Section *</Text>
+              <View style={styles.directionChipsContainer}>
+                {childLocationOptions.map((loc) => (
+                  <TouchableOpacity
+                    key={loc}
+                    style={[
+                      styles.directionChip,
+                      childLocation === loc && styles.directionChipActive,
+                    ]}
+                    onPress={() => setChildLocation(loc)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="compass-outline"
+                      size={14}
+                      color={
+                        childLocation === loc
+                          ? theme.primary
+                          : theme.textTertiary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.directionChipText,
+                        childLocation === loc &&
+                          styles.directionChipTextActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {loc}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </>
           )}
@@ -1390,98 +1445,16 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
           {formMode === "advanced" && (
             <>
-              <Text style={styles.label}>Landmarks</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Nearby landmark or reference point"
+              <FloatingLabelInput
+                label="Nearby landmark or reference point"
                 value={landmarks}
                 onChangeText={(text) =>
                   setLandmarks(sanitizeLandmarkText(text))
                 }
-                placeholderTextColor={theme.inputPlaceholder}
               />
-            </>
-          )}
-        </CollapsibleSection>
 
-        <CollapsibleSection
-          title="Care & Growing Conditions"
-          icon="leaf"
-          fieldCount={formMode === "quick" ? 2 : 14}
-          defaultExpanded={false}
-          expanded={sectionExpanded.care}
-          onExpandedChange={(expanded) =>
-            setSectionExpandedState("care", expanded)
-          }
-          hasError={showValidationErrors && validationErrors.care.length > 0}
-        >
-          {!plantId && (
-            <>
-              <Text style={styles.sectionHeader}>Smart Care Defaults</Text>
-              <TouchableOpacity
-                style={[
-                  styles.smartDefaultsToggle,
-                  autoApplyCareDefaults && styles.smartDefaultsToggleActive,
-                ]}
-                onPress={() => setAutoApplyCareDefaults(!autoApplyCareDefaults)}
-                activeOpacity={0.85}
-                accessibilityRole="switch"
-                accessibilityState={{ checked: autoApplyCareDefaults }}
-              >
-                <View style={styles.smartDefaultsLeft}>
-                  <View
-                    style={[
-                      styles.smartDefaultsIconWrap,
-                      autoApplyCareDefaults &&
-                        styles.smartDefaultsIconWrapActive,
-                    ]}
-                  >
-                    <Ionicons
-                      name={autoApplyCareDefaults ? "sparkles" : "leaf-outline"}
-                      size={18}
-                      color={
-                        autoApplyCareDefaults
-                          ? theme.primary
-                          : theme.textSecondary
-                      }
-                    />
-                  </View>
-                  <Text
-                    style={[
-                      styles.smartDefaultsLabel,
-                      isCompactScreen && styles.smartDefaultsLabelCompact,
-                      autoApplyCareDefaults && styles.smartDefaultsLabelActive,
-                    ]}
-                    numberOfLines={2}
-                  >
-                    Apply smart care defaults
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.smartDefaultsSwitchTrack,
-                    autoApplyCareDefaults &&
-                      styles.smartDefaultsSwitchTrackActive,
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.smartDefaultsSwitchThumb,
-                      autoApplyCareDefaults &&
-                        styles.smartDefaultsSwitchThumbActive,
-                    ]}
-                  />
-                </View>
-              </TouchableOpacity>
-              <Text style={styles.helperText}>
-                Auto-fills watering, fertilising, pruning, and sunlight
-                settings.
-              </Text>
-            </>
-          )}
-          {formMode === "advanced" && (
-            <>
-              <Text style={styles.sectionHeader}>🪴 Growing Space</Text>
+              <View style={styles.fieldGroupDivider} />
+              <Text style={styles.fieldGroupLabel}>🪴 Growing Space</Text>
 
               <View
                 style={[
@@ -1564,151 +1537,258 @@ export default function PlantFormScreen({ route, navigation }: any) {
               </View>
 
               {spaceType === "pot" && (
-                <TextInput
-                  style={styles.input}
-                  placeholder="Pot Size in inches (e.g., 12)"
+                <FloatingLabelInput
+                  label="Pot Size in inches (e.g., 12)"
                   value={potSize}
                   onChangeText={(text) => setPotSize(sanitizeNumberText(text))}
                   keyboardType="numeric"
-                  placeholderTextColor={theme.inputPlaceholder}
                 />
               )}
               {spaceType === "bed" && (
-                <TextInput
-                  style={styles.input}
-                  placeholder="Bed Name (e.g., Veggie Bed 1)"
+                <FloatingLabelInput
+                  label="Bed Name (e.g., Veggie Bed 1)"
                   value={bedName}
                   onChangeText={(text) =>
                     setBedName(sanitizeAlphaNumericSpaces(text))
                   }
-                  placeholderTextColor={theme.inputPlaceholder}
                 />
               )}
+            </>
+          )}
+        </CollapsibleSection>
 
-              <Text style={styles.sectionHeader}>☀️ Environmental Needs</Text>
-
-              <Text style={styles.label}>Sunlight Level *</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  {...androidPickerProps}
-                  selectedValue={sunlight}
-                  onValueChange={setSunlight}
-                  style={styles.picker}
-                  itemStyle={styles.pickerItem}
+        <CollapsibleSection
+          title="Care & Schedule"
+          icon="leaf"
+          fieldCount={formMode === "quick" ? 2 : 9}
+          defaultExpanded={false}
+          expanded={sectionExpanded.care}
+          onExpandedChange={(expanded) =>
+            setSectionExpandedState("care", expanded)
+          }
+          hasError={showValidationErrors && validationErrors.care.length > 0}
+        >
+          {!plantId && (
+            <>
+              <TouchableOpacity
+                style={[
+                  styles.smartDefaultsToggle,
+                  autoApplyCareDefaults && styles.smartDefaultsToggleActive,
+                ]}
+                onPress={() => setAutoApplyCareDefaults(!autoApplyCareDefaults)}
+                activeOpacity={0.85}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: autoApplyCareDefaults }}
+              >
+                <View style={styles.smartDefaultsLeft}>
+                  <View
+                    style={[
+                      styles.smartDefaultsIconWrap,
+                      autoApplyCareDefaults &&
+                        styles.smartDefaultsIconWrapActive,
+                    ]}
+                  >
+                    <Ionicons
+                      name={autoApplyCareDefaults ? "sparkles" : "leaf-outline"}
+                      size={18}
+                      color={
+                        autoApplyCareDefaults
+                          ? theme.primary
+                          : theme.textSecondary
+                      }
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.smartDefaultsLabel,
+                      isCompactScreen && styles.smartDefaultsLabelCompact,
+                      autoApplyCareDefaults && styles.smartDefaultsLabelActive,
+                    ]}
+                    numberOfLines={2}
+                  >
+                    Apply smart care 
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.smartDefaultsSwitchTrack,
+                    autoApplyCareDefaults &&
+                      styles.smartDefaultsSwitchTrackActive,
+                  ]}
                 >
-                  <Picker.Item
-                    label="☀️ Full Sun (6+ hours)"
-                    value="full_sun"
+                  <View
+                    style={[
+                      styles.smartDefaultsSwitchThumb,
+                      autoApplyCareDefaults &&
+                        styles.smartDefaultsSwitchThumbActive,
+                    ]}
                   />
-                  <Picker.Item
-                    label="⛅ Partial Sun (3-6 hours)"
-                    value="partial_sun"
-                  />
-                  <Picker.Item label="🌤️ Shade (< 3 hours)" value="shade" />
-                </Picker>
+                </View>
+              </TouchableOpacity>
+              <Text style={styles.helperText}>
+                Auto-fills watering, fertilising, pruning, and sunlight
+                settings.
+              </Text>
+            </>
+          )}
+          {formMode === "advanced" && (
+            <>
+              <Text style={styles.fieldGroupLabel}>☀️ Sunlight</Text>
+              <View style={styles.directionChipsContainer}>
+                {[
+                  { label: "☀️ Full Sun", value: "full_sun" },
+                  { label: "⛅ Partial", value: "partial_sun" },
+                  { label: "🌤️ Shade", value: "shade" },
+                ].map((opt) => (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[
+                      styles.directionChip,
+                      sunlight === opt.value && styles.directionChipActive,
+                    ]}
+                    onPress={() => setSunlight(opt.value as SunlightLevel)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.directionChipText,
+                        sunlight === opt.value && styles.directionChipTextActive,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
 
-              <Text style={styles.label}>Soil Type *</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  {...androidPickerProps}
-                  selectedValue={soilType}
-                  onValueChange={setSoilType}
-                  style={styles.picker}
-                  itemStyle={styles.pickerItem}
-                >
-                  <Picker.Item label="Garden Soil" value="garden_soil" />
-                  <Picker.Item label="Potting Mix" value="potting_mix" />
-                  <Picker.Item label="Coco Peat Mix" value="coco_peat" />
-                  <Picker.Item
-                    label="Red Laterite (Seivaal)"
-                    value="red_laterite"
-                  />
-                  <Picker.Item
-                    label="Coastal Sandy Soil"
-                    value="coastal_sandy"
-                  />
-                  <Picker.Item label="Black Cotton Soil" value="black_cotton" />
-                  <Picker.Item label="Alluvial Soil" value="alluvial" />
-                  <Picker.Item label="Custom Mix" value="custom" />
-                </Picker>
-              </View>
+              <Text style={styles.fieldGroupLabel}>🟤 Soil Type</Text>
+              <ThemedDropdown
+                items={[
+                  { label: "Garden Soil", value: "garden_soil" },
+                  { label: "Potting Mix", value: "potting_mix" },
+                  { label: "Coco Peat Mix", value: "coco_peat" },
+                  { label: "Red Laterite (Seivaal)", value: "red_laterite" },
+                  { label: "Coastal Sandy Soil", value: "coastal_sandy" },
+                  { label: "Black Cotton Soil", value: "black_cotton" },
+                  { label: "Alluvial Soil", value: "alluvial" },
+                  { label: "Custom Mix", value: "custom" },
+                ]}
+                selectedValue={soilType}
+                onValueChange={setSoilType}
+                placeholder="Select soil type"
+              />
 
-              <Text style={styles.label}>Water Requirement *</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  {...androidPickerProps}
-                  selectedValue={waterRequirement}
-                  onValueChange={setWaterRequirement}
-                  style={styles.picker}
-                  itemStyle={styles.pickerItem}
-                >
-                  <Picker.Item label="💧 Low (Drought tolerant)" value="low" />
-                  <Picker.Item
-                    label="💧💧 Medium (Regular watering)"
-                    value="medium"
-                  />
-                  <Picker.Item
-                    label="💧💧💧 High (Frequent watering)"
-                    value="high"
-                  />
-                </Picker>
-              </View>
+              <Text style={styles.fieldGroupLabel}>💧 Water Needs</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.categoryChipsScroll}
+                contentContainerStyle={styles.categoryChipsContent}
+              >
+                {([
+                  { label: "Low", value: "low", drops: 1 },
+                  { label: "Medium", value: "medium", drops: 2 },
+                  { label: "High", value: "high", drops: 3 },
+                ] as const).map((opt) => {
+                  const isActive = waterRequirement === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      style={[
+                        styles.categoryChip,
+                        { flexDirection: "row", alignItems: "center", gap: 4 },
+                        isActive && styles.categoryChipActive,
+                      ]}
+                      onPress={() => setWaterRequirement(opt.value as WaterRequirement)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={{ flexDirection: "row", gap: 1 }}>
+                        {Array.from({ length: opt.drops }).map((_, i) => (
+                          <Ionicons
+                            key={i}
+                            name="water"
+                            size={12}
+                            color={isActive ? theme.primary : theme.textTertiary}
+                          />
+                        ))}
+                      </View>
+                      <Text
+                        style={[
+                          styles.categoryChipText,
+                          isActive && styles.categoryChipTextActive,
+                        ]}
+                      >
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </>
           )}
 
-          <Text style={styles.sectionHeader}>💧 Watering & Feeding</Text>
-          <Text style={styles.label}>Watering Frequency (days)</Text>
+          <View style={styles.fieldGroupDivider} />
+          <Text style={styles.fieldGroupLabel}>📅 Watering & Feeding Schedule</Text>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Watering Frequency (days) *"
-            value={wateringFrequency}
-            onChangeText={(text) =>
-              setWateringFrequency(sanitizeNumberText(text))
-            }
-            keyboardType="numeric"
-            placeholderTextColor={theme.inputPlaceholder}
-          />
-          <Text style={styles.label}>Fertilising Frequency (days)</Text>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Fertilising Frequency (days) *"
-            value={fertilisingFrequency}
-            onChangeText={(text) =>
-              setFertilisingFrequency(sanitizeNumberText(text))
-            }
-            keyboardType="numeric"
-            placeholderTextColor={theme.inputPlaceholder}
-          />
+          <View style={styles.frequencyRow}>
+            <View style={styles.frequencyCard}>
+              <View style={styles.frequencyIconWrap}>
+                <Ionicons name="water" size={18} color={theme.primary} />
+              </View>
+              <Text style={styles.frequencyCardLabel}>Water</Text>
+              <View style={styles.frequencyInputWrap}>
+                <TextInput
+                  style={styles.frequencyInput}
+                  value={wateringFrequency}
+                  onChangeText={(text) => setWateringFrequency(sanitizeNumberText(text))}
+                  keyboardType="numeric"
+                  placeholder="—"
+                  placeholderTextColor={theme.inputPlaceholder}
+                  maxLength={3}
+                />
+              </View>
+              <Text style={styles.frequencyUnit}>days</Text>
+            </View>
+            <View style={styles.frequencyCard}>
+              <View style={[styles.frequencyIconWrap, { backgroundColor: theme.accentLight }]}>
+                <Ionicons name="nutrition" size={18} color={theme.accent} />
+              </View>
+              <Text style={styles.frequencyCardLabel}>Feed</Text>
+              <View style={styles.frequencyInputWrap}>
+                <TextInput
+                  style={styles.frequencyInput}
+                  value={fertilisingFrequency}
+                  onChangeText={(text) => setFertilisingFrequency(sanitizeNumberText(text))}
+                  keyboardType="numeric"
+                  placeholder="—"
+                  placeholderTextColor={theme.inputPlaceholder}
+                  maxLength={3}
+                />
+              </View>
+              <Text style={styles.frequencyUnit}>days</Text>
+            </View>
+          </View>
 
           {formMode === "advanced" && (
             <>
-              <Text style={styles.label}>Preferred Organic Fertiliser</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  {...androidPickerProps}
-                  selectedValue={preferredFertiliser}
-                  onValueChange={setPreferredFertiliser}
-                  style={styles.picker}
-                  itemStyle={styles.pickerItem}
-                >
-                  <Picker.Item label="Compost" value="compost" />
-                  <Picker.Item label="Vermicompost" value="vermicompost" />
-                  <Picker.Item
-                    label="Cow Dung Slurry"
-                    value="cow_dung_slurry"
-                  />
-                  <Picker.Item label="Neem Cake" value="neem_cake" />
-                  <Picker.Item label="Panchagavya" value="panchagavya" />
-                  <Picker.Item label="Jeevamrutham" value="jeevamrutham" />
-                  <Picker.Item label="Groundnut Cake" value="groundnut_cake" />
-                  <Picker.Item label="Fish Emulsion" value="fish_emulsion" />
-                  <Picker.Item label="Seaweed Extract" value="seaweed" />
-                  <Picker.Item label="Other" value="other" />
-                </Picker>
-              </View>
+              <ThemedDropdown
+                items={[
+                  { label: "Compost", value: "compost" },
+                  { label: "Vermicompost", value: "vermicompost" },
+                  { label: "Cow Dung Slurry", value: "cow_dung_slurry" },
+                  { label: "Neem Cake", value: "neem_cake" },
+                  { label: "Panchagavya", value: "panchagavya" },
+                  { label: "Jeevamrutham", value: "jeevamrutham" },
+                  { label: "Groundnut Cake", value: "groundnut_cake" },
+                  { label: "Fish Emulsion", value: "fish_emulsion" },
+                  { label: "Seaweed Extract", value: "seaweed" },
+                  { label: "Other", value: "other" },
+                ]}
+                selectedValue={preferredFertiliser}
+                onValueChange={setPreferredFertiliser}
+                label="Preferred Organic Fertiliser"
+                placeholder="Preferred Fertiliser"
+              />
 
               <TouchableOpacity
                 style={[
@@ -1728,7 +1808,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
                     ]}
                   >
                     <Ionicons
-                      name={mulchingUsed ? "leaf" : "leaf-outline"}
+                      name={mulchingUsed ? "layers" : "layers-outline"}
                       size={18}
                       color={mulchingUsed ? theme.primary : theme.textSecondary}
                     />
@@ -1757,71 +1837,170 @@ export default function PlantFormScreen({ route, navigation }: any) {
                 </View>
               </TouchableOpacity>
 
-              <Text style={styles.sectionHeader}>🌿 Plant Status & Growth</Text>
+              <View style={styles.fieldGroupDivider} />
+              <Text style={styles.fieldGroupLabel}>✂️ Pruning</Text>
 
-              <Text style={styles.label}>Plant Health Status</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  {...androidPickerProps}
-                  selectedValue={healthStatus}
-                  onValueChange={setHealthStatus}
-                  style={styles.picker}
-                  itemStyle={styles.pickerItem}
-                >
-                  <Picker.Item label="✅ Healthy" value="healthy" />
-                  <Picker.Item label="⚠️ Stressed" value="stressed" />
-                  <Picker.Item label="🔄 Recovering" value="recovering" />
-                  <Picker.Item label="❌ Sick" value="sick" />
-                </Picker>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                <Text style={[styles.frequencyCardLabel, { marginBottom: 0 }]}>Every</Text>
+                <View style={[styles.frequencyInputWrap, { width: 70, marginBottom: 0 }]}>
+                  <TextInput
+                    style={[styles.frequencyInput, { fontSize: 18 }]}
+                    value={pruningFrequency}
+                    onChangeText={(text) => setPruningFrequency(sanitizeNumberText(text))}
+                    keyboardType="numeric"
+                    placeholder="—"
+                    placeholderTextColor={theme.inputPlaceholder}
+                    maxLength={3}
+                  />
+                </View>
+                <Text style={[styles.frequencyCardLabel, { marginBottom: 0 }]}>days</Text>
               </View>
 
-              <Text style={styles.label}>Growth Stage</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  {...androidPickerProps}
-                  selectedValue={growthStage}
-                  onValueChange={setGrowthStage}
-                  style={styles.picker}
-                  itemStyle={styles.pickerItem}
-                >
-                  <Picker.Item label="🌱 Seedling" value="seedling" />
-                  <Picker.Item label="🌿 Vegetative" value="vegetative" />
-                  <Picker.Item label="🌸 Flowering" value="flowering" />
-                  <Picker.Item label="🍎 Fruiting" value="fruiting" />
-                  <Picker.Item label="🌳 Mature" value="mature" />
-                  <Picker.Item label="📉 Declining" value="declining" />
-                </Picker>
-              </View>
-
-              <Text style={styles.sectionHeader}>✂️ Pruning </Text>
-
-              <Text style={styles.label}>Pruning Frequency (days)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., 60"
-                value={pruningFrequency}
-                onChangeText={(text) =>
-                  setPruningFrequency(sanitizeNumberText(text))
-                }
-                keyboardType="numeric"
-                placeholderTextColor="#999"
-              />
-
-              <Text style={styles.label}>Pruning Notes</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Add notes about pruning techniques, timing, or observations"
-                value={pruningNotes}
-                onChangeText={(text) =>
-                  setPruningNotes(sanitizeAlphaNumericSpaces(text))
-                }
-                multiline
-                numberOfLines={2}
-                placeholderTextColor="#999"
-              />
+              {(() => {
+                const userOverride = plantType && plantVariety
+                  ? plantCareProfiles[plantType]?.[plantVariety]
+                  : undefined;
+                const info = getPruningTechniques(plantType, plantVariety, userOverride);
+                const hasTips = info.tips.length > 0 || info.shapePruning || info.flowerPruning;
+                return hasTips ? (
+                  <View style={{
+                    backgroundColor: theme.backgroundSecondary,
+                    borderRadius: 10,
+                    padding: 12,
+                    borderWidth: 1,
+                    borderColor: theme.borderLight,
+                    marginBottom: 8,
+                  }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                      <Ionicons name="bulb-outline" size={16} color={theme.accent} />
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: theme.textSecondary, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                        Pruning Tips{plantVariety ? ` — ${plantVariety}` : ""}
+                      </Text>
+                    </View>
+                    {info.tips.map((tip, i) => (
+                      <View key={i} style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, marginBottom: 4 }}>
+                        <Text style={{ color: theme.textTertiary, fontSize: 13, lineHeight: 18 }}>{"\u2022"}</Text>
+                        <Text style={{ color: theme.text, fontSize: 13, lineHeight: 18, flex: 1 }}>{tip}</Text>
+                      </View>
+                    ))}
+                    {info.shapePruning && (
+                      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: info.tips.length > 0 ? 6 : 0, marginBottom: 4 }}>
+                        <Text style={{ fontSize: 13, lineHeight: 18 }}>{"\u2702\uFE0F"}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: theme.text, fontSize: 13, lineHeight: 18, fontWeight: "600" }}>
+                            Shape pruning
+                            <Text style={{ fontWeight: "400" }}> — {info.shapePruning.tip}</Text>
+                          </Text>
+                          <Text style={{ color: theme.primary, fontSize: 12, fontWeight: "600", marginTop: 2 }}>
+                            Best: {info.shapePruning.months}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                    {info.flowerPruning && (
+                      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: 4 }}>
+                        <Text style={{ fontSize: 13, lineHeight: 18 }}>{"\uD83C\uDF38"}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: theme.text, fontSize: 13, lineHeight: 18, fontWeight: "600" }}>
+                            Flower pruning
+                            <Text style={{ fontWeight: "400" }}> — {info.flowerPruning.tip}</Text>
+                          </Text>
+                          <Text style={{ color: theme.primary, fontSize: 12, fontWeight: "600", marginTop: 2 }}>
+                            Best: {info.flowerPruning.months}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                ) : null;
+              })()}
             </>
           )}
         </CollapsibleSection>
+
+        {formMode === "advanced" && (
+          <CollapsibleSection
+            title="Plant Health"
+            icon="fitness"
+            fieldCount={2}
+            defaultExpanded={false}
+            expanded={sectionExpanded.health}
+            onExpandedChange={(expanded) =>
+              setSectionExpandedState("health", expanded)
+            }
+            hasError={false}
+          >
+            <Text style={styles.fieldGroupLabel}>🌿 Health Status</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.categoryChipsScroll}
+              contentContainerStyle={styles.categoryChipsContent}
+            >
+              {[
+                { label: "✅ Healthy", value: "healthy" },
+                { label: "⚠️ Stressed", value: "stressed" },
+                { label: "🔄 Recovering", value: "recovering" },
+                { label: "❌ Sick", value: "sick" },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[
+                    styles.categoryChip,
+                    healthStatus === opt.value && styles.categoryChipActive,
+                  ]}
+                  onPress={() => setHealthStatus(opt.value as HealthStatus)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.categoryChipText,
+                      healthStatus === opt.value && styles.categoryChipTextActive,
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.fieldGroupLabel}>🌱 Growth Stage</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.categoryChipsScroll}
+              contentContainerStyle={styles.categoryChipsContent}
+            >
+              {[
+                { label: "🌱 Seedling", value: "seedling" },
+                { label: "🌿 Vegetative", value: "vegetative" },
+                { label: "🌸 Flowering", value: "flowering" },
+                { label: "🍎 Fruiting", value: "fruiting" },
+                { label: "🌳 Mature", value: "mature" },
+                { label: "📉 Declining", value: "declining" },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[
+                    styles.categoryChip,
+                    growthStage === opt.value && styles.categoryChipActive,
+                  ]}
+                  onPress={() => setGrowthStage(opt.value as GrowthStage)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.categoryChipText,
+                      growthStage === opt.value && styles.categoryChipTextActive,
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </CollapsibleSection>
+        )}
 
         {/* Harvest Information */}
         {formMode === "advanced" && (
@@ -1838,82 +2017,109 @@ export default function PlantFormScreen({ route, navigation }: any) {
               showValidationErrors && validationErrors.harvest.length > 0
             }
           >
-            <Text style={styles.label}>Harvest Season</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                {...androidPickerProps}
-                selectedValue={harvestSeason}
-                onValueChange={setHarvestSeason}
-                style={styles.picker}
-                itemStyle={styles.pickerItem}
-              >
-                <Picker.Item label="Select season" value="" color="#999" />
-                {harvestSeasonOptions.map((season) => (
-                  <Picker.Item key={season} label={season} value={season} />
-                ))}
-              </Picker>
+            <Text style={styles.fieldGroupLabel}>Harvest Season</Text>
+            <View style={styles.directionChipsContainer}>
+              {harvestSeasonOptions.map((s) => (
+                <TouchableOpacity
+                  key={s}
+                  style={[
+                    styles.directionChip,
+                    harvestSeason === s && styles.directionChipActive,
+                  ]}
+                  onPress={() => setHarvestSeason(harvestSeason === s ? "" : s)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.directionChipText,
+                      harvestSeason === s && styles.directionChipTextActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {s}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
             {plantType === "fruit_tree" && (
               <>
-                <TouchableOpacity
-                  style={styles.dateButton}
-                  onPress={() => setShowStartDatePicker(true)}
-                >
-                  <Text
-                    style={
-                      harvestStartDate
-                        ? styles.dateText
-                        : styles.datePlaceholder
-                    }
+                <View style={styles.fieldGroupDivider} />
+                <Text style={styles.fieldGroupLabel}>Harvest Date Range</Text>
+                <View style={styles.dateCard}>
+                  <TouchableOpacity
+                    style={styles.dateCardTouchable}
+                    onPress={() => setShowStartDatePicker(true)}
+                    activeOpacity={0.7}
                   >
-                    {harvestStartDate || "Harvest Start Date (tap to select)"}
-                  </Text>
-                  <Ionicons name="calendar-outline" size={20} color="#666" />
-                </TouchableOpacity>
+                    <View style={styles.dateCardIconWrap}>
+                      <Ionicons name="play" size={18} color={theme.primary} />
+                    </View>
+                    <View style={styles.dateCardContent}>
+                      <Text style={styles.dateCardLabel}>Start Date</Text>
+                      <Text
+                        style={
+                          harvestStartDate ? styles.dateCardValue : styles.dateCardPlaceholder
+                        }
+                      >
+                        {harvestStartDate ? formatDateDisplay(harvestStartDate) : "Tap to select"}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
+                  </TouchableOpacity>
+                </View>
                 {showStartDatePicker && (
                   <DateTimePicker
                     value={
                       harvestStartDate ? new Date(harvestStartDate) : new Date()
                     }
                     mode="date"
-                    display="default"
+                    display={Platform.OS === "ios" ? "spinner" : "default"}
                     onChange={(event, selectedDate) => {
-                      setShowStartDatePicker(false);
+                      setShowStartDatePicker(Platform.OS === "ios");
                       if (selectedDate) {
                         setHarvestStartDate(
-                          selectedDate.toISOString().split("T")[0],
+                          toLocalDateString(selectedDate),
                         );
                       }
                     }}
                   />
                 )}
 
-                <TouchableOpacity
-                  style={styles.dateButton}
-                  onPress={() => setShowEndDatePicker(true)}
-                >
-                  <Text
-                    style={
-                      harvestEndDate ? styles.dateText : styles.datePlaceholder
-                    }
+                <View style={styles.dateCard}>
+                  <TouchableOpacity
+                    style={styles.dateCardTouchable}
+                    onPress={() => setShowEndDatePicker(true)}
+                    activeOpacity={0.7}
                   >
-                    {harvestEndDate || "Harvest End Date (tap to select)"}
-                  </Text>
-                  <Ionicons name="calendar-outline" size={20} color="#666" />
-                </TouchableOpacity>
+                    <View style={[styles.dateCardIconWrap, { backgroundColor: theme.accentLight }]}>
+                      <Ionicons name="stop" size={18} color={theme.accent} />
+                    </View>
+                    <View style={styles.dateCardContent}>
+                      <Text style={styles.dateCardLabel}>End Date</Text>
+                      <Text
+                        style={
+                          harvestEndDate ? styles.dateCardValue : styles.dateCardPlaceholder
+                        }
+                      >
+                        {harvestEndDate ? formatDateDisplay(harvestEndDate) : "Tap to select"}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
+                  </TouchableOpacity>
+                </View>
                 {showEndDatePicker && (
                   <DateTimePicker
                     value={
                       harvestEndDate ? new Date(harvestEndDate) : new Date()
                     }
                     mode="date"
-                    display="default"
+                    display={Platform.OS === "ios" ? "spinner" : "default"}
                     onChange={(event, selectedDate) => {
-                      setShowEndDatePicker(false);
+                      setShowEndDatePicker(Platform.OS === "ios");
                       if (selectedDate) {
                         setHarvestEndDate(
-                          selectedDate.toISOString().split("T")[0],
+                          toLocalDateString(selectedDate),
                         );
                       }
                     }}
@@ -2011,58 +2217,101 @@ export default function PlantFormScreen({ route, navigation }: any) {
               </View>
             )}
 
-            <Text style={styles.label}>Fronds Count</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., 32"
-              value={coconutFrondsCount}
-              onChangeText={(text) =>
-                setCoconutFrondsCount(sanitizeNumberText(text))
-              }
-              keyboardType="numeric"
-              placeholderTextColor="#999"
-            />
+            <Text style={styles.fieldGroupLabel}>Tree Metrics</Text>
+            <View style={styles.statCardsRow}>
+              <View style={styles.statCard}>
+                <View style={[styles.statCardIconWrap, { backgroundColor: theme.primaryLight }]}>
+                  <Ionicons name="leaf" size={16} color={theme.primary} />
+                </View>
+                <Text style={styles.statCardLabel}>Fronds</Text>
+                <View style={styles.statCardInputWrap}>
+                  <TextInput
+                    style={styles.statCardInput}
+                    value={coconutFrondsCount}
+                    onChangeText={(text) => setCoconutFrondsCount(sanitizeNumberText(text))}
+                    keyboardType="numeric"
+                    placeholder="—"
+                    placeholderTextColor={theme.inputPlaceholder}
+                    maxLength={3}
+                  />
+                </View>
+              </View>
+              <View style={styles.statCard}>
+                <View style={[styles.statCardIconWrap, { backgroundColor: theme.accentLight }]}>
+                  <Ionicons name="ellipse" size={16} color={theme.accent} />
+                </View>
+                <Text style={styles.statCardLabel}>Nuts/mo</Text>
+                <View style={styles.statCardInputWrap}>
+                  <TextInput
+                    style={styles.statCardInput}
+                    value={nutsPerMonth}
+                    onChangeText={(text) => setNutsPerMonth(sanitizeNumberText(text))}
+                    keyboardType="numeric"
+                    placeholder="—"
+                    placeholderTextColor={theme.inputPlaceholder}
+                    maxLength={3}
+                  />
+                </View>
+              </View>
+              <View style={styles.statCard}>
+                <View style={[styles.statCardIconWrap, { backgroundColor: theme.warningLight }]}>
+                  <Ionicons name="flower" size={16} color={theme.warning} />
+                </View>
+                <Text style={styles.statCardLabel}>Spathes</Text>
+                <View style={styles.statCardInputWrap}>
+                  <TextInput
+                    style={styles.statCardInput}
+                    value={spatheCount}
+                    onChangeText={(text) => setSpatheCount(sanitizeNumberText(text))}
+                    keyboardType="numeric"
+                    placeholder="—"
+                    placeholderTextColor={theme.inputPlaceholder}
+                    maxLength={3}
+                  />
+                </View>
+              </View>
+            </View>
             <Text style={styles.helperText}>
-              Healthy coconut tree: 30–35 living fronds. Below 20 indicates
-              stress.
+              Fronds: 30–35 is healthy. Spathes: 1–2/month for bearing trees.
             </Text>
 
-            <Text style={styles.label}>Nuts per Month (approx.)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., 8"
-              value={nutsPerMonth}
-              onChangeText={(text) => setNutsPerMonth(sanitizeNumberText(text))}
-              keyboardType="numeric"
-              placeholderTextColor="#999"
-            />
+            <View style={styles.fieldGroupDivider} />
+            <Text style={styles.fieldGroupLabel}>Harvest Tracking</Text>
 
-            <Text style={styles.label}>Last Climbing / Harvest Date</Text>
-            <TouchableOpacity
-              style={styles.dateButton}
-              onPress={() => setShowClimbingDatePicker(true)}
-            >
-              <Text
-                style={
-                  lastClimbingDate ? styles.dateText : styles.datePlaceholder
-                }
+            <View style={styles.dateCard}>
+              <TouchableOpacity
+                style={styles.dateCardTouchable}
+                onPress={() => setShowClimbingDatePicker(true)}
+                activeOpacity={0.7}
               >
-                {lastClimbingDate || "Select date (tap to choose)"}
-              </Text>
-              <Ionicons name="calendar-outline" size={20} color="#666" />
-            </TouchableOpacity>
+                <View style={styles.dateCardIconWrap}>
+                  <Ionicons name="arrow-up" size={18} color={theme.primary} />
+                </View>
+                <View style={styles.dateCardContent}>
+                  <Text style={styles.dateCardLabel}>Last Climbing / Harvest</Text>
+                  <Text
+                    style={
+                      lastClimbingDate ? styles.dateCardValue : styles.dateCardPlaceholder
+                    }
+                  >
+                    {lastClimbingDate ? formatDateDisplay(lastClimbingDate) : "Tap to select"}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
+              </TouchableOpacity>
+            </View>
             {showClimbingDatePicker && (
               <DateTimePicker
                 value={
                   lastClimbingDate ? new Date(lastClimbingDate) : new Date()
                 }
                 mode="date"
-                display="default"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
                 onChange={(_, selectedDate) => {
-                  setShowClimbingDatePicker(false);
+                  setShowClimbingDatePicker(Platform.OS === "ios");
                   if (selectedDate) {
                     setLastClimbingDate(
-                      selectedDate.toISOString().split("T")[0],
+                      toLocalDateString(selectedDate),
                     );
                   }
                 }}
@@ -2075,63 +2324,65 @@ export default function PlantFormScreen({ route, navigation }: any) {
               </Text>
             )}
 
-            <Text style={styles.label}>
-              Spathe / Inflorescence Count (per month)
-            </Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., 3"
-              value={spatheCount}
-              onChangeText={(text) => setSpatheCount(sanitizeNumberText(text))}
-              keyboardType="numeric"
-              placeholderTextColor="#999"
-            />
+            <View style={styles.fieldGroupDivider} />
+            <Text style={styles.fieldGroupLabel}>Nut Fall Monitoring</Text>
+
+            <View style={styles.frequencyRow}>
+              <View style={styles.frequencyCard}>
+                <View style={[styles.frequencyIconWrap, { backgroundColor: theme.errorLight }]}>
+                  <Ionicons name="arrow-down" size={18} color={theme.error} />
+                </View>
+                <Text style={styles.frequencyCardLabel}>Falls</Text>
+                <View style={styles.frequencyInputWrap}>
+                  <TextInput
+                    style={styles.frequencyInput}
+                    value={nutFallCount}
+                    onChangeText={(text) => setNutFallCount(sanitizeNumberText(text))}
+                    keyboardType="numeric"
+                    placeholder="—"
+                    placeholderTextColor={theme.inputPlaceholder}
+                    maxLength={3}
+                  />
+                </View>
+                <Text style={styles.frequencyUnit}>nuts</Text>
+              </View>
+            </View>
             <Text style={styles.helperText}>
-              Count of new flower stalks (spathes) emerging per month. A healthy
-              bearing tree produces 1–2 per month. Useful predictor of next
-              harvest volume.
+              High count (&gt;10) may indicate Red Palm Weevil, water stress, or boron deficiency.
             </Text>
 
-            <Text style={styles.label}>
-              Premature Nut Fall Count (last incident)
-            </Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., 12"
-              value={nutFallCount}
-              onChangeText={(text) => setNutFallCount(sanitizeNumberText(text))}
-              keyboardType="numeric"
-              placeholderTextColor="#999"
-            />
-            <Text style={styles.helperText}>
-              Nuts falling before maturity. High count (&gt;10) may indicate Red
-              Palm Weevil, water stress, or boron deficiency.
-            </Text>
-
-            <Text style={styles.label}>Last Nut Fall Incident Date</Text>
-            <TouchableOpacity
-              style={styles.dateButton}
-              onPress={() => setShowNutFallDatePicker(true)}
-            >
-              <Text
-                style={
-                  lastNutFallDate ? styles.dateText : styles.datePlaceholder
-                }
+            <View style={styles.dateCard}>
+              <TouchableOpacity
+                style={styles.dateCardTouchable}
+                onPress={() => setShowNutFallDatePicker(true)}
+                activeOpacity={0.7}
               >
-                {lastNutFallDate || "Select date (tap to choose)"}
-              </Text>
-              <Ionicons name="calendar-outline" size={20} color="#666" />
-            </TouchableOpacity>
+                <View style={[styles.dateCardIconWrap, { backgroundColor: theme.errorLight }]}>
+                  <Ionicons name="alert-circle" size={18} color={theme.error} />
+                </View>
+                <View style={styles.dateCardContent}>
+                  <Text style={styles.dateCardLabel}>Last Nut Fall Incident</Text>
+                  <Text
+                    style={
+                      lastNutFallDate ? styles.dateCardValue : styles.dateCardPlaceholder
+                    }
+                  >
+                    {lastNutFallDate ? formatDateDisplay(lastNutFallDate) : "Tap to select"}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
+              </TouchableOpacity>
+            </View>
             {showNutFallDatePicker && (
               <DateTimePicker
                 value={lastNutFallDate ? new Date(lastNutFallDate) : new Date()}
                 mode="date"
-                display="default"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
                 onChange={(_, selectedDate) => {
-                  setShowNutFallDatePicker(false);
+                  setShowNutFallDatePicker(Platform.OS === "ios");
                   if (selectedDate) {
                     setLastNutFallDate(
-                      selectedDate.toISOString().split("T")[0],
+                      toLocalDateString(selectedDate),
                     );
                   }
                 }}
@@ -2156,22 +2407,24 @@ export default function PlantFormScreen({ route, navigation }: any) {
             }
           >
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeaderText}>Records</Text>
+              <Text style={styles.fieldGroupLabel}>Records</Text>
               <TouchableOpacity
-                style={styles.addPestButton}
+                style={styles.addPestButtonPill}
                 onPress={() => {
                   setCurrentPestDisease({
                     type: "pest",
                     name: "",
-                    occurredAt: new Date().toISOString().split("T")[0],
+                    occurredAt: toLocalDateString(new Date()),
                     severity: "medium",
                     resolved: false,
                   });
                   setShowPestOccurredDatePicker(false);
                   setShowPestDiseaseModal(true);
                 }}
+                activeOpacity={0.7}
               >
-                <Ionicons name="add-circle" size={24} color="#2e7d32" />
+                <Ionicons name="add" size={16} color={theme.primary} />
+                <Text style={styles.addPestButtonText}>Add</Text>
               </TouchableOpacity>
             </View>
 
@@ -2243,22 +2496,38 @@ export default function PlantFormScreen({ route, navigation }: any) {
         )}
 
         {formMode === "advanced" && (
-          <>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Notes"
-              value={notes}
-              onChangeText={(text) =>
-                setNotes(sanitizeAlphaNumericSpaces(text))
-              }
-              multiline
-              numberOfLines={4}
-              maxLength={NOTES_MAX_LENGTH}
-              placeholderTextColor="#999"
-            />
-            <Text style={styles.noteCounter}>
-              {notes.length}/{NOTES_MAX_LENGTH}
-            </Text>
+          <CollapsibleSection
+            title="Notes & Companions"
+            icon="document-text"
+            fieldCount={1}
+            defaultExpanded={false}
+            expanded={sectionExpanded.notes}
+            onExpandedChange={(expanded) =>
+              setSectionExpandedState("notes", expanded)
+            }
+            hasError={showValidationErrors && validationErrors.notes.length > 0}
+          >
+            <View style={styles.notesCard}>
+              <View style={styles.notesCardHeader}>
+                <Ionicons name="document-text-outline" size={16} color={theme.textTertiary} />
+                <Text style={styles.fieldGroupLabel}>Notes</Text>
+              </View>
+              <TextInput
+                style={styles.notesCardInput}
+                value={notes}
+                onChangeText={(text) =>
+                  setNotes(sanitizeAlphaNumericSpaces(text))
+                }
+                multiline
+                numberOfLines={4}
+                maxLength={NOTES_MAX_LENGTH}
+                placeholder="Add any notes about this plant..."
+                placeholderTextColor={theme.inputPlaceholder}
+              />
+              <Text style={styles.noteCounter}>
+                {notes.length}/{NOTES_MAX_LENGTH}
+              </Text>
+            </View>
 
             {plantVariety &&
               getCompanionSuggestions(plantVariety).length > 0 && (
@@ -2302,8 +2571,51 @@ export default function PlantFormScreen({ route, navigation }: any) {
                 </View>
               </View>
             )}
-          </>
+          </CollapsibleSection>
         )}
+
+        {/* Discard Changes Modal */}
+        <Modal
+          visible={showDiscardModal}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => setShowDiscardModal(false)}
+        >
+          <View style={styles.discardOverlay}>
+            <View style={styles.discardCard}>
+              <View style={styles.discardIconWrap}>
+                <Ionicons name="alert-circle" size={36} color={theme.error} />
+              </View>
+              <Text style={styles.discardTitle}>Discard Changes?</Text>
+              <Text style={styles.discardMessage}>
+                You have unsaved changes. Are you sure you want to leave without saving?
+              </Text>
+              <View style={styles.discardActions}>
+                <TouchableOpacity
+                  style={styles.discardKeepButton}
+                  onPress={() => setShowDiscardModal(false)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="create-outline" size={18} color={theme.primary} />
+                  <Text style={styles.discardKeepText}>Keep Editing</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.discardButton}
+                  onPress={() => {
+                    setShowDiscardModal(false);
+                    isDiscarding.current = true;
+                    setHasUnsavedChanges(false);
+                    navigation.goBack();
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#fff" />
+                  <Text style={styles.discardButtonText}>Discard</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Pest/Disease Modal */}
         <Modal
@@ -2438,16 +2750,16 @@ export default function PlantFormScreen({ route, navigation }: any) {
                   style={styles.dateButton}
                   onPress={() => setShowPestOccurredDatePicker(true)}
                 >
+                  <Ionicons name="calendar-outline" size={20} color="#666" />
                   <Text
                     style={
                       currentPestDisease.occurredAt
-                        ? styles.dateText
+                        ? styles.dateButtonText
                         : styles.datePlaceholder
                     }
                   >
-                    {currentPestDisease.occurredAt || "Occurred Date"}
+                    {currentPestDisease.occurredAt ? formatDateDisplay(currentPestDisease.occurredAt) : "Occurred Date"}
                   </Text>
-                  <Ionicons name="calendar-outline" size={20} color="#666" />
                 </TouchableOpacity>
                 {showPestOccurredDatePicker && (
                   <DateTimePicker
@@ -2457,45 +2769,37 @@ export default function PlantFormScreen({ route, navigation }: any) {
                         : new Date()
                     }
                     mode="date"
-                    display="default"
+                    display={Platform.OS === "ios" ? "spinner" : "default"}
                     onChange={(_, selectedDate) => {
-                      setShowPestOccurredDatePicker(false);
+                      setShowPestOccurredDatePicker(Platform.OS === "ios");
                       if (selectedDate) {
                         setCurrentPestDisease({
                           ...currentPestDisease,
-                          occurredAt: selectedDate.toISOString().split("T")[0],
+                          occurredAt: toLocalDateString(selectedDate),
                         });
                       }
                     }}
                   />
                 )}
 
-                <Text style={styles.label}>Severity</Text>
-                <View style={styles.pickerContainer}>
-                  <Picker
-                    {...androidPickerProps}
-                    selectedValue={currentPestDisease.severity || "medium"}
-                    onValueChange={(value) =>
-                      setCurrentPestDisease({
-                        ...currentPestDisease,
-                        severity: value as IssueSeverity,
-                      })
-                    }
-                    style={styles.picker}
-                  >
-                    {ISSUE_SEVERITY_OPTIONS.map((option) => (
-                      <Picker.Item
-                        key={option.value}
-                        label={option.label}
-                        value={option.value}
-                      />
-                    ))}
-                  </Picker>
-                </View>
+                <ThemedDropdown
+                  items={ISSUE_SEVERITY_OPTIONS.map((option) => ({
+                    label: option.label,
+                    value: option.value,
+                  }))}
+                  selectedValue={currentPestDisease.severity || "medium"}
+                  onValueChange={(value) =>
+                    setCurrentPestDisease({
+                      ...currentPestDisease,
+                      severity: value as IssueSeverity,
+                    })
+                  }
+                  label="Severity"
+                  placeholder="Severity"
+                />
 
-                <TextInput
-                  style={styles.input}
-                  placeholder="Affected Part (Leaf/Stem/Fruit/Root)"
+                <FloatingLabelInput
+                  label="Affected Part (Leaf/Stem/Fruit/Root)"
                   value={currentPestDisease.affectedPart || ""}
                   onChangeText={(text) =>
                     setCurrentPestDisease({
@@ -2503,12 +2807,10 @@ export default function PlantFormScreen({ route, navigation }: any) {
                       affectedPart: sanitizeAlphaNumericSpaces(text),
                     })
                   }
-                  placeholderTextColor={theme.inputPlaceholder}
                 />
 
-                <TextInput
-                  style={styles.input}
-                  placeholder={`${
+                <FloatingLabelInput
+                  label={`${
                     currentPestDisease.type === "pest" ? "Pest" : "Disease"
                   } Name *`}
                   value={currentPestDisease.name}
@@ -2518,12 +2820,10 @@ export default function PlantFormScreen({ route, navigation }: any) {
                       name: sanitizeAlphaNumericSpaces(text),
                     })
                   }
-                  placeholderTextColor={theme.inputPlaceholder}
                 />
 
-                <TextInput
-                  style={styles.input}
-                  placeholder="Treatment Used"
+                <FloatingLabelInput
+                  label="Treatment Used"
                   value={currentPestDisease.treatment || ""}
                   onChangeText={(text) =>
                     setCurrentPestDisease({
@@ -2531,12 +2831,10 @@ export default function PlantFormScreen({ route, navigation }: any) {
                       treatment: sanitizeAlphaNumericSpaces(text),
                     })
                   }
-                  placeholderTextColor={theme.inputPlaceholder}
                 />
 
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  placeholder="Notes"
+                <FloatingLabelInput
+                  label="Notes"
                   value={currentPestDisease.notes || ""}
                   onChangeText={(text) =>
                     setCurrentPestDisease({
@@ -2546,7 +2844,6 @@ export default function PlantFormScreen({ route, navigation }: any) {
                   }
                   multiline
                   numberOfLines={3}
-                  placeholderTextColor={theme.inputPlaceholder}
                 />
 
                 <TouchableOpacity
@@ -2559,7 +2856,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
                       ...currentPestDisease,
                       resolved: !currentPestDisease.resolved,
                       resolvedAt: !currentPestDisease.resolved
-                        ? new Date().toISOString().split("T")[0]
+                        ? toLocalDateString(new Date())
                         : undefined,
                     })
                   }
@@ -2725,26 +3022,32 @@ const createStyles = (theme: any) =>
     },
     photoButton: {
       alignSelf: "center",
-      marginTop: 16,
-      marginBottom: 24,
+      marginTop: 8,
+      marginBottom: 20,
     },
     photo: {
-      width: 150,
-      height: 150,
-      borderRadius: 75,
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      borderWidth: 3,
+      borderColor: theme.primaryLight,
     },
     photoPlaceholder: {
-      width: 150,
-      height: 150,
-      borderRadius: 75,
+      width: 100,
+      height: 100,
+      borderRadius: 50,
       backgroundColor: theme.primaryLight,
       alignItems: "center",
       justifyContent: "center",
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderStyle: "dashed",
     },
     photoText: {
-      marginTop: 8,
-      fontSize: 14,
+      marginTop: 4,
+      fontSize: 11,
       color: theme.textTertiary,
+      fontWeight: "600",
     },
     input: {
       backgroundColor: theme.inputBackground,
@@ -2764,12 +3067,13 @@ const createStyles = (theme: any) =>
       borderWidth: 1,
       borderColor: theme.inputBorder,
       flexDirection: "row",
-      justifyContent: "space-between",
       alignItems: "center",
+      gap: 12,
     },
-    dateText: {
+    dateButtonText: {
       fontSize: 16,
       color: theme.text,
+      fontWeight: "500",
     },
     datePlaceholder: {
       fontSize: 16,
@@ -2783,8 +3087,7 @@ const createStyles = (theme: any) =>
       fontSize: 12,
       color: theme.textTertiary,
       textAlign: "right",
-      marginTop: -4,
-      marginBottom: 12,
+      marginTop: 6,
     },
     spaceTypeContainer: {
       flexDirection: "row",
@@ -2839,10 +3142,9 @@ const createStyles = (theme: any) =>
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: theme.inputBackground,
-      borderRadius: 12,
+      borderRadius: 10,
       borderWidth: 1,
       borderColor: theme.inputBorder,
-      marginBottom: 12,
     },
     nicknameInput: {
       flex: 1,
@@ -2853,26 +3155,6 @@ const createStyles = (theme: any) =>
     nicknameClearButton: {
       paddingHorizontal: 12,
       paddingVertical: 16,
-    },
-    pickerContainer: {
-      backgroundColor: theme.pickerBackground,
-      borderRadius: 12,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: theme.pickerBorder,
-      overflow: "hidden",
-      minHeight: 56,
-      justifyContent: "center",
-    },
-    picker: {
-      height: 56,
-      fontSize: 16,
-      color: theme.pickerText,
-    },
-    pickerItem: {
-      fontSize: 18,
-      height: 120,
-      color: theme.pickerText,
     },
     locationPreview: {
       flexDirection: "row",
@@ -3053,6 +3335,317 @@ const createStyles = (theme: any) =>
       marginTop: -2,
       marginBottom: 12,
       marginLeft: 4,
+    },
+    // --- Plant Category chip selector ---
+    categoryChipsScroll: {
+      marginBottom: 12,
+    },
+    categoryChipsContent: {
+      paddingRight: 8,
+      gap: 8,
+    },
+    categoryChip: {
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 20,
+      backgroundColor: theme.backgroundSecondary,
+      borderWidth: 1.5,
+      borderColor: theme.border,
+    },
+    categoryChipActive: {
+      backgroundColor: theme.primaryLight,
+      borderColor: theme.primary,
+    },
+    categoryChipText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: theme.textTertiary,
+    },
+    categoryChipTextActive: {
+      color: theme.primary,
+    },
+    // --- Field group visual divider ---
+    fieldGroupDivider: {
+      height: 1,
+      backgroundColor: theme.borderLight,
+      marginVertical: 16,
+      marginHorizontal: 4,
+    },
+    fieldGroupLabel: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.8,
+      marginBottom: 10,
+      marginTop: 2,
+    },
+    // --- Direction/Section chips ---
+    directionChipsContainer: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 12,
+    },
+    directionChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 18,
+      backgroundColor: theme.backgroundSecondary,
+      borderWidth: 1.5,
+      borderColor: theme.border,
+      gap: 5,
+    },
+    directionChipActive: {
+      backgroundColor: theme.primaryLight,
+      borderColor: theme.primary,
+    },
+    directionChipText: {
+      fontSize: 13,
+      fontWeight: "500",
+      color: theme.textTertiary,
+    },
+    directionChipTextActive: {
+      color: theme.primary,
+      fontWeight: "700",
+    },
+    // --- Display Name Card ---
+    displayNameCard: {
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 14,
+      padding: 14,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: theme.borderLight,
+    },
+    displayNameHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 8,
+    },
+    displayNameLabelRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    displayNameLabel: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    autoGenBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: theme.primaryLight,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 10,
+    },
+    autoGenBadgeText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: theme.primary,
+    },
+    displayNameHelper: {
+      fontSize: 12,
+      color: theme.textTertiary,
+      marginTop: 4,
+      marginLeft: 2,
+    },
+    // --- Date Card ---
+    dateCard: {
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 14,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: theme.borderLight,
+      overflow: "hidden",
+    },
+    dateCardTouchable: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 14,
+    },
+    dateCardIconWrap: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: theme.primaryLight,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 12,
+    },
+    dateCardContent: {
+      flex: 1,
+    },
+    dateCardLabel: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: theme.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 2,
+    },
+    dateCardValue: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: theme.text,
+    },
+    dateCardPlaceholder: {
+      fontSize: 15,
+      color: theme.inputPlaceholder,
+    },
+    // --- Frequency Row (Water/Feed/Prune inline cards) ---
+    frequencyRow: {
+      flexDirection: "row",
+      gap: 12,
+      marginBottom: 12,
+    },
+    frequencyCard: {
+      flex: 1,
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 14,
+      padding: 12,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.borderLight,
+    },
+    frequencyIconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: theme.primaryLight,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 6,
+    },
+    frequencyCardLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: theme.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 4,
+    },
+    frequencyInputWrap: {
+      backgroundColor: theme.inputBackground,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.inputBorder,
+      width: "100%" as any,
+      alignItems: "center",
+      marginBottom: 4,
+    },
+    frequencyInput: {
+      fontSize: 22,
+      fontWeight: "700",
+      color: theme.text,
+      textAlign: "center",
+      paddingVertical: 6,
+      paddingHorizontal: 8,
+      minWidth: 50,
+    },
+    frequencyUnit: {
+      fontSize: 11,
+      color: theme.textTertiary,
+      fontWeight: "600",
+    },
+    // --- Stat Cards (Coconut metrics) ---
+    statCardsRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginBottom: 8,
+    },
+    statCard: {
+      flex: 1,
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 14,
+      padding: 10,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.borderLight,
+    },
+    statCardIconWrap: {
+      width: 28,
+      height: 28,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 4,
+    },
+    statCardLabel: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: theme.textTertiary,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+      marginBottom: 4,
+    },
+    statCardInputWrap: {
+      backgroundColor: theme.inputBackground,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.inputBorder,
+      width: "100%" as any,
+      alignItems: "center",
+    },
+    statCardInput: {
+      fontSize: 20,
+      fontWeight: "700",
+      color: theme.text,
+      textAlign: "center",
+      paddingVertical: 4,
+      paddingHorizontal: 4,
+      minWidth: 40,
+    },
+    // --- Notes Card ---
+    notesCard: {
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 14,
+      padding: 14,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: theme.borderLight,
+    },
+    notesCardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 8,
+    },
+    notesCardInput: {
+      backgroundColor: theme.inputBackground,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: theme.inputBorder,
+      padding: 12,
+      fontSize: 15,
+      color: theme.inputText,
+      minHeight: 80,
+      textAlignVertical: "top",
+    },
+    // --- Add Pest Button Pill ---
+    addPestButtonPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: theme.primaryLight,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: theme.primary,
+    },
+    addPestButtonText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.primary,
     },
     infoCard: {
       backgroundColor: theme.backgroundSecondary,
@@ -3245,6 +3838,85 @@ const createStyles = (theme: any) =>
       flex: 1,
       backgroundColor: theme.overlay,
       justifyContent: "flex-end",
+    },
+    discardOverlay: {
+      flex: 1,
+      backgroundColor: theme.overlay,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 32,
+    },
+    discardCard: {
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 20,
+      padding: 28,
+      alignItems: "center",
+      width: "100%",
+      maxWidth: 340,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.15,
+      shadowRadius: 24,
+      elevation: 12,
+    },
+    discardIconWrap: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: theme.errorLight,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    discardTitle: {
+      fontSize: 19,
+      fontWeight: "700",
+      color: theme.text,
+      marginBottom: 8,
+    },
+    discardMessage: {
+      fontSize: 14,
+      color: theme.textSecondary,
+      textAlign: "center",
+      lineHeight: 20,
+      marginBottom: 24,
+    },
+    discardActions: {
+      flexDirection: "row",
+      gap: 12,
+      width: "100%",
+    },
+    discardKeepButton: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      paddingVertical: 13,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: theme.primary,
+      backgroundColor: theme.primaryLight,
+    },
+    discardKeepText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: theme.primary,
+    },
+    discardButton: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      paddingVertical: 13,
+      borderRadius: 12,
+      backgroundColor: theme.error,
+    },
+    discardButtonText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: "#fff",
     },
     modalContent: {
       backgroundColor: theme.backgroundSecondary,

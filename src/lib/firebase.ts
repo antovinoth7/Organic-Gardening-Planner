@@ -95,10 +95,13 @@ const db = initializeFirestore(app, {
 // Track last token refresh to avoid excessive refreshes
 let lastTokenRefresh = 0;
 const TOKEN_REFRESH_INTERVAL = 50 * 60 * 1000; // 50 minutes (tokens expire in 60min)
+let pendingRefresh: Promise<boolean> | null = null;
 
 /**
  * Refresh auth token to prevent expiration issues
- * Firebase tokens expire after 1 hour - refresh proactively but cached
+ * Firebase tokens expire after 1 hour - refresh proactively but cached.
+ * Concurrent calls share the same in-flight promise to avoid duplicate
+ * network round-trips (e.g. when TodayScreen fires 3 service calls in parallel).
  * @param forceRefresh - Force refresh even if recently refreshed
  * @returns true if token was refreshed successfully
  */
@@ -112,13 +115,26 @@ export const refreshAuthToken = async (forceRefresh = false): Promise<boolean> =
     if (!forceRefresh && (now - lastTokenRefresh) < TOKEN_REFRESH_INTERVAL) {
       return true; // Token is still fresh
     }
-    
-    await user.getIdToken(/* forceRefresh */ true);
-    lastTokenRefresh = now;
-    return true;
+
+    // Deduplicate concurrent refresh calls
+    if (pendingRefresh) return pendingRefresh;
+
+    pendingRefresh = (async () => {
+      try {
+        await user.getIdToken(/* forceRefresh */ true);
+        lastTokenRefresh = Date.now();
+        return true;
+      } catch (error: any) {
+        console.error('Token refresh failed:', error);
+        return false;
+      } finally {
+        pendingRefresh = null;
+      }
+    })();
+
+    return pendingRefresh;
   } catch (error: any) {
     console.error('Token refresh failed:', error);
-    // If token refresh fails, it likely means the session is invalid
     return false;
   }
 };
