@@ -19,6 +19,7 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  Pressable,
 } from "react-native";
 
 if (
@@ -62,7 +63,7 @@ export default function JournalScreen({ navigation, route }: any) {
   );
   const [dateFilter, setDateFilter] = useState<
     "all" | "week" | "month" | "year"
-  >("month");
+  >("week");
 
   // View mode state
   const [viewMode, setViewMode] = useState<"list" | "gallery">("list");
@@ -214,21 +215,24 @@ export default function JournalScreen({ navigation, route }: any) {
       filtered = filtered.filter((e) => e.entry_type === selectedType);
     }
 
-    // Plant filter
     // Date filter
     if (dateFilter !== "all") {
       const now = new Date();
-      const filterDate = new Date();
+      let filterStart: Date;
 
       if (dateFilter === "week") {
-        filterDate.setDate(now.getDate() - 7);
+        filterStart = new Date(now);
+        filterStart.setDate(now.getDate() - 7);
       } else if (dateFilter === "month") {
-        filterDate.setMonth(now.getMonth() - 1);
-      } else if (dateFilter === "year") {
-        filterDate.setFullYear(now.getFullYear() - 1);
+        filterStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else {
+        // year
+        filterStart = new Date(now.getFullYear(), 0, 1);
       }
 
-      filtered = filtered.filter((e) => new Date(e.created_at) >= filterDate);
+      filtered = filtered.filter(
+        (e) => new Date(e.created_at) >= filterStart,
+      );
     }
 
     // Sort by newest first
@@ -242,7 +246,7 @@ export default function JournalScreen({ navigation, route }: any) {
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
-    if (dateFilter !== "month") count++; // 'month' is default, so only count non-default
+    if (dateFilter !== "week") count++;
     if (selectedType) count++;
     return count;
   }, [dateFilter, selectedType]);
@@ -252,57 +256,10 @@ export default function JournalScreen({ navigation, route }: any) {
     setShowFilters((prev) => !prev);
   };
 
-  const activeFilterChips = useMemo(() => {
-    const chips: { key: string; label: string; onRemove: () => void }[] = [];
-    if (dateFilter === "week")
-      chips.push({
-        key: "date",
-        label: "📅 This Week",
-        onRemove: () => setDateFilter("month"),
-      });
-    if (dateFilter === "year")
-      chips.push({
-        key: "date",
-        label: "📅 This Year",
-        onRemove: () => setDateFilter("month"),
-      });
-    if (dateFilter === "all")
-      chips.push({
-        key: "date",
-        label: "📅 All Time",
-        onRemove: () => setDateFilter("month"),
-      });
-    if (selectedType === JournalEntryType.Harvest)
-      chips.push({
-        key: "type",
-        label: "🧺 Harvest",
-        onRemove: () => setSelectedType(null),
-      });
-    if (selectedType === JournalEntryType.Observation)
-      chips.push({
-        key: "type",
-        label: "👁️ Observation",
-        onRemove: () => setSelectedType(null),
-      });
-    if (selectedType === JournalEntryType.Issue)
-      chips.push({
-        key: "type",
-        label: "⚠️ Issue",
-        onRemove: () => setSelectedType(null),
-      });
-    if (selectedType === JournalEntryType.Milestone)
-      chips.push({
-        key: "type",
-        label: "🏁 Milestone",
-        onRemove: () => setSelectedType(null),
-      });
-    return chips;
-  }, [dateFilter, selectedType]);
-
   const clearAllFilters = () => {
     setSearchQuery("");
     setSelectedType(null);
-    setDateFilter("month");
+    setDateFilter("week");
   };
 
   // Get all photos for gallery view
@@ -467,214 +424,7 @@ export default function JournalScreen({ navigation, route }: any) {
           </View>
         </View>
 
-        {/* Active filter pills (shown when filter panel is collapsed) */}
-        {!showFilters && activeFilterChips.length > 0 && (
-          <View style={styles.activeFiltersRow}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.activeFiltersScroll}
-            >
-              {activeFilterChips.map((chip) => (
-                <TouchableOpacity
-                  key={chip.key}
-                  style={styles.activeFilterPill}
-                  onPress={chip.onRemove}
-                >
-                  <Text style={styles.activeFilterPillText}>{chip.label}</Text>
-                  <Ionicons name="close" size={12} color={theme.primary} />
-                </TouchableOpacity>
-              ))}
-              <TouchableOpacity
-                onPress={clearAllFilters}
-                style={styles.clearAllPill}
-              >
-                <Text style={styles.clearAllPillText}>Clear all</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Collapsible Filter Panel */}
-        {showFilters && (
-          <View style={styles.searchFilterRow}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.filtersScroll}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.filterChip,
-                  dateFilter === "week" && styles.filterChipActive,
-                ]}
-                onPress={() =>
-                  setDateFilter(dateFilter === "week" ? "all" : "week")
-                }
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    dateFilter === "week" && styles.filterChipTextActive,
-                  ]}
-                >
-                  This Week
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.filterChip,
-                  dateFilter === "month" && styles.filterChipActive,
-                ]}
-                onPress={() =>
-                  setDateFilter(dateFilter === "month" ? "all" : "month")
-                }
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    dateFilter === "month" && styles.filterChipTextActive,
-                  ]}
-                >
-                  This Month
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.filterChip,
-                  selectedType === JournalEntryType.Harvest &&
-                    styles.filterChipActive,
-                ]}
-                onPress={() =>
-                  setSelectedType(
-                    selectedType === JournalEntryType.Harvest
-                      ? null
-                      : JournalEntryType.Harvest,
-                  )
-                }
-              >
-                <Ionicons
-                  name="basket"
-                  size={14}
-                  color={
-                    selectedType === JournalEntryType.Harvest
-                      ? theme.primary
-                      : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    selectedType === JournalEntryType.Harvest &&
-                      styles.filterChipTextActive,
-                  ]}
-                >
-                  Harvest
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.filterChip,
-                  selectedType === JournalEntryType.Observation &&
-                    styles.filterChipActive,
-                ]}
-                onPress={() =>
-                  setSelectedType(
-                    selectedType === JournalEntryType.Observation
-                      ? null
-                      : JournalEntryType.Observation,
-                  )
-                }
-              >
-                <Ionicons
-                  name="eye"
-                  size={14}
-                  color={
-                    selectedType === JournalEntryType.Observation
-                      ? theme.primary
-                      : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    selectedType === JournalEntryType.Observation &&
-                      styles.filterChipTextActive,
-                  ]}
-                >
-                  Observation
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.filterChip,
-                  selectedType === JournalEntryType.Issue &&
-                    styles.filterChipActive,
-                ]}
-                onPress={() =>
-                  setSelectedType(
-                    selectedType === JournalEntryType.Issue
-                      ? null
-                      : JournalEntryType.Issue,
-                  )
-                }
-              >
-                <Ionicons
-                  name="alert-circle"
-                  size={14}
-                  color={
-                    selectedType === JournalEntryType.Issue
-                      ? theme.primary
-                      : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    selectedType === JournalEntryType.Issue &&
-                      styles.filterChipTextActive,
-                  ]}
-                >
-                  Issue
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.filterChip,
-                  selectedType === JournalEntryType.Milestone &&
-                    styles.filterChipActive,
-                ]}
-                onPress={() =>
-                  setSelectedType(
-                    selectedType === JournalEntryType.Milestone
-                      ? null
-                      : JournalEntryType.Milestone,
-                  )
-                }
-              >
-                <Ionicons
-                  name="flag"
-                  size={14}
-                  color={
-                    selectedType === JournalEntryType.Milestone
-                      ? theme.primary
-                      : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    selectedType === JournalEntryType.Milestone &&
-                      styles.filterChipTextActive,
-                  ]}
-                >
-                  Milestone
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        )}
+        {/* Collapsible Filter Menu — removed from inline, moved to overlay below */}
 
         {viewMode === "list" ? (
           <View style={styles.entriesContainer}>
@@ -918,6 +668,81 @@ export default function JournalScreen({ navigation, route }: any) {
       {/* Floating Action Button */}
       <AnimatedFAB onPress={() => navigation.navigate("JournalForm")} />
 
+      {/* Filter Bottom Sheet */}
+      {showFilters && (
+        <View style={[StyleSheet.absoluteFill, styles.sheetOverlay]}>
+          {/* Backdrop */}
+          <Pressable style={StyleSheet.absoluteFill} onPress={toggleFilters} />
+
+          {/* Sheet */}
+          <View style={[styles.sheetContainer, { paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 16) }]}>
+            <TouchableOpacity activeOpacity={0.6} onPress={toggleFilters} style={styles.sheetHandleArea}>
+              <View style={styles.sheetHandle} />
+            </TouchableOpacity>
+
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Filter Journal</Text>
+              {activeFilterCount > 0 && (
+                <TouchableOpacity onPress={clearAllFilters} style={styles.sheetClearBtn}>
+                  <Text style={styles.sheetClearText}>Clear All</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.sheetScroll}
+              contentContainerStyle={styles.sheetScrollContent}
+              bounces={false}
+              nestedScrollEnabled
+            >
+              {/* Date Range */}
+              <Text style={styles.sheetSectionTitle}>
+                <Ionicons name="calendar" size={14} color={theme.textSecondary} /> Date Range
+              </Text>
+              <View style={styles.sheetChipWrap}>
+                {([
+                  ["all", "All Time"],
+                  ["week", "This Week"],
+                  ["month", "This Month"],
+                  ["year", "This Year"],
+                ] as const).map(([val, label]) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[styles.sheetChip, dateFilter === val && styles.sheetChipActive]}
+                    onPress={() => setDateFilter(val)}
+                  >
+                    <Text style={[styles.sheetChipText, dateFilter === val && styles.sheetChipTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Entry Type */}
+              <Text style={styles.sheetSectionTitle}>
+                <Ionicons name="document-text" size={14} color={theme.textSecondary} /> Entry Type
+              </Text>
+              <View style={styles.sheetChipWrap}>
+                {([
+                  [null, "All"],
+                  [JournalEntryType.Observation, "👁️ Observation"],
+                  [JournalEntryType.Harvest, "🧺 Harvest"],
+                  [JournalEntryType.Issue, "⚠️ Issue"],
+                  [JournalEntryType.Milestone, "🏁 Milestone"],
+                ] as const).map(([val, label]) => (
+                  <TouchableOpacity
+                    key={val ?? "all"}
+                    style={[styles.sheetChip, selectedType === val && styles.sheetChipActive]}
+                    onPress={() => setSelectedType(val as JournalEntryType | null)}
+                  >
+                    <Text style={[styles.sheetChipText, selectedType === val && styles.sheetChipTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      )}
+
       {/* Image Modal */}
       <Modal
         visible={selectedImage !== null}
@@ -1062,39 +887,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontWeight: "700",
       lineHeight: 14,
     },
-    activeFiltersRow: {
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-    },
-    activeFiltersScroll: {
-      alignItems: "center",
-      gap: 6,
-    },
-    activeFilterPill: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.primaryLight,
-      borderRadius: 14,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      gap: 4,
-      borderWidth: 1,
-      borderColor: theme.primary,
-    },
-    activeFilterPillText: {
-      fontSize: 12,
-      color: theme.primary,
-      fontWeight: "600",
-    },
-    clearAllPill: {
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-    },
-    clearAllPillText: {
-      fontSize: 12,
-      color: theme.error,
-      fontWeight: "600",
-    },
     statsRow: {
       flexDirection: "row",
       marginTop: 8,
@@ -1124,35 +916,94 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       lineHeight: 12,
       textAlign: "center",
     },
-    searchFilterRow: {
-      marginTop: 6,
+    sheetOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.4)",
+      justifyContent: "flex-end",
+      zIndex: 1000,
+      elevation: 1000,
+    },
+    sheetContainer: {
+      backgroundColor: theme.background,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+    },
+    sheetHandle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: theme.border,
+    },
+    sheetHandleArea: {
+      alignItems: "center",
+      paddingTop: 10,
+      paddingBottom: 8,
+    },
+    sheetHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+    },
+    sheetTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: theme.text,
+    },
+    sheetClearBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 14,
+      backgroundColor: theme.errorLight,
+    },
+    sheetClearText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: theme.error,
+    },
+    sheetScroll: {
+      paddingHorizontal: 20,
+    },
+    sheetScrollContent: {
+      paddingBottom: 20,
+    },
+    sheetSectionTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.textSecondary,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginTop: 16,
       marginBottom: 8,
     },
-    filtersScroll: {
-      flex: 1,
-    },
-    filterChip: {
+    sheetChipWrap: {
       flexDirection: "row",
-      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    sheetChip: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
       backgroundColor: theme.backgroundSecondary,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 16,
-      marginRight: 6,
-      gap: 4,
       borderWidth: 1,
       borderColor: theme.border,
     },
-    filterChipActive: {
+    sheetChipActive: {
       backgroundColor: theme.primaryLight,
       borderColor: theme.primary,
     },
-    filterChipText: {
+    sheetChipText: {
       fontSize: 14,
       color: theme.textSecondary,
+      fontWeight: "500",
     },
-    filterChipTextActive: {
+    sheetChipTextActive: {
       color: theme.primary,
+      fontWeight: "600",
     },
     content: {
       flex: 1,

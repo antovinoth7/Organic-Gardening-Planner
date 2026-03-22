@@ -14,9 +14,11 @@ Use this file as the working source of guidance for AI contributors. If any mark
 - Firebase is used for Auth and Firestore only.
 - Do not add Firebase Storage. Images are intentionally device-local.
 - Firestore is initialized with `memoryLocalCache()` in `src/lib/firebase.ts`.
+- `refreshAuthToken()` is exported from `src/lib/firebase.ts` and used by services before important reads.
 - Never call `terminate()` on the Firestore instance.
 - AsyncStorage is the app-managed cache layer and is accessed through `src/lib/storage.ts`.
 - `clearAllData()` should clear only local cached data, not Firestore internals.
+- `src/lib/dataCache.ts` is an in-memory freshness cache (30-second TTL) that sits between screens and service calls. It avoids redundant Firestore reads on tab switches. Use `getCached()`/`setCached()` for short-lived reads and `invalidate()`/`invalidateAll()` after mutations. This does not replace AsyncStorage (offline fallback).
 
 ## Active Firestore Shape
 - `plants`: plant metadata and stored image filename.
@@ -73,10 +75,12 @@ Specific current behavior to preserve:
   - Avoids extra Firestore composite index requirements by filtering and sorting in memory in some queries.
   - `markTaskDone()` writes a task log, updates `next_due_at`, and also updates plant last-care fields.
   - Recurring task due times are normalized to 6:00 PM.
-  - `syncCareTasksForPlant()` maintains water, fertilise, prune, and coconut harvest tasks from plant settings.
+  - `syncCareTasksForPlant()` auto-generates water, fertilise, prune, and coconut harvest (age-derived) tasks from plant settings.
+  - The full `TaskType` union is `water | fertilise | prune | repot | spray | mulch | harvest`. Repot, spray, and mulch are user-created; sync does not auto-generate them.
 - `src/services/journal.ts`
   - Supports multiple images through `photo_filenames` and `photo_urls`.
   - Still carries the legacy single `photo_url` field for backward compatibility.
+  - `getJournalMetadata()` fetches entries without resolving images, used by `CalendarScreen` for lightweight reads.
 - `src/services/backup.ts`
   - Supports images-only ZIP export/import.
   - Does not currently support data-only or full data-plus-images backups.
@@ -95,6 +99,7 @@ Specific current behavior to preserve:
   - pest and disease suggestions
   - coconut age-based care guidance
   - coconut nutrient deficiency guidance
+- `src/utils/plantCareDefaults.ts` provides plant care profiles, pruning techniques, and static pruning defaults.
 - Preserve this regional logic unless a change is explicitly requested.
 
 ## Plant and Settings Data
@@ -123,17 +128,31 @@ Specific current behavior to preserve:
   - `PhotoSourceModal`
   - `CollapsibleSection`
   - `ErrorBoundary`
+  - `FloatingLabelInput`
+  - `FloatingTabBar`
+  - `ThemedDropdown`
 
 ## Reliability and Logging
 - Sentry is initialized in `App.tsx` when a DSN is configured.
 - Global error and unhandled promise rejection handlers are already wired up in `App.tsx`.
-- Use `logError()`, `logAuthError()`, and storage-safe helpers instead of ad hoc error handling when touching existing flows.
-- `safeStorage` is the defensive wrapper for AsyncStorage access.
+- Use `logError()`, `logAuthError()`, `logStorageError()`, and `setErrorLogUserId()` from `src/utils/errorLogging.ts` instead of ad hoc error handling when touching existing flows.
+- `safeStorage` in `src/utils/safeStorage.ts` is the defensive wrapper for AsyncStorage access.
+- `src/utils/logger.ts` provides production-safe console logging.
 
 ## Backup Guidance
 - Current user-facing backup in Settings is images only.
 - Do not reintroduce `exportBackup`, `importBackup`, or full ZIP flows unless the feature is intentionally rebuilt across services, UI, and docs.
 - When importing images, matching is filename-based and should continue to work for both plants and journal entries.
+
+## Additional Utilities
+- `src/utils/appLifecycle.ts` — app lifecycle management, used in `App.tsx`.
+- `src/utils/asyncWrapper.ts` — async utility helpers.
+- `src/utils/dateHelpers.ts` — date parsing and formatting helpers used across services.
+- `src/utils/errorTracker.ts` — error tracking service.
+- `src/utils/networkState.ts` — network connectivity state, used by `firestoreTimeout.ts`.
+- `src/utils/textSanitizer.ts` — text sanitization for user input.
+- `src/utils/zipHelper.ts` — ZIP utilities used by backup.
+- `src/utils/firestoreTimeout.ts` — `withTimeoutAndRetry()` wrapper for Firestore operations.
 
 ## Development Commands
 ```bash

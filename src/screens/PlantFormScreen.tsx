@@ -81,7 +81,7 @@ import { toLocalDateString, formatDateDisplay } from "../utils/dateHelpers";
 
 const NOTES_MAX_LENGTH = 500;
 type FormMode = "quick" | "advanced";
-type FormSectionKey = "basic" | "location" | "care" | "health" | "harvest" | "coconut" | "history" | "notes";
+type FormSectionKey = "basic" | "location" | "care" | "health" | "harvest" | "coconut" | "notesHistory";
 const sanitizeNumberText = (value: string) => value.replace(/[^0-9]/g, "");
 const TAMIL_NADU_HARVEST_SEASONS = [
   "Year Round",
@@ -297,8 +297,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
     health: false,
     harvest: false,
     coconut: false,
-    history: false,
-    notes: false,
+    notesHistory: false,
   });
   const [autoApplyCareDefaults, setAutoApplyCareDefaults] = useState(true);
   const [currentPestDisease, setCurrentPestDisease] =
@@ -420,8 +419,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
       health: [],
       harvest: [],
       coconut: [],
-      history: [],
-      notes: [],
+      notesHistory: [],
     };
 
     if (!plantVariety.trim()) {
@@ -457,7 +455,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
     }
 
     if (notes.length > NOTES_MAX_LENGTH) {
-      errors.notes.push(
+      errors.notesHistory.push(
         `Notes must be ${NOTES_MAX_LENGTH} characters or less`,
       );
     }
@@ -651,8 +649,8 @@ export default function PlantFormScreen({ route, navigation }: any) {
         care: true,
         health: false,
         harvest: false,
-        history: false,
-        notes: false,
+        coconut: false,
+        notesHistory: false,
       }));
     }
   }, [formMode]);
@@ -728,9 +726,98 @@ export default function PlantFormScreen({ route, navigation }: any) {
     return plantType === "fruit_tree" ? 4 : 2;
   }, [plantType]);
 
-  const pestHistorySectionFieldCount = React.useMemo(() => {
-    return Math.max(1, pestDiseaseHistory.length);
+  const notesHistoryFieldCount = React.useMemo(() => {
+    return 1 + Math.max(1, pestDiseaseHistory.length);
   }, [pestDiseaseHistory.length]);
+
+  // Form completion progress — derived from section field counts, checks actual values
+  const formProgress = React.useMemo(() => {
+    const careFieldCount = formMode === "quick" ? 2 : 9;
+
+    // Total uses the same field counts shown in section headers
+    let total = basicFieldCount + locationFieldCount + careFieldCount;
+    if (formMode === "advanced") {
+      total += 2; // Health section (fieldCount={2})
+      total += harvestSectionFieldCount;
+      total += notesHistoryFieldCount;
+      if (plantType === "coconut_tree") {
+        total += 3; // Coconut section (fieldCount={3})
+      }
+    }
+
+    // Dynamically check each field's actual value
+    let filled = 0;
+
+    // — Basic Information —
+    if (photoUri) filled += 1;
+    if (name || plantVariety) filled += 1; // display name auto-generates from variety
+    if (plantType) filled += 1;
+    if (plantVariety) filled += 1;
+    if (formMode === "advanced") {
+      if (customVarietyMode || variety) filled += 1; // variety chip selection
+      if (plantingDate) filled += 1;
+      if (varietySuggestions.length > 0 && customVarietyMode && variety) {
+        filled += 1; // custom variety text input
+      }
+    }
+
+    // — Location & Placement —
+    if (parentLocation) filled += 1;
+    if (parentLocation && childLocation) filled += 1; // only visible when parent is set
+    if (formMode === "advanced" && landmarks) filled += 1;
+
+    // — Care & Schedule —
+    if (wateringFrequency) filled += 1;
+    if (fertilisingFrequency) filled += 1;
+    if (formMode === "advanced") {
+      if (sunlight) filled += 1;
+      if (waterRequirement) filled += 1;
+      if (soilType) filled += 1;
+      if (preferredFertiliser) filled += 1;
+      if (typeof mulchingUsed === "boolean") filled += 1; // toggle always has a value
+      if (pruningFrequency) filled += 1;
+      if (pruningNotes) filled += 1;
+    }
+
+    if (formMode === "advanced") {
+      // — Plant Health —
+      if (healthStatus) filled += 1;
+      if (growthStage) filled += 1;
+
+      // — Harvest —
+      if (harvestSeason) filled += 1;
+      if (expectedHarvestDate) filled += 1;
+      if (plantType === "fruit_tree") {
+        if (harvestStartDate) filled += 1;
+        if (harvestEndDate) filled += 1;
+      }
+
+      // — Notes & History —
+      if (notes) filled += 1;
+      filled += pestDiseaseHistory.length; // each record counts as filled
+
+      // — Coconut Tracking —
+      if (plantType === "coconut_tree") {
+        if (coconutFrondsCount) filled += 1;
+        if (nutsPerMonth) filled += 1;
+        if (lastClimbingDate) filled += 1;
+      }
+    }
+
+    return { filled, total, percent: total > 0 ? Math.round((filled / total) * 100) : 0 };
+  }, [
+    basicFieldCount, locationFieldCount, harvestSectionFieldCount,
+    notesHistoryFieldCount, formMode, plantType,
+    photoUri, name, plantVariety, variety, customVarietyMode,
+    varietySuggestions.length, plantingDate,
+    parentLocation, childLocation, landmarks,
+    wateringFrequency, fertilisingFrequency, sunlight, waterRequirement,
+    soilType, preferredFertiliser, mulchingUsed, pruningFrequency, pruningNotes,
+    healthStatus, growthStage,
+    harvestSeason, expectedHarvestDate, harvestStartDate, harvestEndDate,
+    notes, pestDiseaseHistory.length,
+    coconutFrondsCount, nutsPerMonth, lastClimbingDate,
+  ]);
 
   // Handle back button press
   useEffect(() => {
@@ -884,6 +971,21 @@ export default function PlantFormScreen({ route, navigation }: any) {
         setNutFallCount(plant.nut_fall_count?.toString() || "");
         setLastNutFallDate(plant.last_nut_fall_date || "");
 
+        // Auto-expand advanced sections that already have data
+        if (formMode === "advanced") {
+          setSectionExpanded((prev) => ({
+            ...prev,
+            health:
+              prev.health ||
+              (plant.health_status !== undefined &&
+                plant.health_status !== "healthy"),
+            notesHistory:
+              prev.notesHistory ||
+              !!plant.notes ||
+              (plant.pest_disease_history?.length ?? 0) > 0,
+          }));
+        }
+
         // Mark initial data as loaded
         setTimeout(() => {
           initialDataLoaded.current = true;
@@ -952,14 +1054,13 @@ export default function PlantFormScreen({ route, navigation }: any) {
       "health",
       "harvest",
       "coconut",
-      "history",
-      "notes",
+      "notesHistory",
     ];
     const firstErrorSection = sectionOrder.find(
       (section) => validationErrors[section].length > 0,
     );
     if (firstErrorSection) {
-      if (["harvest", "health", "notes"].includes(firstErrorSection) && formMode === "quick") {
+      if (["harvest", "health", "notesHistory"].includes(firstErrorSection) && formMode === "quick") {
         setFormMode("advanced");
       }
       setSectionExpandedState(firstErrorSection, true);
@@ -1153,6 +1254,26 @@ export default function PlantFormScreen({ route, navigation }: any) {
               Advanced
             </Text>
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.progressContainer}>
+          <View style={styles.progressBarTrack}>
+            <View
+              style={[
+                styles.progressBarFill,
+                {
+                  width: `${formProgress.percent}%`,
+                  backgroundColor:
+                    formProgress.percent === 100
+                      ? "#4CAF50"
+                      : theme.primary,
+                },
+              ]}
+            />
+          </View>
+          <Text style={styles.progressText}>
+            {formProgress.filled} of {formProgress.total} fields filled
+          </Text>
         </View>
 
         <CollapsibleSection
@@ -1660,6 +1781,15 @@ export default function PlantFormScreen({ route, navigation }: any) {
                   </TouchableOpacity>
                 ))}
               </View>
+              {sunlight === "full_sun" && (
+                <Text style={styles.helperText}>6+ hours of direct sunlight per day.</Text>
+              )}
+              {sunlight === "partial_sun" && (
+                <Text style={styles.helperText}>3–6 hours of direct sunlight per day.</Text>
+              )}
+              {sunlight === "shade" && (
+                <Text style={styles.helperText}>Less than 3 hours of direct sunlight per day.</Text>
+              )}
 
               <Text style={styles.fieldGroupLabel}>🟤 Soil Type</Text>
               <ThemedDropdown
@@ -1724,6 +1854,15 @@ export default function PlantFormScreen({ route, navigation }: any) {
                   );
                 })}
               </ScrollView>
+              {waterRequirement === "low" && (
+                <Text style={styles.helperText}>Water once every 3–5 days. Suits drought-tolerant plants like succulents and native shrubs.</Text>
+              )}
+              {waterRequirement === "medium" && (
+                <Text style={styles.helperText}>Water every 1–2 days. Suitable for most vegetables, herbs, and flowering plants.</Text>
+              )}
+              {waterRequirement === "high" && (
+                <Text style={styles.helperText}>Water daily or twice daily. For moisture-loving plants like paddy, taro, and water spinach.</Text>
+              )}
             </>
           )}
 
@@ -1963,6 +2102,18 @@ export default function PlantFormScreen({ route, navigation }: any) {
                 </TouchableOpacity>
               ))}
             </ScrollView>
+            {healthStatus === "healthy" && (
+              <Text style={styles.helperText}>Plant looks good — no visible stress, pests, or disease. Growing normally.</Text>
+            )}
+            {healthStatus === "stressed" && (
+              <Text style={styles.helperText}>Early warning signs like wilting, yellowing tips, or slow growth — usually from environment (sun, water, transplant shock). Can recover with corrective care.</Text>
+            )}
+            {healthStatus === "recovering" && (
+              <Text style={styles.helperText}>Previously stressed or sick, now improving. May still show some damage but new growth looks healthy.</Text>
+            )}
+            {healthStatus === "sick" && (
+              <Text style={styles.helperText}>Active disease, fungal infection, rot, or heavy pest infestation. Needs treatment — not just adjusted conditions.</Text>
+            )}
 
             <Text style={styles.fieldGroupLabel}>🌱 Growth Stage</Text>
             <ScrollView
@@ -1977,7 +2128,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
                 { label: "🌸 Flowering", value: "flowering" },
                 { label: "🍎 Fruiting", value: "fruiting" },
                 { label: "🌳 Mature", value: "mature" },
-                { label: "📉 Declining", value: "declining" },
+                { label: "� Dormant", value: "dormant" },
               ].map((opt) => (
                 <TouchableOpacity
                   key={opt.value}
@@ -1999,6 +2150,24 @@ export default function PlantFormScreen({ route, navigation }: any) {
                 </TouchableOpacity>
               ))}
             </ScrollView>
+            {growthStage === "seedling" && (
+              <Text style={styles.helperText}>Just sprouted or recently transplanted. Needs gentle care — avoid direct harsh sun and overwatering.</Text>
+            )}
+            {growthStage === "vegetative" && (
+              <Text style={styles.helperText}>Actively growing leaves and stems. Focus on regular watering, feeding, and ensuring good sunlight.</Text>
+            )}
+            {growthStage === "flowering" && (
+              <Text style={styles.helperText}>Producing buds and flowers. Reduce nitrogen fertiliser; support with phosphorus and potassium.</Text>
+            )}
+            {growthStage === "fruiting" && (
+              <Text style={styles.helperText}>Setting or ripening fruit. Ensure consistent watering and watch for pests attracted to fruit.</Text>
+            )}
+            {growthStage === "mature" && (
+              <Text style={styles.helperText}>Fully established plant. Maintenance care — regular pruning, seasonal feeding, and pest monitoring.</Text>
+            )}
+            {growthStage === "dormant" && (
+              <Text style={styles.helperText}>Resting phase — growth slows or stops. Reduce watering and feeding. Normal for seasonal or perennial plants.</Text>
+            )}
           </CollapsibleSection>
         )}
 
@@ -2391,23 +2560,88 @@ export default function PlantFormScreen({ route, navigation }: any) {
           </CollapsibleSection>
         )}
 
-        {/* Pest & Disease History */}
+        {/* Notes, Pest History & Companions */}
         {formMode === "advanced" && (
           <CollapsibleSection
-            title="Pest & Disease History"
-            icon="bug"
-            fieldCount={pestHistorySectionFieldCount}
+            title="Notes & History"
+            icon="document-text"
+            fieldCount={notesHistoryFieldCount}
             defaultExpanded={false}
-            expanded={sectionExpanded.history}
+            expanded={sectionExpanded.notesHistory}
             onExpandedChange={(expanded) =>
-              setSectionExpandedState("history", expanded)
+              setSectionExpandedState("notesHistory", expanded)
             }
-            hasError={
-              showValidationErrors && validationErrors.history.length > 0
-            }
+            hasError={showValidationErrors && validationErrors.notesHistory.length > 0}
           >
+            <View style={styles.notesCard}>
+              <View style={styles.notesCardHeader}>
+                <Ionicons name="document-text-outline" size={16} color={theme.textTertiary} />
+                <Text style={styles.fieldGroupLabel}>Notes</Text>
+              </View>
+              <TextInput
+                style={styles.notesCardInput}
+                value={notes}
+                onChangeText={(text) =>
+                  setNotes(sanitizeAlphaNumericSpaces(text))
+                }
+                multiline
+                numberOfLines={4}
+                maxLength={NOTES_MAX_LENGTH}
+                placeholder="Add any notes about this plant..."
+                placeholderTextColor={theme.inputPlaceholder}
+              />
+              <Text style={styles.noteCounter}>
+                {notes.length}/{NOTES_MAX_LENGTH}
+              </Text>
+            </View>
+
+            {plantVariety &&
+              getCompanionSuggestions(plantVariety).length > 0 && (
+                <View style={styles.infoCard}>
+                  <View style={styles.infoCardHeader}>
+                    <Ionicons name="leaf" size={20} color="#4CAF50" />
+                    <Text style={styles.infoCardTitle}>Companion Plants</Text>
+                  </View>
+                  <Text style={styles.infoCardSubtext}>
+                    Good companion plants for {plantVariety}:
+                  </Text>
+                  <View style={styles.chipContainer}>
+                    {getCompanionSuggestions(plantVariety).map((companion) => (
+                      <View key={companion} style={styles.companionChip}>
+                        <Text style={styles.companionChipText}>
+                          {companion}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+            {plantVariety && getIncompatiblePlants(plantVariety).length > 0 && (
+              <View style={styles.infoCard}>
+                <View style={styles.infoCardHeader}>
+                  <Ionicons name="warning" size={20} color="#f57c00" />
+                  <Text style={styles.infoCardTitle}>Avoid Planting With</Text>
+                </View>
+                <Text style={styles.infoCardSubtext}>
+                  These plants can compete with {plantVariety}:
+                </Text>
+                <View style={styles.chipContainer}>
+                  {getIncompatiblePlants(plantVariety).map((incompatible) => (
+                    <View key={incompatible} style={styles.incompatibleChip}>
+                      <Text style={styles.incompatibleChipText}>
+                        {incompatible}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            <View style={styles.fieldGroupDivider} />
+
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.fieldGroupLabel}>Records</Text>
+              <Text style={styles.fieldGroupLabel}>🐛 Pest & Disease Records</Text>
               <TouchableOpacity
                 style={styles.addPestButtonPill}
                 onPress={() => {
@@ -2491,85 +2725,6 @@ export default function PlantFormScreen({ route, navigation }: any) {
               <Text style={styles.noPestHistory}>
                 No pest or disease records yet
               </Text>
-            )}
-          </CollapsibleSection>
-        )}
-
-        {formMode === "advanced" && (
-          <CollapsibleSection
-            title="Notes & Companions"
-            icon="document-text"
-            fieldCount={1}
-            defaultExpanded={false}
-            expanded={sectionExpanded.notes}
-            onExpandedChange={(expanded) =>
-              setSectionExpandedState("notes", expanded)
-            }
-            hasError={showValidationErrors && validationErrors.notes.length > 0}
-          >
-            <View style={styles.notesCard}>
-              <View style={styles.notesCardHeader}>
-                <Ionicons name="document-text-outline" size={16} color={theme.textTertiary} />
-                <Text style={styles.fieldGroupLabel}>Notes</Text>
-              </View>
-              <TextInput
-                style={styles.notesCardInput}
-                value={notes}
-                onChangeText={(text) =>
-                  setNotes(sanitizeAlphaNumericSpaces(text))
-                }
-                multiline
-                numberOfLines={4}
-                maxLength={NOTES_MAX_LENGTH}
-                placeholder="Add any notes about this plant..."
-                placeholderTextColor={theme.inputPlaceholder}
-              />
-              <Text style={styles.noteCounter}>
-                {notes.length}/{NOTES_MAX_LENGTH}
-              </Text>
-            </View>
-
-            {plantVariety &&
-              getCompanionSuggestions(plantVariety).length > 0 && (
-                <View style={styles.infoCard}>
-                  <View style={styles.infoCardHeader}>
-                    <Ionicons name="leaf" size={20} color="#4CAF50" />
-                    <Text style={styles.infoCardTitle}>Companion Plants</Text>
-                  </View>
-                  <Text style={styles.infoCardSubtext}>
-                    Good companion plants for {plantVariety}:
-                  </Text>
-                  <View style={styles.chipContainer}>
-                    {getCompanionSuggestions(plantVariety).map((companion) => (
-                      <View key={companion} style={styles.companionChip}>
-                        <Text style={styles.companionChipText}>
-                          {companion}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-            {plantVariety && getIncompatiblePlants(plantVariety).length > 0 && (
-              <View style={styles.infoCard}>
-                <View style={styles.infoCardHeader}>
-                  <Ionicons name="warning" size={20} color="#f57c00" />
-                  <Text style={styles.infoCardTitle}>Avoid Planting With</Text>
-                </View>
-                <Text style={styles.infoCardSubtext}>
-                  These plants can compete with {plantVariety}:
-                </Text>
-                <View style={styles.chipContainer}>
-                  {getIncompatiblePlants(plantVariety).map((incompatible) => (
-                    <View key={incompatible} style={styles.incompatibleChip}>
-                      <Text style={styles.incompatibleChipText}>
-                        {incompatible}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
             )}
           </CollapsibleSection>
         )}
@@ -2998,7 +3153,7 @@ const createStyles = (theme: any) =>
       backgroundColor: theme.backgroundSecondary,
       borderRadius: 12,
       padding: 4,
-      marginBottom: 16,
+      marginBottom: 8,
       borderWidth: 1,
       borderColor: theme.border,
     },
@@ -3019,6 +3174,25 @@ const createStyles = (theme: any) =>
     },
     modeToggleTextActive: {
       color: theme.primary,
+    },
+    progressContainer: {
+      marginBottom: 16,
+      gap: 4,
+    },
+    progressBarTrack: {
+      height: 4,
+      backgroundColor: theme.borderLight,
+      borderRadius: 2,
+      overflow: "hidden" as const,
+    },
+    progressBarFill: {
+      height: "100%",
+      borderRadius: 2,
+    },
+    progressText: {
+      fontSize: 12,
+      color: theme.textTertiary,
+      textAlign: "right" as const,
     },
     photoButton: {
       alignSelf: "center",

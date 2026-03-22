@@ -20,6 +20,7 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  Dimensions,
 } from "react-native";
 import { getAllPlants, deletePlant } from "../services/plants";
 import {
@@ -66,34 +67,6 @@ if (
 ) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
-const getFilterLabel = (category: string, value: string): string => {
-  const labels: Record<string, Record<string, string>> = {
-    type: {
-      vegetable: "🥕 Vegetable",
-      herb: "🌿 Herb",
-      flower: "🌸 Flower",
-      fruit_tree: "� Fruit",
-      timber_tree: "🌳 Timber Tree",
-      coconut_tree: "🥥 Coconut Tree",
-      shrub: "🪴 Shrub",
-    },
-    health: {
-      healthy: "✅ Healthy",
-      stressed: "⚠️ Stressed",
-      recovering: "🔄 Recovering",
-      sick: "❌ Sick",
-    },
-    space: { pot: "Pot", bed: "Bed", ground: "Ground" },
-    sunlight: {
-      full_sun: "☀️ Full Sun",
-      partial_sun: "⛅ Partial",
-      shade: "🌤️ Shade",
-    },
-    water: { low: "💧 Low", medium: "💧💧 Medium", high: "💧💧💧 High" },
-  };
-  return labels[category]?.[value] || value;
-};
 
 export default function PlantsScreen({ navigation, route }: any) {
   const theme = useTheme();
@@ -208,6 +181,7 @@ export default function PlantsScreen({ navigation, route }: any) {
     const refreshParam = route?.params?.refresh;
     if (refreshParam) {
       flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+      resetTabBar();
       loadPlants();
       // Clear the param to prevent repeated refreshes
       navigation.setParams({ refresh: undefined });
@@ -267,7 +241,8 @@ export default function PlantsScreen({ navigation, route }: any) {
             (p.plant_variety &&
               p.plant_variety.toLowerCase().includes(query)) ||
             (p.variety && p.variety.toLowerCase().includes(query)) ||
-            (p.location && p.location.toLowerCase().includes(query))),
+            (p.location && p.location.toLowerCase().includes(query)) ||
+            (p.landmarks && p.landmarks.toLowerCase().includes(query))),
       );
     }
 
@@ -388,14 +363,6 @@ export default function PlantsScreen({ navigation, route }: any) {
     [activeFilterCount, searchQuery],
   );
 
-  const attentionPlants = useMemo(
-    () =>
-      plants.filter(
-        (p) => p.health_status === "sick" || p.health_status === "stressed",
-      ),
-    [plants],
-  );
-
   const clearAllFilters = () => {
     setFilters({
       type: "all",
@@ -417,56 +384,6 @@ export default function PlantsScreen({ navigation, route }: any) {
     }
     setShowFilters((prev) => !prev);
   };
-
-  const activeFilterChips = useMemo(() => {
-    const chips: { key: string; label: string; onRemove: () => void }[] = [];
-    if (filters.type !== "all")
-      chips.push({
-        key: "type",
-        label: getFilterLabel("type", filters.type),
-        onRemove: () => updateFilter("type", "all"),
-      });
-    if (filters.health !== "all")
-      chips.push({
-        key: "health",
-        label: getFilterLabel("health", filters.health),
-        onRemove: () => updateFilter("health", "all"),
-      });
-    if (filters.space !== "all")
-      chips.push({
-        key: "space",
-        label: getFilterLabel("space", filters.space),
-        onRemove: () => updateFilter("space", "all"),
-      });
-    if (filters.sunlight !== "all")
-      chips.push({
-        key: "sunlight",
-        label: getFilterLabel("sunlight", filters.sunlight),
-        onRemove: () => updateFilter("sunlight", "all"),
-      });
-    if (filters.water !== "all")
-      chips.push({
-        key: "water",
-        label: getFilterLabel("water", filters.water),
-        onRemove: () => updateFilter("water", "all"),
-      });
-    if (filters.parentLocation !== "")
-      chips.push({
-        key: "parentLoc",
-        label: `\ud83d\udccd ${filters.parentLocation}`,
-        onRemove: () => {
-          updateFilter("parentLocation", "");
-          updateFilter("childLocation", "");
-        },
-      });
-    if (filters.childLocation !== "")
-      chips.push({
-        key: "childLoc",
-        label: `\ud83e\udded ${filters.childLocation}`,
-        onRemove: () => updateFilter("childLocation", ""),
-      });
-    return chips;
-  }, [filters]);
 
   const filteredPlants = useMemo(
     () => getSortedPlants(getFilteredPlants()),
@@ -753,52 +670,6 @@ export default function PlantsScreen({ navigation, route }: any) {
         </View>
       )}
 
-      {attentionPlants.length > 0 && (
-        <TouchableOpacity
-          style={styles.healthAlertBanner}
-          activeOpacity={0.85}
-          onPress={() => {
-            setSortBy("health");
-          }}
-        >
-          <Ionicons name="warning" size={16} color={theme.warning} />
-          <Text style={styles.healthAlertText}>
-            {attentionPlants.length}{" "}
-            {attentionPlants.length === 1 ? "plant needs" : "plants need"}{" "}
-            attention — tap to sort by health
-          </Text>
-          <Ionicons name="chevron-forward" size={16} color={theme.warning} />
-        </TouchableOpacity>
-      )}
-
-      {/* Active filter chips (shown when filter panel is collapsed) */}
-      {!showFilters && activeFilterChips.length > 0 && (
-        <View style={styles.activeFiltersRow}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.activeFiltersScroll}
-          >
-            {activeFilterChips.map((chip) => (
-              <TouchableOpacity
-                key={chip.key}
-                style={styles.activeFilterPill}
-                onPress={chip.onRemove}
-              >
-                <Text style={styles.activeFilterPillText}>{chip.label}</Text>
-                <Ionicons name="close" size={12} color={theme.primary} />
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity
-              onPress={clearAllFilters}
-              style={styles.clearAllPill}
-            >
-              <Text style={styles.clearAllPillText}>Clear all</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      )}
-
       {/* Filter Bottom Sheet */}
       {showFilters && (
         <View style={[StyleSheet.absoluteFill, styles.sheetOverlay]}>
@@ -806,7 +677,7 @@ export default function PlantsScreen({ navigation, route }: any) {
             <Pressable style={StyleSheet.absoluteFill} onPress={toggleFilters} />
 
             {/* Sheet content - sits at bottom, not nested inside backdrop */}
-            <View style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <View style={[styles.sheetContainer, { paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 16) }]}>
               {/* Handle bar */}
               <TouchableOpacity activeOpacity={0.6} onPress={toggleFilters} style={styles.sheetHandleArea}>
                 <View style={styles.sheetHandle} />
@@ -833,7 +704,7 @@ export default function PlantsScreen({ navigation, route }: any) {
                   <Ionicons name="apps" size={14} color={theme.textSecondary} /> Plant Type
                 </Text>
                 <View style={styles.sheetChipWrap}>
-                  {([["all", "All"], ["vegetable", "🥕 Vegetable"], ["fruit_tree", "� Fruit"], ["coconut_tree", "🥥 Coconut"], ["herb", "🌿 Herb"], ["timber_tree", "🌳 Timber"], ["flower", "🌸 Flower"], ["shrub", "🪴 Shrub"]] as const).map(([val, label]) => (
+                  {([["all", "All"], ["vegetable", "🥕 Vegetable"], ["fruit_tree", "🍇 Fruit"], ["coconut_tree", "🥥 Coconut"], ["herb", "🌿 Herb"], ["timber_tree", "🌳 Timber"], ["flower", "🌸 Flower"], ["shrub", "🪴 Shrub"]] as const).map(([val, label]) => (
                     <TouchableOpacity
                       key={val}
                       style={[styles.sheetChip, filters.type === val && styles.sheetChipActive]}
@@ -939,30 +810,21 @@ export default function PlantsScreen({ navigation, route }: any) {
                       >
                         <Text style={[styles.sheetChipText, filters.childLocation === "" && styles.sheetChipTextActive]}>All</Text>
                       </TouchableOpacity>
-                      {childLocations.map((loc) => (
+                      {childLocations.filter(loc => loc.trim()).map((loc) => (
                         <TouchableOpacity
                           key={loc}
                           style={[styles.sheetChip, filters.childLocation === loc && styles.sheetChipActive]}
                           onPress={() => updateFilter("childLocation", loc)}
                         >
-                          <Text style={[styles.sheetChipText, filters.childLocation === loc && styles.sheetChipTextActive]}>🧭 {loc}</Text>
+                          <Text style={[styles.sheetChipText, filters.childLocation === loc && styles.sheetChipTextActive]}>◉ {loc}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
                   </>
                 )}
 
-                <View style={{ height: 24 }} />
+                <View style={{ height: 12 }} />
               </ScrollView>
-
-              {/* Apply button */}
-              <View style={styles.sheetFooter}>
-                <TouchableOpacity style={styles.sheetApplyBtn} onPress={toggleFilters}>
-                  <Text style={styles.sheetApplyText}>
-                    Show {filteredPlants.length} {filteredPlants.length === 1 ? 'plant' : 'plants'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
             </View>
         </View>
       )}
@@ -980,11 +842,6 @@ export default function PlantsScreen({ navigation, route }: any) {
             </View>
           )}
         </View>
-        {hasMore && (
-          <Text style={styles.resultsShowing}>
-            showing {displayedPlants.length}
-          </Text>
-        )}
       </View>
 
       <FlatList
@@ -1306,7 +1163,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       backgroundColor: theme.background,
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
-      maxHeight: "75%",
     },
     sheetHandle: {
       width: 40,
@@ -1346,6 +1202,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     sheetScroll: {
       paddingHorizontal: 20,
+      maxHeight: Dimensions.get("window").height * 0.55,
     },
     sheetSectionTitle: {
       fontSize: 13,
@@ -1389,23 +1246,7 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       color: theme.primary,
       fontWeight: "600",
     },
-    sheetFooter: {
-      paddingHorizontal: 20,
-      paddingTop: 12,
-      borderTopWidth: 1,
-      borderTopColor: theme.border,
-    },
-    sheetApplyBtn: {
-      backgroundColor: theme.primary,
-      borderRadius: 14,
-      paddingVertical: 14,
-      alignItems: "center",
-    },
-    sheetApplyText: {
-      fontSize: 16,
-      fontWeight: "700",
-      color: theme.buttonText,
-    },
+
     resultsHeader: {
       flexDirection: "row",
       justifyContent: "space-between",

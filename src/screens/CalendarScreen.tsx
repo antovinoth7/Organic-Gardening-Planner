@@ -10,6 +10,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   Modal,
   TextInput,
   Alert,
@@ -316,11 +317,13 @@ export default function CalendarScreen() {
       currentMonth.getMonth(),
       1,
     );
+    monthStart.setHours(0, 0, 0, 0);
     const monthEnd = new Date(
       currentMonth.getFullYear(),
       currentMonth.getMonth() + 1,
       0,
     );
+    monthEnd.setHours(23, 59, 59, 999);
 
     return filteredTasks.filter((task) => {
       const dueDate = new Date(task.next_due_at);
@@ -408,13 +411,17 @@ export default function CalendarScreen() {
 
   const getWeekTasks = () => {
     if (!filteredTasks || filteredTasks.length === 0) return [];
-    const weekEnd = new Date(currentWeekStart);
+    const weekStart = new Date(currentWeekStart);
+    weekStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 7);
+    weekEnd.setHours(0, 0, 0, 0);
 
     return filteredTasks.filter((task) => {
       if (!task || !task.next_due_at) return false;
       const dueDate = new Date(task.next_due_at);
-      return dueDate >= currentWeekStart && dueDate < weekEnd;
+      dueDate.setHours(0, 0, 0, 0);
+      return dueDate >= weekStart && dueDate < weekEnd;
     });
   };
 
@@ -1063,52 +1070,49 @@ export default function CalendarScreen() {
           </View>
         </View>
 
-        {showGroupMenu && (
-          <View style={styles.groupMenu}>
-            {GROUP_OPTIONS.map((option, index) => {
-              const isActive = groupBy === option.value;
-              return (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[
-                    styles.groupOption,
-                    isActive && styles.groupOptionActive,
-                    index === GROUP_OPTIONS.length - 1 &&
-                      styles.groupOptionLast,
-                  ]}
-                  onPress={() => {
-                    setGroupBy(option.value);
-                    setShowGroupMenu(false);
-                  }}
-                >
-                  <Ionicons
-                    name={option.icon as any}
-                    size={18}
-                    color={isActive ? theme.primary : theme.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      styles.groupText,
-                      isActive && styles.groupTextActive,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                  {isActive && (
-                    <Ionicons
-                      name="checkmark"
-                      size={18}
-                      color={theme.primary}
-                    />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
+
 
         {/* Week or Month View */}
         {selectedView === "week" ? renderWeekView() : renderMonthView()}
+
+        {/* Selected Date Header - outside ScrollView so it stays visible */}
+        {!isSearching && selectedDate && (
+          <View style={styles.selectedDateHeaderFixed}>
+            <Text style={styles.selectedDateTitle}>
+              📅{" "}
+              {selectedDate.toLocaleDateString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+              })}
+            </Text>
+            <View style={styles.selectedDateActions}>
+              {getTasksForDate(selectedDate).length > 1 && (
+                <TouchableOpacity
+                  style={[
+                    styles.completeAllBtn,
+                    isCompletingAll && styles.completeAllBtnDisabled,
+                  ]}
+                  onPress={() => handleCompleteAllForDate(selectedDate)}
+                  disabled={isCompletingAll}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  {isCompletingAll ? (
+                    <Text style={styles.completeAllProgress}>
+                      {completedCount}/{getTasksForDate(selectedDate).length}
+                    </Text>
+                  ) : (
+                    <Ionicons name="checkmark-done" size={18} color="#fff" />
+                  )}
+                  <Text style={styles.completeAllText}>
+                    {isCompletingAll ? "Completing..." : "All Done"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
 
         <ScrollView
           ref={scrollViewRef}
@@ -1116,6 +1120,8 @@ export default function CalendarScreen() {
           contentContainerStyle={{ paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 48) + 16 }}
           onScroll={onTabBarScroll}
           scrollEventThrottle={16}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
           }
@@ -1123,40 +1129,6 @@ export default function CalendarScreen() {
           {/* Selected Date Tasks */}
           {!isSearching && selectedDate && (
             <View style={styles.section}>
-              <View style={styles.selectedDateHeader}>
-                <Text style={styles.selectedDateTitle}>
-                  📅{" "}
-                  {selectedDate.toLocaleDateString("en-US", {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </Text>
-                <View style={styles.selectedDateActions}>
-                  {getTasksForDate(selectedDate).length > 1 && (
-                    <TouchableOpacity
-                      style={[
-                        styles.completeAllBtn,
-                        isCompletingAll && styles.completeAllBtnDisabled,
-                      ]}
-                      onPress={() => handleCompleteAllForDate(selectedDate)}
-                      disabled={isCompletingAll}
-                      activeOpacity={0.7}
-                    >
-                      {isCompletingAll ? (
-                        <Text style={styles.completeAllProgress}>
-                          {completedCount}/{getTasksForDate(selectedDate).length}
-                        </Text>
-                      ) : (
-                        <Ionicons name="checkmark-done" size={18} color="#fff" />
-                      )}
-                      <Text style={styles.completeAllText}>
-                        {isCompletingAll ? "Completing..." : "All Done"}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
               {(() => {
                 const selectedDateTasks = getTasksForDate(selectedDate);
                 return selectedDateTasks.length > 0 ? (
@@ -1329,6 +1301,58 @@ export default function CalendarScreen() {
 
         {/* Floating Action Button */}
         <AnimatedFAB onPress={() => setShowModal(true)} />
+
+        {/* Filter Bottom Sheet */}
+        {showGroupMenu && (
+          <View style={[StyleSheet.absoluteFill, styles.sheetOverlay]}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowGroupMenu(false)} />
+            <View style={[styles.sheetContainer, { paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 16) }]}>
+              <TouchableOpacity activeOpacity={0.6} onPress={() => setShowGroupMenu(false)} style={styles.sheetHandleArea}>
+                <View style={styles.sheetHandle} />
+              </TouchableOpacity>
+
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetTitle}>Filter Tasks</Text>
+                {groupBy !== "none" && (
+                  <TouchableOpacity onPress={() => { setGroupBy("none"); setShowGroupMenu(false); }} style={styles.sheetClearBtn}>
+                    <Text style={styles.sheetClearText}>Clear All</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                style={styles.sheetScroll}
+                contentContainerStyle={styles.sheetScrollContent}
+                bounces={false}
+                nestedScrollEnabled
+              >
+                <Text style={styles.sheetSectionTitle}>
+                  <Ionicons name="funnel" size={14} color={theme.textSecondary} /> Group By
+                </Text>
+                <View style={styles.sheetChipWrap}>
+                  {GROUP_OPTIONS.map((option) => {
+                    const isActive = groupBy === option.value;
+                    return (
+                      <TouchableOpacity
+                        key={option.value}
+                        style={[styles.sheetChip, isActive && styles.sheetChipActive]}
+                        onPress={() => {
+                          setGroupBy(option.value);
+                          setShowGroupMenu(false);
+                        }}
+                      >
+                        <Text style={[styles.sheetChipText, isActive && styles.sheetChipTextActive]}>
+                          {option.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        )}
 
         {/* Create Task Modal */}
         <Modal
@@ -1682,7 +1706,7 @@ export default function CalendarScreen() {
               <Text style={styles.completeAllTitle}>
                 {isCompletingAll
                   ? `Completing... ${completedCount}/${completeAllTasks.length}`
-                  : `Complete ${completeAllTasks.length} Tasks`}
+                  : `Mark all ${completeAllTasks.length} tasks as done?`}
               </Text>
 
               {isCompletingAll && (
@@ -1695,26 +1719,6 @@ export default function CalendarScreen() {
                       },
                     ]}
                   />
-                </View>
-              )}
-
-              {!isCompletingAll && (
-                <View style={styles.completeAllTaskList}>
-                  {completeAllTasks.map((task) => {
-                    const plant = getPlantDetails(task.plant_id);
-                    const color = TASK_COLORS[task.task_type] || theme.textSecondary;
-                    return (
-                      <View key={task.id} style={styles.completeAllTaskRow}>
-                        <View style={[styles.completeAllDot, { backgroundColor: color }]} />
-                        <Text style={styles.completeAllTaskType} numberOfLines={1}>
-                          {task.task_type.charAt(0).toUpperCase() + task.task_type.slice(1)}
-                        </Text>
-                        <Text style={styles.completeAllTaskPlant} numberOfLines={1}>
-                          {plant.name}
-                        </Text>
-                      </View>
-                    );
-                  })}
                 </View>
               )}
 
@@ -1829,7 +1833,9 @@ function getStartOfWeek(date: Date): Date {
   const d = new Date(date);
   const day = d.getDay();
   const diff = d.getDate() - day;
-  return new Date(d.setDate(diff));
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 const createStyles = (theme: ReturnType<typeof useTheme>) =>
@@ -1948,43 +1954,94 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     groupMenuButtonActive: {
       backgroundColor: theme.primary,
     },
-    groupMenu: {
-      backgroundColor: theme.backgroundSecondary,
-      marginHorizontal: 16,
-      marginTop: 4,
-      marginBottom: 8,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: theme.border,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
+    sheetOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.4)",
+      justifyContent: "flex-end",
+      zIndex: 1000,
+      elevation: 1000,
     },
-    groupOption: {
-      flexDirection: "row",
+    sheetContainer: {
+      backgroundColor: theme.background,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+    },
+    sheetHandle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: theme.border,
+    },
+    sheetHandleArea: {
       alignItems: "center",
-      paddingHorizontal: 16,
-      paddingVertical: 14,
+      paddingTop: 10,
+      paddingBottom: 8,
+    },
+    sheetHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingBottom: 12,
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
-      gap: 12,
     },
-    groupOptionActive: {
-      backgroundColor: theme.background,
-    },
-    groupOptionLast: {
-      borderBottomWidth: 0,
-    },
-    groupText: {
-      flex: 1,
-      fontSize: 15,
+    sheetTitle: {
+      fontSize: 18,
+      fontWeight: "700",
       color: theme.text,
     },
-    groupTextActive: {
+    sheetClearBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 14,
+      backgroundColor: theme.errorLight,
+    },
+    sheetClearText: {
+      fontSize: 13,
       fontWeight: "600",
+      color: theme.error,
+    },
+    sheetScroll: {
+      paddingHorizontal: 20,
+    },
+    sheetScrollContent: {
+      paddingBottom: 20,
+    },
+    sheetSectionTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.textSecondary,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginTop: 16,
+      marginBottom: 8,
+    },
+    sheetChipWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    sheetChip: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: theme.backgroundSecondary,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    sheetChipActive: {
+      backgroundColor: theme.primaryLight,
+      borderColor: theme.primary,
+    },
+    sheetChipText: {
+      fontSize: 14,
+      color: theme.textSecondary,
+      fontWeight: "500",
+    },
+    sheetChipTextActive: {
       color: theme.primary,
+      fontWeight: "600",
     },
     weekView: {
       backgroundColor: theme.card,
@@ -2201,6 +2258,16 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       padding: 16,
       paddingBottom: 16,
     },
+    selectedDateHeaderFixed: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      backgroundColor: theme.primaryLight,
+      borderLeftWidth: 3,
+      borderLeftColor: theme.primary,
+    },
     selectedDateHeader: {
       flexDirection: "row",
       justifyContent: "space-between",
@@ -2233,11 +2300,12 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
     completeAllBtn: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 4,
+      gap: 6,
       backgroundColor: theme.primary,
-      paddingVertical: 5,
-      paddingHorizontal: 10,
+      paddingVertical: 8,
+      paddingHorizontal: 14,
       borderRadius: 8,
+      minHeight: 36,
     },
     completeAllBtnDisabled: {
       opacity: 0.6,
@@ -2297,36 +2365,6 @@ const createStyles = (theme: ReturnType<typeof useTheme>) =>
       height: 6,
       backgroundColor: theme.primary,
       borderRadius: 3,
-    },
-    completeAllTaskList: {
-      width: "100%",
-      marginBottom: 20,
-      gap: 8,
-    },
-    completeAllTaskRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      backgroundColor: theme.background,
-      borderRadius: 8,
-    },
-    completeAllDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-    },
-    completeAllTaskType: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: theme.text,
-      width: 80,
-    },
-    completeAllTaskPlant: {
-      fontSize: 13,
-      color: theme.textSecondary,
-      flex: 1,
     },
     completeAllActions: {
       flexDirection: "row",

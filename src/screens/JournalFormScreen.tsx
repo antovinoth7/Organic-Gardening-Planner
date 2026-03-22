@@ -546,25 +546,37 @@ export default function JournalFormScreen({ navigation, route }: any) {
               ))}
             </View>
 
-            <FloatingLabelInput
-              label="Storage / Notes"
-              value={harvestNotes}
-              onChangeText={(text) =>
-                setHarvestNotes(sanitizeAlphaNumericSpaces(text))
-              }
-              multiline
-              numberOfLines={2}
-            />
+            <View style={[styles.notesWrapper, { marginTop: 12 }]}>
+              <FloatingLabelInput
+                label="Storage / Notes"
+                value={harvestNotes}
+                onChangeText={(text) =>
+                  setHarvestNotes(sanitizeAlphaNumericSpaces(text))
+                }
+                multiline
+                numberOfLines={3}
+                maxLength={500}
+              />
+              <Text style={styles.charCounter}>
+                {harvestNotes.length}/500
+              </Text>
+            </View>
           </View>
         )}
 
-        <FloatingLabelInput
-          label="What's happening in your garden today?"
-          value={content}
-          onChangeText={(text) => setContent(sanitizeAlphaNumericSpaces(text))}
-          multiline
-          numberOfLines={6}
-        />
+        <View style={styles.notesWrapper}>
+          <FloatingLabelInput
+            label="What's happening in your garden today?"
+            value={content}
+            onChangeText={(text) => setContent(sanitizeAlphaNumericSpaces(text))}
+            multiline
+            numberOfLines={6}
+            maxLength={5000}
+          />
+          <Text style={styles.charCounter}>
+            {content.length}/5000
+          </Text>
+        </View>
 
         {/* Extra spacing for keyboard */}
         <View style={{ height: 300 }} />
@@ -787,14 +799,13 @@ const createStyles = (theme: any) =>
     qualityButtonTextActive: {
       color: theme.primary,
     },
-    harvestNotesInput: {
-      backgroundColor: theme.inputBackground,
-      padding: 12,
-      borderRadius: 8,
-      fontSize: 16,
-      color: theme.inputText,
-      borderWidth: 1,
-      borderColor: theme.inputBorder,
-      minHeight: 60,
+    notesWrapper: {
+      marginBottom: 4,
+    },
+    charCounter: {
+      fontSize: 12,
+      color: theme.textTertiary,
+      textAlign: "right",
+      marginTop: -6,
     },
   });
