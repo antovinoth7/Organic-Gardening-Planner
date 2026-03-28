@@ -101,9 +101,11 @@ export interface PestDiseaseRecord {
   severity?: IssueSeverity;
   affectedPart?: string;
   treatment?: string;
+  treatmentEffectiveness?: "effective" | "partially_effective" | "ineffective";
   resolved: boolean;
   resolvedAt?: string;
   notes?: string;
+  photo_filename?: string;
 }
 
 export interface Plant {

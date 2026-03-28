@@ -117,6 +117,34 @@ Specific current behavior to preserve:
 - Location defaults and normalization live in `src/services/locations.ts`.
 - These settings are cached locally and synced through `user_settings`.
 
+## Styles Architecture
+- All styles live in `src/styles/` as separate files. No screen or component has inline `StyleSheet.create`.
+- Style files export a `createStyles(theme)` factory function that takes the theme object and returns a `StyleSheet`.
+- Exception: `errorBoundaryStyles.ts` exports a static `styles` object (class component, no theme).
+- Exception: `floatingTabBarStyles.ts` exports both `createStyles` (tab bar) and `fabStyles` (FAB button).
+- Exception: `calendarStyles.ts` also exports the `getStartOfWeek()` helper alongside styles.
+- Naming convention: `src/styles/<camelCaseName>Styles.ts` matching the screen or component name.
+- When adding a new screen or component, create its style file in `src/styles/` following this pattern.
+- In screens/components, import and call `createStyles(theme)` — use `useMemo(() => createStyles(theme), [theme])` for larger screens.
+
+Current style files (21 total):
+- **Screens (13):** `authStyles`, `moreStyles`, `settingsStyles`, `archivedPlantsStyles`, `journalFormStyles`, `manageLocationsStyles`, `journalStyles`, `plantsStyles`, `managePlantCatalogStyles`, `todayStyles`, `calendarStyles`, `plantFormStyles`, `plantDetailStyles`
+- **Components (8):** `collapsibleSectionStyles`, `errorBoundaryStyles`, `floatingLabelInputStyles`, `floatingTabBarStyles`, `photoSourceModalStyles`, `plantCardStyles`, `taskCardStyles`, `themedDropdownStyles`
+
+## Extracted Components
+Larger screens have been decomposed into focused sub-components in `src/components/`:
+- **Modals:** `DiscardChangesModal`, `CompleteAllModal`, `TaskCompletionModal`, `CreateTaskModal`, `PestDiseaseModal`
+- **Calendar views:** `WeekCalendarView`, `MonthCalendarView`
+- **Detail sections:** `PestDiseaseHistorySection`, `HarvestHistorySection`
+
+Prefer reusing these over rebuilding similar UI in new screens.
+
+## Custom Hooks
+- `src/hooks/useCalendarData.ts` — data fetching, filtering, and state logic for `CalendarScreen`.
+- `src/hooks/usePlantFormData.ts` — catalog/location/profile loading for `PlantFormScreen`.
+
+When adding complex data logic to a screen, consider extracting it into a custom hook in `src/hooks/`.
+
 ## UI Conventions
 - Use `useTheme()` for colors and shared tokens.
 - Use `useThemeMode()` for theme mode changes.
@@ -129,7 +157,7 @@ Specific current behavior to preserve:
   - `CollapsibleSection`
   - `ErrorBoundary`
   - `FloatingLabelInput`
-  - `FloatingTabBar`
+  - `FloatingTabBar` (includes `AnimatedFAB` and `FloatingTabBarProvider`)
   - `ThemedDropdown`
 
 ## Reliability and Logging

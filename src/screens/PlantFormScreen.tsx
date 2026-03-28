@@ -1,16 +1,14 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
   TextInput,
-  StyleSheet,
   TouchableOpacity,
   ScrollView,
   Alert,
   KeyboardAvoidingView,
   Platform,
   BackHandler,
-  Modal,
   useWindowDimensions,
 } from "react-native";
 import { Image } from "expo-image";
@@ -18,7 +16,6 @@ import * as ImagePicker from "expo-image-picker";
 import ThemedDropdown from "../components/ThemedDropdown";
 import FloatingLabelInput from "../components/FloatingLabelInput";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   getPlant,
@@ -40,9 +37,6 @@ import {
   FertiliserType,
   PestDiseaseRecord,
   GrowthStage,
-  PlantCatalog,
-  PlantCareProfiles,
-  IssueSeverity,
 } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -50,8 +44,6 @@ import {
   getDefaultHarvestSeason,
   getCompanionSuggestions,
   getIncompatiblePlants,
-  getCommonPests,
-  getCommonDiseases,
   getCoconutAgeInfo,
   CoconutAgeInfo,
 } from "../utils/plantHelpers";
@@ -61,18 +53,13 @@ import {
   getPruningTechniques,
 } from "../utils/plantCareDefaults";
 import { useTheme } from "../theme";
+import { createStyles } from "../styles/plantFormStyles";
 import CollapsibleSection from "../components/CollapsibleSection";
 import PhotoSourceModal from "../components/PhotoSourceModal";
-import {
-  DEFAULT_CHILD_LOCATIONS,
-  DEFAULT_PARENT_LOCATIONS,
-  getLocationConfig,
-} from "../services/locations";
-import {
-  DEFAULT_PLANT_CATALOG,
-  getPlantCatalog,
-} from "../services/plantCatalog";
-import { getPlantCareProfiles } from "../services/plantCareProfiles";
+import DiscardChangesModal from "../components/DiscardChangesModal";
+import PestDiseaseModal from "../components/PestDiseaseModal";
+import { getLocationConfig } from "../services/locations";
+import { usePlantFormData } from "../hooks/usePlantFormData";
 import {
   sanitizeAlphaNumericSpaces,
   sanitizeLandmarkText,
@@ -81,25 +68,8 @@ import { toLocalDateString, formatDateDisplay } from "../utils/dateHelpers";
 
 const NOTES_MAX_LENGTH = 500;
 type FormMode = "quick" | "advanced";
-type FormSectionKey = "basic" | "location" | "care" | "health" | "harvest" | "coconut" | "notesHistory";
+type FormSectionKey = "basic" | "location" | "care" | "health" | "harvest" | "coconut" | "notesHistory" | "pestDisease";
 const sanitizeNumberText = (value: string) => value.replace(/[^0-9]/g, "");
-const TAMIL_NADU_HARVEST_SEASONS = [
-  "Year Round",
-  "Summer (Mar-May)",
-  "Southwest Monsoon (Jun-Sep)",
-  "Northeast Monsoon (Oct-Dec)",
-  "Cool Dry (Jan-Feb)",
-];
-const ISSUE_SEVERITY_OPTIONS: {
-  value: IssueSeverity;
-  label: string;
-}[] = [
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-  { value: "severe", label: "Severe" },
-];
-
 /**
  * Builds the base portion of an auto-generated plant name.
  *
@@ -226,38 +196,50 @@ export default function PlantFormScreen({ route, navigation }: any) {
   const isCompactScreen = screenWidth <= 380;
 
   const [name, setName] = useState("");
-  const [existingPlants, setExistingPlants] = useState<Plant[]>([]);
   const [loadedGeneratedName, setLoadedGeneratedName] = useState("");
   const [plantType, setPlantType] = useState<PlantType>("vegetable");
   const [plantVariety, setPlantVariety] = useState("");
-  const [plantCatalog, setPlantCatalog] = useState<PlantCatalog>(
-    DEFAULT_PLANT_CATALOG,
-  );
-  const [plantCareProfiles, setPlantCareProfiles] = useState<PlantCareProfiles>(
-    {} as PlantCareProfiles,
-  );
-  const [careProfilesLoaded, setCareProfilesLoaded] = useState(false);
   const [spaceType, setSpaceType] = useState<SpaceType>("ground");
   const [location, setLocation] = useState("");
   const [parentLocation, setParentLocation] = useState("");
   const [childLocation, setChildLocation] = useState("");
-  const [parentLocations, setParentLocations] = useState<string[]>(
-    DEFAULT_PARENT_LOCATIONS,
-  );
-  const [childLocations, setChildLocations] = useState<string[]>(
-    DEFAULT_CHILD_LOCATIONS,
-  );
-  const [locationShortNames, setLocationShortNames] = useState<Record<string, string>>({});
   const [landmarks, setLandmarks] = useState("");
   const [bedName, setBedName] = useState("");
   const [potSize, setPotSize] = useState("");
   const [variety, setVariety] = useState("");
   const [plantingDate, setPlantingDate] = useState("");
   const [harvestSeason, setHarvestSeason] = useState("");
+  const [formMode, setFormMode] = useState<FormMode>("quick");
+  const [customVarietyMode, setCustomVarietyMode] = useState(false);
+
+  const {
+    existingPlants,
+    setExistingPlants,
+    plantCareProfiles,
+    careProfilesLoaded,
+    locationShortNames,
+    parentLocationOptions,
+    childLocationOptions,
+    specificPlantOptions,
+    varietySuggestions,
+    harvestSeasonOptions,
+    basicFieldCount,
+    locationFieldCount,
+    harvestSectionFieldCount,
+    notesHistoryFieldCount,
+  } = usePlantFormData({
+    plantType,
+    plantVariety,
+    parentLocation,
+    childLocation,
+    harvestSeason,
+    formMode,
+    customVarietyMode,
+  });
+
   const [harvestStartDate, setHarvestStartDate] = useState("");
   const [harvestEndDate, setHarvestEndDate] = useState("");
   const [notes, setNotes] = useState("");
-  const [formMode, setFormMode] = useState<FormMode>("quick");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoFilename, setPhotoFilename] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -283,10 +265,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
   >([]);
   const [showPestDiseaseModal, setShowPestDiseaseModal] = useState(false);
   const [showDiscardModal, setShowDiscardModal] = useState(false);
-  const [showPestOccurredDatePicker, setShowPestOccurredDatePicker] =
-    useState(false);
   const [showPhotoSourceModal, setShowPhotoSourceModal] = useState(false);
-  const [customVarietyMode, setCustomVarietyMode] = useState(false);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [sectionExpanded, setSectionExpanded] = useState<
     Record<FormSectionKey, boolean>
@@ -298,6 +277,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
     harvest: false,
     coconut: false,
     notesHistory: false,
+    pestDisease: false,
   });
   const [autoApplyCareDefaults, setAutoApplyCareDefaults] = useState(true);
   const [currentPestDisease, setCurrentPestDisease] =
@@ -308,6 +288,8 @@ export default function PlantFormScreen({ route, navigation }: any) {
       severity: "medium",
       resolved: false,
     });
+  const [editingPestIndex, setEditingPestIndex] = useState<number | null>(null);
+  const [pestPhotoUri, setPestPhotoUri] = useState<string | null>(null);
 
   // PHASE 1: Growth Stage & Pruning
   const [growthStage, setGrowthStage] = useState<GrowthStage>("seedling");
@@ -334,6 +316,55 @@ export default function PlantFormScreen({ route, navigation }: any) {
   const isDiscarding = useRef(false);
   const autoSuggestApplied = useRef(false);
 
+  // Refs for horizontal chip ScrollViews (auto-scroll to selected on edit)
+  const categoryChipsRef = useRef<ScrollView>(null);
+  const waterNeedsChipsRef = useRef<ScrollView>(null);
+  const healthChipsRef = useRef<ScrollView>(null);
+  const growthStageChipsRef = useRef<ScrollView>(null);
+
+  const CATEGORY_OPTIONS = useMemo(() => [
+    { label: "🥬 Vegetable", value: "vegetable" },
+    { label: "🍇 Fruit", value: "fruit_tree" },
+    { label: "🥥 Coconut", value: "coconut_tree" },
+    { label: "🌿 Herb", value: "herb" },
+    { label: "🌲 Timber", value: "timber_tree" },
+    { label: "🌸 Flower", value: "flower" },
+    { label: "🌱 Shrub", value: "shrub" },
+  ], []);
+
+  const WATER_NEEDS_OPTIONS = useMemo(() => [
+    { label: "Low", value: "low", drops: 1 },
+    { label: "Medium", value: "medium", drops: 2 },
+    { label: "High", value: "high", drops: 3 },
+  ] as const, []);
+
+  const HEALTH_OPTIONS = useMemo(() => [
+    { label: "✅ Healthy", value: "healthy" },
+    { label: "⚠️ Stressed", value: "stressed" },
+    { label: "🔄 Recovering", value: "recovering" },
+    { label: "❌ Sick", value: "sick" },
+  ], []);
+
+  const GROWTH_STAGE_OPTIONS = useMemo(() => [
+    { label: "🌱 Seedling", value: "seedling" },
+    { label: "🌿 Vegetative", value: "vegetative" },
+    { label: "🌸 Flowering", value: "flowering" },
+    { label: "🍎 Fruiting", value: "fruiting" },
+    { label: "🌳 Mature", value: "mature" },
+    { label: "💤 Dormant", value: "dormant" },
+  ], []);
+
+  // Estimated chip width (paddingH 14*2 + ~60 text + gap 8) ≈ 100px per chip
+  const scrollChipsToIndex = useCallback((ref: React.RefObject<ScrollView | null>, index: number) => {
+    if (index > 0) {
+      // Each chip ≈ 100px wide + 8px gap
+      const offset = Math.max(0, index * 108 - 40);
+      setTimeout(() => {
+        ref.current?.scrollTo({ x: offset, animated: false });
+      }, 100);
+    }
+  }, []);
+
   useEffect(() => {
     if (plantId) {
       setFormMode("advanced");
@@ -347,62 +378,6 @@ export default function PlantFormScreen({ route, navigation }: any) {
       return () => clearTimeout(timeoutId);
     }
   }, [plantId]);
-
-  const loadLocations = async () => {
-    try {
-      const config = await getLocationConfig();
-      setParentLocations(config.parentLocations);
-      setChildLocations(config.childLocations);
-      setLocationShortNames(config.parentLocationShortNames ?? {});
-    } catch (error) {
-      console.error("Error loading locations:", error);
-    }
-  };
-
-  const loadPlantCatalog = async () => {
-    try {
-      const catalog = await getPlantCatalog();
-      setPlantCatalog(catalog);
-    } catch (error) {
-      console.error("Error loading plant catalog:", error);
-    }
-  };
-
-  const loadExistingPlants = async () => {
-    try {
-      const plants = await getAllPlants();
-      setExistingPlants(plants);
-    } catch (error) {
-      console.error("Error loading plants for naming:", error);
-    }
-  };
-
-  const loadPlantCareProfiles = async () => {
-    try {
-      const profiles = await getPlantCareProfiles();
-      setPlantCareProfiles(profiles);
-    } catch (error) {
-      console.error("Error loading plant care profiles:", error);
-    } finally {
-      setCareProfilesLoaded(true);
-    }
-  };
-
-  useEffect(() => {
-    loadLocations();
-    loadPlantCatalog();
-    loadPlantCareProfiles();
-    loadExistingPlants();
-  }, []);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      loadLocations();
-      loadPlantCatalog();
-      loadPlantCareProfiles();
-      loadExistingPlants();
-    }, []),
-  );
 
   const setSectionExpandedState = (
     section: FormSectionKey,
@@ -420,6 +395,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
       harvest: [],
       coconut: [],
       notesHistory: [],
+      pestDisease: [],
     };
 
     if (!plantVariety.trim()) {
@@ -655,79 +631,8 @@ export default function PlantFormScreen({ route, navigation }: any) {
     }
   }, [formMode]);
 
-  const parentLocationOptions = React.useMemo(() => {
-    if (parentLocation && !parentLocations.includes(parentLocation)) {
-      return [parentLocation, ...parentLocations];
-    }
-    return parentLocations;
-  }, [parentLocations, parentLocation]);
-
-  const childLocationOptions = React.useMemo(() => {
-    if (childLocation && !childLocations.includes(childLocation)) {
-      return [childLocation, ...childLocations];
-    }
-    return childLocations;
-  }, [childLocations, childLocation]);
-
-  const specificPlantOptions = React.useMemo(() => {
-    const plants = plantCatalog.categories[plantType]?.plants ?? [];
-    if (plantVariety && !plants.includes(plantVariety)) {
-      return [plantVariety, ...plants];
-    }
-    return plants;
-  }, [plantCatalog, plantType, plantVariety]);
-
-  const varietySuggestions = React.useMemo(() => {
-    if (!plantVariety) return [];
-    return plantCatalog.categories[plantType]?.varieties?.[plantVariety] ?? [];
-  }, [plantCatalog, plantType, plantVariety]);
-
-  const basicFieldCount = React.useMemo(() => {
-    // Always shown in Basic Information
-    // 1) Photo, 2) Display name, 3) Plant Category, 4) Specific Plant
-    let count = 4;
-
-    if (formMode === "advanced") {
-      // Variety control + Planting Date
-      count += 2;
-
-      // Extra custom variety input appears in advanced mode when "Other" is selected
-      if (varietySuggestions.length > 0 && customVarietyMode) {
-        count += 1;
-      }
-    }
-
-    return count;
-  }, [formMode, varietySuggestions.length, customVarietyMode]);
-
-  const locationFieldCount = React.useMemo(() => {
-    // 1) Main Location
-    let count = 1;
-    // Direction/section picker appears after main location is selected
-    if (parentLocation !== "") {
-      count += 1;
-    }
-    if (formMode === "advanced") {
-      // Landmarks
-      count += 1;
-    }
-    return count;
-  }, [formMode, parentLocation]);
-
-  const harvestSeasonOptions = React.useMemo(() => {
-    if (!harvestSeason) return TAMIL_NADU_HARVEST_SEASONS;
-    if (TAMIL_NADU_HARVEST_SEASONS.includes(harvestSeason)) {
-      return TAMIL_NADU_HARVEST_SEASONS;
-    }
-    return [harvestSeason, ...TAMIL_NADU_HARVEST_SEASONS];
-  }, [harvestSeason]);
-
-  const harvestSectionFieldCount = React.useMemo(() => {
-    return plantType === "fruit_tree" ? 4 : 2;
-  }, [plantType]);
-
-  const notesHistoryFieldCount = React.useMemo(() => {
-    return 1 + Math.max(1, pestDiseaseHistory.length);
+  const pestDiseaseFieldCount = React.useMemo(() => {
+    return Math.max(1, pestDiseaseHistory.length);
   }, [pestDiseaseHistory.length]);
 
   // Form completion progress — derived from section field counts, checks actual values
@@ -740,6 +645,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
       total += 2; // Health section (fieldCount={2})
       total += harvestSectionFieldCount;
       total += notesHistoryFieldCount;
+      total += pestDiseaseFieldCount;
       if (plantType === "coconut_tree") {
         total += 3; // Coconut section (fieldCount={3})
       }
@@ -794,6 +700,8 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
       // — Notes & History —
       if (notes) filled += 1;
+
+      // — Pest & Disease —
       filled += pestDiseaseHistory.length; // each record counts as filled
 
       // — Coconut Tracking —
@@ -807,7 +715,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
     return { filled, total, percent: total > 0 ? Math.round((filled / total) * 100) : 0 };
   }, [
     basicFieldCount, locationFieldCount, harvestSectionFieldCount,
-    notesHistoryFieldCount, formMode, plantType,
+    notesHistoryFieldCount, pestDiseaseFieldCount, formMode, plantType,
     photoUri, name, plantVariety, variety, customVarietyMode,
     varietySuggestions.length, plantingDate,
     parentLocation, childLocation, landmarks,
@@ -990,6 +898,19 @@ export default function PlantFormScreen({ route, navigation }: any) {
         setTimeout(() => {
           initialDataLoaded.current = true;
         }, 500);
+
+        // Auto-scroll horizontal chip rows to show the selected value
+        const catIdx = CATEGORY_OPTIONS.findIndex(c => c.value === plant.plant_type);
+        scrollChipsToIndex(categoryChipsRef, catIdx);
+
+        const waterIdx = WATER_NEEDS_OPTIONS.findIndex(w => w.value === (plant.water_requirement || "medium"));
+        scrollChipsToIndex(waterNeedsChipsRef, waterIdx);
+
+        const healthIdx = HEALTH_OPTIONS.findIndex(h => h.value === (plant.health_status || "healthy"));
+        scrollChipsToIndex(healthChipsRef, healthIdx);
+
+        const growthIdx = GROWTH_STAGE_OPTIONS.findIndex(g => g.value === (plant.growth_stage || "seedling"));
+        scrollChipsToIndex(growthStageChipsRef, growthIdx);
       }
     } catch (error: any) {
       Alert.alert("Error", error.message);
@@ -1210,7 +1131,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
           </Text>
           {hasUnsavedChanges && <View style={styles.unsavedDot} />}
         </View>
-        <TouchableOpacity onPress={handleSave} disabled={loading}>
+        <TouchableOpacity onPress={handleSave} disabled={loading} style={[styles.saveButton, loading && styles.saveButtonDisabled]}>
           <Text style={[styles.saveText, loading && styles.saveTextDisabled]}>
             {loading ? "Saving..." : "Save"}
           </Text>
@@ -1220,6 +1141,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.modeToggleContainer}>
           <TouchableOpacity
@@ -1306,20 +1228,13 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
           <Text style={styles.fieldGroupLabel}>Plant Category *</Text>
           <ScrollView
+            ref={categoryChipsRef}
             horizontal
             showsHorizontalScrollIndicator={false}
             style={styles.categoryChipsScroll}
             contentContainerStyle={styles.categoryChipsContent}
           >
-            {[
-              { label: "🥬 Vegetable", value: "vegetable" },
-              { label: "🍇 Fruit", value: "fruit_tree" },
-              { label: "🥥 Coconut", value: "coconut_tree" },
-              { label: "🌿 Herb", value: "herb" },
-              { label: "🌲 Timber", value: "timber_tree" },
-              { label: "🌸 Flower", value: "flower" },
-              { label: "🌱 Shrub", value: "shrub" },
-            ].map((cat) => (
+            {CATEGORY_OPTIONS.map((cat) => (
               <TouchableOpacity
                 key={cat.value}
                 style={[
@@ -1810,6 +1725,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
               <Text style={styles.fieldGroupLabel}>💧 Water Needs</Text>
               <ScrollView
+                ref={waterNeedsChipsRef}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.categoryChipsScroll}
@@ -2071,17 +1987,13 @@ export default function PlantFormScreen({ route, navigation }: any) {
           >
             <Text style={styles.fieldGroupLabel}>🌿 Health Status</Text>
             <ScrollView
+              ref={healthChipsRef}
               horizontal
               showsHorizontalScrollIndicator={false}
               style={styles.categoryChipsScroll}
               contentContainerStyle={styles.categoryChipsContent}
             >
-              {[
-                { label: "✅ Healthy", value: "healthy" },
-                { label: "⚠️ Stressed", value: "stressed" },
-                { label: "🔄 Recovering", value: "recovering" },
-                { label: "❌ Sick", value: "sick" },
-              ].map((opt) => (
+              {HEALTH_OPTIONS.map((opt) => (
                 <TouchableOpacity
                   key={opt.value}
                   style={[
@@ -2117,19 +2029,13 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
             <Text style={styles.fieldGroupLabel}>🌱 Growth Stage</Text>
             <ScrollView
+              ref={growthStageChipsRef}
               horizontal
               showsHorizontalScrollIndicator={false}
               style={styles.categoryChipsScroll}
               contentContainerStyle={styles.categoryChipsContent}
             >
-              {[
-                { label: "🌱 Seedling", value: "seedling" },
-                { label: "🌿 Vegetative", value: "vegetative" },
-                { label: "🌸 Flowering", value: "flowering" },
-                { label: "🍎 Fruiting", value: "fruiting" },
-                { label: "🌳 Mature", value: "mature" },
-                { label: "� Dormant", value: "dormant" },
-              ].map((opt) => (
+              {GROWTH_STAGE_OPTIONS.map((opt) => (
                 <TouchableOpacity
                   key={opt.value}
                   style={[
@@ -2638,13 +2544,29 @@ export default function PlantFormScreen({ route, navigation }: any) {
               </View>
             )}
 
-            <View style={styles.fieldGroupDivider} />
+          </CollapsibleSection>
+        )}
 
+        {/* Pest & Disease Section — own collapsible */}
+        {formMode === "advanced" && (
+          <CollapsibleSection
+            title="Pest & Disease"
+            icon="bug"
+            fieldCount={pestDiseaseFieldCount}
+            defaultExpanded={false}
+            expanded={sectionExpanded.pestDisease}
+            onExpandedChange={(expanded) =>
+              setSectionExpandedState("pestDisease", expanded)
+            }
+            hasError={showValidationErrors && validationErrors.pestDisease.length > 0}
+          >
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.fieldGroupLabel}>🐛 Pest & Disease Records</Text>
               <TouchableOpacity
                 style={styles.addPestButtonPill}
                 onPress={() => {
+                  setEditingPestIndex(null);
+                  setPestPhotoUri(null);
                   setCurrentPestDisease({
                     type: "pest",
                     name: "",
@@ -2652,7 +2574,6 @@ export default function PlantFormScreen({ route, navigation }: any) {
                     severity: "medium",
                     resolved: false,
                   });
-                  setShowPestOccurredDatePicker(false);
                   setShowPestDiseaseModal(true);
                 }}
                 activeOpacity={0.7}
@@ -2664,8 +2585,25 @@ export default function PlantFormScreen({ route, navigation }: any) {
 
             {pestDiseaseHistory.length > 0 ? (
               <View style={styles.pestDiseaseList}>
-                {pestDiseaseHistory.map((record, index) => (
-                  <View key={index} style={styles.pestDiseaseCard}>
+                {/* Active (unresolved) records first */}
+                {pestDiseaseHistory
+                  .map((record, index) => ({ record, index }))
+                  .sort((a, b) => (a.record.resolved === b.record.resolved ? 0 : a.record.resolved ? 1 : -1))
+                  .map(({ record, index }) => (
+                  <TouchableOpacity
+                    key={record.id || index}
+                    style={[
+                      styles.pestDiseaseCard,
+                      { borderLeftWidth: 3, borderLeftColor: record.resolved ? "#4CAF50" : "#f44336" },
+                    ]}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setEditingPestIndex(index);
+                      setCurrentPestDisease({ ...record });
+                      setPestPhotoUri(record.photo_filename || null);
+                      setShowPestDiseaseModal(true);
+                    }}
+                  >
                     <View style={styles.pestDiseaseHeader}>
                       <Ionicons
                         name={record.type === "pest" ? "bug" : "medical"}
@@ -2718,7 +2656,7 @@ export default function PlantFormScreen({ route, navigation }: any) {
                         color="#f44336"
                       />
                     </TouchableOpacity>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             ) : (
@@ -2730,365 +2668,44 @@ export default function PlantFormScreen({ route, navigation }: any) {
         )}
 
         {/* Discard Changes Modal */}
-        <Modal
+        <DiscardChangesModal
           visible={showDiscardModal}
-          animationType="fade"
-          transparent={true}
-          onRequestClose={() => setShowDiscardModal(false)}
-        >
-          <View style={styles.discardOverlay}>
-            <View style={styles.discardCard}>
-              <View style={styles.discardIconWrap}>
-                <Ionicons name="alert-circle" size={36} color={theme.error} />
-              </View>
-              <Text style={styles.discardTitle}>Discard Changes?</Text>
-              <Text style={styles.discardMessage}>
-                You have unsaved changes. Are you sure you want to leave without saving?
-              </Text>
-              <View style={styles.discardActions}>
-                <TouchableOpacity
-                  style={styles.discardKeepButton}
-                  onPress={() => setShowDiscardModal(false)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="create-outline" size={18} color={theme.primary} />
-                  <Text style={styles.discardKeepText}>Keep Editing</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.discardButton}
-                  onPress={() => {
-                    setShowDiscardModal(false);
-                    isDiscarding.current = true;
-                    setHasUnsavedChanges(false);
-                    navigation.goBack();
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="trash-outline" size={18} color="#fff" />
-                  <Text style={styles.discardButtonText}>Discard</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+          theme={theme}
+          styles={styles}
+          onKeepEditing={() => setShowDiscardModal(false)}
+          onDiscard={() => {
+            setShowDiscardModal(false);
+            isDiscarding.current = true;
+            setHasUnsavedChanges(false);
+            navigation.goBack();
+          }}
+        />
 
         {/* Pest/Disease Modal */}
-        <Modal
+        <PestDiseaseModal
           visible={showPestDiseaseModal}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => {
-            setShowPestOccurredDatePicker(false);
+          editingIndex={editingPestIndex}
+          editingRecord={editingPestIndex !== null ? currentPestDisease : null}
+          initialPhotoUri={pestPhotoUri}
+          pestDiseaseHistory={pestDiseaseHistory}
+          plantType={plantType}
+          plantVariety={plantVariety}
+          plantId={plantId}
+          healthStatus={healthStatus}
+          styles={styles}
+          theme={theme}
+          bottomInset={insets.bottom}
+          onClose={() => {
+            setEditingPestIndex(null);
             setShowPestDiseaseModal(false);
           }}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Add Pest/Disease Record</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    setShowPestOccurredDatePicker(false);
-                    setShowPestDiseaseModal(false);
-                  }}
-                >
-                  <Ionicons name="close" size={24} color="#333" />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView
-                style={styles.modalScrollView}
-                contentContainerStyle={{
-                  paddingBottom: Math.max(insets.bottom, 12),
-                }}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-              >
-                <Text style={styles.label}>Type</Text>
-                <View style={styles.typeButtons}>
-                  <TouchableOpacity
-                    style={[
-                      styles.typeButton,
-                      currentPestDisease.type === "pest" &&
-                        styles.typeButtonActive,
-                    ]}
-                    onPress={() =>
-                      setCurrentPestDisease({
-                        ...currentPestDisease,
-                        type: "pest",
-                      })
-                    }
-                  >
-                    <Ionicons
-                      name="bug"
-                      size={20}
-                      color={
-                        currentPestDisease.type === "pest" ? "#2e7d32" : "#666"
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.typeButtonText,
-                        currentPestDisease.type === "pest" &&
-                          styles.typeButtonTextActive,
-                      ]}
-                    >
-                      Pest
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.typeButton,
-                      currentPestDisease.type === "disease" &&
-                        styles.typeButtonActive,
-                    ]}
-                    onPress={() =>
-                      setCurrentPestDisease({
-                        ...currentPestDisease,
-                        type: "disease",
-                      })
-                    }
-                  >
-                    <Ionicons
-                      name="medical"
-                      size={20}
-                      color={
-                        currentPestDisease.type === "disease"
-                          ? "#2e7d32"
-                          : "#666"
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.typeButtonText,
-                        currentPestDisease.type === "disease" &&
-                          styles.typeButtonTextActive,
-                      ]}
-                    >
-                      Disease
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <Text style={styles.label}>
-                  Common{" "}
-                  {currentPestDisease.type === "pest" ? "Pests" : "Diseases"}:
-                </Text>
-                <Text style={styles.helperText}>
-                  Suggestions are tuned for Tamil Nadu and Kanyakumari crops.
-                </Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.suggestionsScroll}
-                >
-                  {(currentPestDisease.type === "pest"
-                    ? getCommonPests(plantType, plantVariety)
-                    : getCommonDiseases(plantType, plantVariety)
-                  ).map((item, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.suggestionChip}
-                      onPress={() =>
-                        setCurrentPestDisease({
-                          ...currentPestDisease,
-                          name: item,
-                        })
-                      }
-                    >
-                      <Text style={styles.suggestionChipText}>{item}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-
-                <TouchableOpacity
-                  style={styles.dateButton}
-                  onPress={() => setShowPestOccurredDatePicker(true)}
-                >
-                  <Ionicons name="calendar-outline" size={20} color="#666" />
-                  <Text
-                    style={
-                      currentPestDisease.occurredAt
-                        ? styles.dateButtonText
-                        : styles.datePlaceholder
-                    }
-                  >
-                    {currentPestDisease.occurredAt ? formatDateDisplay(currentPestDisease.occurredAt) : "Occurred Date"}
-                  </Text>
-                </TouchableOpacity>
-                {showPestOccurredDatePicker && (
-                  <DateTimePicker
-                    value={
-                      currentPestDisease.occurredAt
-                        ? new Date(currentPestDisease.occurredAt)
-                        : new Date()
-                    }
-                    mode="date"
-                    display={Platform.OS === "ios" ? "spinner" : "default"}
-                    onChange={(_, selectedDate) => {
-                      setShowPestOccurredDatePicker(Platform.OS === "ios");
-                      if (selectedDate) {
-                        setCurrentPestDisease({
-                          ...currentPestDisease,
-                          occurredAt: toLocalDateString(selectedDate),
-                        });
-                      }
-                    }}
-                  />
-                )}
-
-                <ThemedDropdown
-                  items={ISSUE_SEVERITY_OPTIONS.map((option) => ({
-                    label: option.label,
-                    value: option.value,
-                  }))}
-                  selectedValue={currentPestDisease.severity || "medium"}
-                  onValueChange={(value) =>
-                    setCurrentPestDisease({
-                      ...currentPestDisease,
-                      severity: value as IssueSeverity,
-                    })
-                  }
-                  label="Severity"
-                  placeholder="Severity"
-                />
-
-                <FloatingLabelInput
-                  label="Affected Part (Leaf/Stem/Fruit/Root)"
-                  value={currentPestDisease.affectedPart || ""}
-                  onChangeText={(text) =>
-                    setCurrentPestDisease({
-                      ...currentPestDisease,
-                      affectedPart: sanitizeAlphaNumericSpaces(text),
-                    })
-                  }
-                />
-
-                <FloatingLabelInput
-                  label={`${
-                    currentPestDisease.type === "pest" ? "Pest" : "Disease"
-                  } Name *`}
-                  value={currentPestDisease.name}
-                  onChangeText={(text) =>
-                    setCurrentPestDisease({
-                      ...currentPestDisease,
-                      name: sanitizeAlphaNumericSpaces(text),
-                    })
-                  }
-                />
-
-                <FloatingLabelInput
-                  label="Treatment Used"
-                  value={currentPestDisease.treatment || ""}
-                  onChangeText={(text) =>
-                    setCurrentPestDisease({
-                      ...currentPestDisease,
-                      treatment: sanitizeAlphaNumericSpaces(text),
-                    })
-                  }
-                />
-
-                <FloatingLabelInput
-                  label="Notes"
-                  value={currentPestDisease.notes || ""}
-                  onChangeText={(text) =>
-                    setCurrentPestDisease({
-                      ...currentPestDisease,
-                      notes: sanitizeAlphaNumericSpaces(text),
-                    })
-                  }
-                  multiline
-                  numberOfLines={3}
-                />
-
-                <TouchableOpacity
-                  style={[
-                    styles.settingToggle,
-                    currentPestDisease.resolved && styles.settingToggleActive,
-                  ]}
-                  onPress={() =>
-                    setCurrentPestDisease({
-                      ...currentPestDisease,
-                      resolved: !currentPestDisease.resolved,
-                      resolvedAt: !currentPestDisease.resolved
-                        ? toLocalDateString(new Date())
-                        : undefined,
-                    })
-                  }
-                  activeOpacity={0.85}
-                  accessibilityRole="switch"
-                  accessibilityState={{ checked: currentPestDisease.resolved }}
-                >
-                  <View style={styles.settingToggleLeft}>
-                    <View
-                      style={[
-                        styles.settingToggleIconWrap,
-                        currentPestDisease.resolved &&
-                          styles.settingToggleIconWrapActive,
-                      ]}
-                    >
-                      <Ionicons
-                        name={
-                          currentPestDisease.resolved
-                            ? "checkmark-done-circle"
-                            : "time-outline"
-                        }
-                        size={18}
-                        color={
-                          currentPestDisease.resolved
-                            ? theme.primary
-                            : theme.textSecondary
-                        }
-                      />
-                    </View>
-                    <Text
-                      style={[
-                        styles.settingToggleLabel,
-                        currentPestDisease.resolved &&
-                          styles.settingToggleLabelActive,
-                      ]}
-                    >
-                      Resolved
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.settingSwitchTrack,
-                      currentPestDisease.resolved &&
-                        styles.settingSwitchTrackActive,
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.settingSwitchThumb,
-                        currentPestDisease.resolved &&
-                          styles.settingSwitchThumbActive,
-                      ]}
-                    />
-                  </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.modalSaveButton}
-                  onPress={() => {
-                    if (currentPestDisease.name.trim()) {
-                      setPestDiseaseHistory([
-                        ...pestDiseaseHistory,
-                        { ...currentPestDisease, id: Date.now().toString() },
-                      ]);
-                      setShowPestOccurredDatePicker(false);
-                      setShowPestDiseaseModal(false);
-                    } else {
-                      Alert.alert("Validation Error", "Please enter a name");
-                    }
-                  }}
-                >
-                  <Text style={styles.modalSaveButtonText}>Add Record</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
+          onSave={(updatedHistory) => {
+            setPestDiseaseHistory(updatedHistory);
+            setEditingPestIndex(null);
+            setShowPestDiseaseModal(false);
+          }}
+          onHealthStatusChange={(status) => setHealthStatus(status)}
+        />
       </ScrollView>
 
       <PhotoSourceModal
@@ -3101,1074 +2718,3 @@ export default function PlantFormScreen({ route, navigation }: any) {
   );
 }
 
-const createStyles = (theme: any) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.background,
-    },
-    header: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      padding: 16,
-      paddingTop: 12,
-      backgroundColor: theme.backgroundSecondary,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.borderLight,
-    },
-    title: {
-      fontSize: 18,
-      fontWeight: "600",
-      color: theme.text,
-    },
-    headerCenter: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    unsavedDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: theme.warning,
-    },
-    saveText: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: theme.primary,
-    },
-    saveTextDisabled: {
-      color: theme.textTertiary,
-    },
-    content: {
-      flex: 1,
-      padding: 16,
-    },
-    scrollContent: {
-      paddingBottom: 100,
-    },
-    modeToggleContainer: {
-      flexDirection: "row",
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 12,
-      padding: 4,
-      marginBottom: 8,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    modeToggleButton: {
-      flex: 1,
-      borderRadius: 10,
-      paddingVertical: 10,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    modeToggleButtonActive: {
-      backgroundColor: theme.primaryLight,
-    },
-    modeToggleText: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: theme.textSecondary,
-    },
-    modeToggleTextActive: {
-      color: theme.primary,
-    },
-    progressContainer: {
-      marginBottom: 16,
-      gap: 4,
-    },
-    progressBarTrack: {
-      height: 4,
-      backgroundColor: theme.borderLight,
-      borderRadius: 2,
-      overflow: "hidden" as const,
-    },
-    progressBarFill: {
-      height: "100%",
-      borderRadius: 2,
-    },
-    progressText: {
-      fontSize: 12,
-      color: theme.textTertiary,
-      textAlign: "right" as const,
-    },
-    photoButton: {
-      alignSelf: "center",
-      marginTop: 8,
-      marginBottom: 20,
-    },
-    photo: {
-      width: 100,
-      height: 100,
-      borderRadius: 50,
-      borderWidth: 3,
-      borderColor: theme.primaryLight,
-    },
-    photoPlaceholder: {
-      width: 100,
-      height: 100,
-      borderRadius: 50,
-      backgroundColor: theme.primaryLight,
-      alignItems: "center",
-      justifyContent: "center",
-      borderWidth: 2,
-      borderColor: theme.border,
-      borderStyle: "dashed",
-    },
-    photoText: {
-      marginTop: 4,
-      fontSize: 11,
-      color: theme.textTertiary,
-      fontWeight: "600",
-    },
-    input: {
-      backgroundColor: theme.inputBackground,
-      padding: 16,
-      borderRadius: 12,
-      marginBottom: 12,
-      fontSize: 16,
-      color: theme.inputText,
-      borderWidth: 1,
-      borderColor: theme.inputBorder,
-    },
-    dateButton: {
-      backgroundColor: theme.inputBackground,
-      padding: 16,
-      borderRadius: 12,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: theme.inputBorder,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-    },
-    dateButtonText: {
-      fontSize: 16,
-      color: theme.text,
-      fontWeight: "500",
-    },
-    datePlaceholder: {
-      fontSize: 16,
-      color: theme.inputPlaceholder,
-    },
-    textArea: {
-      height: 100,
-      textAlignVertical: "top",
-    },
-    noteCounter: {
-      fontSize: 12,
-      color: theme.textTertiary,
-      textAlign: "right",
-      marginTop: 6,
-    },
-    spaceTypeContainer: {
-      flexDirection: "row",
-      marginBottom: 12,
-      gap: 12,
-    },
-    spaceTypeContainerCompact: {
-      gap: 8,
-    },
-    spaceTypeButton: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 16,
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: theme.border,
-      minWidth: 0,
-    },
-    spaceTypeButtonCompact: {
-      paddingVertical: 12,
-      paddingHorizontal: 8,
-    },
-    spaceTypeActive: {
-      borderColor: theme.primary,
-      backgroundColor: theme.primaryLight,
-    },
-    spaceTypeText: {
-      fontSize: 16,
-      color: theme.textTertiary,
-      marginLeft: 8,
-      flexShrink: 1,
-    },
-    spaceTypeTextCompact: {
-      fontSize: 14,
-      marginLeft: 6,
-    },
-    spaceTypeTextActive: {
-      color: theme.primary,
-      fontWeight: "600",
-    },
-    label: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: theme.textSecondary,
-      marginBottom: 8,
-      marginTop: 4,
-    },
-    nicknameInputWrapper: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.inputBackground,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: theme.inputBorder,
-    },
-    nicknameInput: {
-      flex: 1,
-      padding: 16,
-      fontSize: 16,
-      color: theme.inputText,
-    },
-    nicknameClearButton: {
-      paddingHorizontal: 12,
-      paddingVertical: 16,
-    },
-    locationPreview: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      backgroundColor: theme.primaryLight,
-      padding: 12,
-      borderRadius: 8,
-      marginBottom: 12,
-    },
-    locationPreviewText: {
-      fontSize: 14,
-      color: theme.primary,
-      fontWeight: "600",
-    },
-    sectionHeader: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: theme.primary,
-      marginTop: 16,
-      marginBottom: 12,
-    },
-    checkboxContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.backgroundSecondary,
-      padding: 16,
-      borderRadius: 12,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    checkboxLabel: {
-      fontSize: 16,
-      color: theme.text,
-      marginLeft: 12,
-    },
-    settingToggle: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      backgroundColor: theme.backgroundSecondary,
-      padding: 14,
-      borderRadius: 14,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    settingToggleActive: {
-      borderColor: theme.primary,
-      backgroundColor: theme.primaryLight,
-    },
-    settingToggleLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-      flex: 1,
-      minWidth: 0,
-    },
-    settingToggleIconWrap: {
-      width: 30,
-      height: 30,
-      borderRadius: 15,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: theme.background,
-      borderWidth: 1,
-      borderColor: theme.border,
-      marginRight: 10,
-    },
-    settingToggleIconWrapActive: {
-      borderColor: theme.primary,
-      backgroundColor: theme.backgroundSecondary,
-    },
-    settingToggleLabel: {
-      fontSize: 16,
-      color: theme.text,
-      fontWeight: "600",
-      flexShrink: 1,
-    },
-    settingToggleLabelActive: {
-      color: theme.primary,
-    },
-    settingSwitchTrack: {
-      width: 44,
-      height: 26,
-      borderRadius: 13,
-      backgroundColor: theme.border,
-      justifyContent: "center",
-      paddingHorizontal: 3,
-      marginLeft: 12,
-    },
-    settingSwitchTrackActive: {
-      backgroundColor: theme.primary,
-    },
-    settingSwitchThumb: {
-      width: 20,
-      height: 20,
-      borderRadius: 10,
-      backgroundColor: theme.backgroundSecondary,
-      alignSelf: "flex-start",
-    },
-    settingSwitchThumbActive: {
-      alignSelf: "flex-end",
-    },
-    smartDefaultsToggle: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      backgroundColor: theme.backgroundSecondary,
-      padding: 14,
-      borderRadius: 14,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    smartDefaultsToggleActive: {
-      borderColor: theme.primary,
-      backgroundColor: theme.primaryLight,
-    },
-    smartDefaultsLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-      flex: 1,
-      minWidth: 0,
-    },
-    smartDefaultsIconWrap: {
-      width: 30,
-      height: 30,
-      borderRadius: 15,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: theme.background,
-      borderWidth: 1,
-      borderColor: theme.border,
-      marginRight: 10,
-    },
-    smartDefaultsIconWrapActive: {
-      borderColor: theme.primary,
-      backgroundColor: theme.backgroundSecondary,
-    },
-    smartDefaultsLabel: {
-      fontSize: 16,
-      color: theme.text,
-      fontWeight: "600",
-      flexShrink: 1,
-    },
-    smartDefaultsLabelCompact: {
-      fontSize: 15,
-    },
-    smartDefaultsLabelActive: {
-      color: theme.primary,
-    },
-    smartDefaultsSwitchTrack: {
-      width: 44,
-      height: 26,
-      borderRadius: 13,
-      backgroundColor: theme.border,
-      justifyContent: "center",
-      paddingHorizontal: 3,
-      marginLeft: 12,
-    },
-    smartDefaultsSwitchTrackActive: {
-      backgroundColor: theme.primary,
-    },
-    smartDefaultsSwitchThumb: {
-      width: 20,
-      height: 20,
-      borderRadius: 10,
-      backgroundColor: theme.backgroundSecondary,
-      alignSelf: "flex-start",
-    },
-    smartDefaultsSwitchThumbActive: {
-      alignSelf: "flex-end",
-    },
-    helperText: {
-      fontSize: 12,
-      color: theme.textTertiary,
-      marginTop: -2,
-      marginBottom: 12,
-      marginLeft: 4,
-    },
-    // --- Plant Category chip selector ---
-    categoryChipsScroll: {
-      marginBottom: 12,
-    },
-    categoryChipsContent: {
-      paddingRight: 8,
-      gap: 8,
-    },
-    categoryChip: {
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      borderRadius: 20,
-      backgroundColor: theme.backgroundSecondary,
-      borderWidth: 1.5,
-      borderColor: theme.border,
-    },
-    categoryChipActive: {
-      backgroundColor: theme.primaryLight,
-      borderColor: theme.primary,
-    },
-    categoryChipText: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: theme.textTertiary,
-    },
-    categoryChipTextActive: {
-      color: theme.primary,
-    },
-    // --- Field group visual divider ---
-    fieldGroupDivider: {
-      height: 1,
-      backgroundColor: theme.borderLight,
-      marginVertical: 16,
-      marginHorizontal: 4,
-    },
-    fieldGroupLabel: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: theme.textTertiary,
-      textTransform: "uppercase",
-      letterSpacing: 0.8,
-      marginBottom: 10,
-      marginTop: 2,
-    },
-    // --- Direction/Section chips ---
-    directionChipsContainer: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-      marginBottom: 12,
-    },
-    directionChip: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 18,
-      backgroundColor: theme.backgroundSecondary,
-      borderWidth: 1.5,
-      borderColor: theme.border,
-      gap: 5,
-    },
-    directionChipActive: {
-      backgroundColor: theme.primaryLight,
-      borderColor: theme.primary,
-    },
-    directionChipText: {
-      fontSize: 13,
-      fontWeight: "500",
-      color: theme.textTertiary,
-    },
-    directionChipTextActive: {
-      color: theme.primary,
-      fontWeight: "700",
-    },
-    // --- Display Name Card ---
-    displayNameCard: {
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 14,
-      padding: 14,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: theme.borderLight,
-    },
-    displayNameHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginBottom: 8,
-    },
-    displayNameLabelRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-    },
-    displayNameLabel: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: theme.textTertiary,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-    },
-    autoGenBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      backgroundColor: theme.primaryLight,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 10,
-    },
-    autoGenBadgeText: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: theme.primary,
-    },
-    displayNameHelper: {
-      fontSize: 12,
-      color: theme.textTertiary,
-      marginTop: 4,
-      marginLeft: 2,
-    },
-    // --- Date Card ---
-    dateCard: {
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 14,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: theme.borderLight,
-      overflow: "hidden",
-    },
-    dateCardTouchable: {
-      flexDirection: "row",
-      alignItems: "center",
-      padding: 14,
-    },
-    dateCardIconWrap: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
-      backgroundColor: theme.primaryLight,
-      alignItems: "center",
-      justifyContent: "center",
-      marginRight: 12,
-    },
-    dateCardContent: {
-      flex: 1,
-    },
-    dateCardLabel: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: theme.textTertiary,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-      marginBottom: 2,
-    },
-    dateCardValue: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: theme.text,
-    },
-    dateCardPlaceholder: {
-      fontSize: 15,
-      color: theme.inputPlaceholder,
-    },
-    // --- Frequency Row (Water/Feed/Prune inline cards) ---
-    frequencyRow: {
-      flexDirection: "row",
-      gap: 12,
-      marginBottom: 12,
-    },
-    frequencyCard: {
-      flex: 1,
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 14,
-      padding: 12,
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: theme.borderLight,
-    },
-    frequencyIconWrap: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
-      backgroundColor: theme.primaryLight,
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: 6,
-    },
-    frequencyCardLabel: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: theme.textTertiary,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-      marginBottom: 4,
-    },
-    frequencyInputWrap: {
-      backgroundColor: theme.inputBackground,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: theme.inputBorder,
-      width: "100%" as any,
-      alignItems: "center",
-      marginBottom: 4,
-    },
-    frequencyInput: {
-      fontSize: 22,
-      fontWeight: "700",
-      color: theme.text,
-      textAlign: "center",
-      paddingVertical: 6,
-      paddingHorizontal: 8,
-      minWidth: 50,
-    },
-    frequencyUnit: {
-      fontSize: 11,
-      color: theme.textTertiary,
-      fontWeight: "600",
-    },
-    // --- Stat Cards (Coconut metrics) ---
-    statCardsRow: {
-      flexDirection: "row",
-      gap: 10,
-      marginBottom: 8,
-    },
-    statCard: {
-      flex: 1,
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 14,
-      padding: 10,
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: theme.borderLight,
-    },
-    statCardIconWrap: {
-      width: 28,
-      height: 28,
-      borderRadius: 8,
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: 4,
-    },
-    statCardLabel: {
-      fontSize: 10,
-      fontWeight: "700",
-      color: theme.textTertiary,
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-      marginBottom: 4,
-    },
-    statCardInputWrap: {
-      backgroundColor: theme.inputBackground,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: theme.inputBorder,
-      width: "100%" as any,
-      alignItems: "center",
-    },
-    statCardInput: {
-      fontSize: 20,
-      fontWeight: "700",
-      color: theme.text,
-      textAlign: "center",
-      paddingVertical: 4,
-      paddingHorizontal: 4,
-      minWidth: 40,
-    },
-    // --- Notes Card ---
-    notesCard: {
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 14,
-      padding: 14,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: theme.borderLight,
-    },
-    notesCardHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      marginBottom: 8,
-    },
-    notesCardInput: {
-      backgroundColor: theme.inputBackground,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: theme.inputBorder,
-      padding: 12,
-      fontSize: 15,
-      color: theme.inputText,
-      minHeight: 80,
-      textAlignVertical: "top",
-    },
-    // --- Add Pest Button Pill ---
-    addPestButtonPill: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      backgroundColor: theme.primaryLight,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: theme.primary,
-    },
-    addPestButtonText: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: theme.primary,
-    },
-    infoCard: {
-      backgroundColor: theme.backgroundSecondary,
-      padding: 16,
-      borderRadius: 12,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: theme.borderDark,
-    },
-    infoCardHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      marginBottom: 8,
-    },
-    infoCardTitle: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: theme.text,
-      flex: 1,
-    },
-    infoCardText: {
-      fontSize: 16,
-      color: theme.primary,
-      fontWeight: "600",
-      marginBottom: 4,
-    },
-    infoCardSubtext: {
-      fontSize: 13,
-      color: theme.textSecondary,
-      marginBottom: 8,
-    },
-    chipContainer: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-      marginTop: 8,
-    },
-    varietySuggestions: {
-      marginBottom: 12,
-    },
-    suggestionLabel: {
-      fontSize: 12,
-      color: theme.textSecondary,
-      marginBottom: 6,
-      fontWeight: "600",
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-    },
-    varietySuggestionChips: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-    },
-    varietySuggestionChip: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 16,
-      backgroundColor: theme.primaryLight,
-      borderWidth: 1,
-      borderColor: theme.primary,
-    },
-    varietySuggestionText: {
-      fontSize: 12,
-      color: theme.primary,
-      fontWeight: "600",
-    },
-    companionChip: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 16,
-      backgroundColor: theme.background,
-      borderWidth: 1,
-      borderColor: theme.border,
-      gap: 4,
-    },
-    companionChipSelected: {
-      backgroundColor: theme.accentLight,
-      borderColor: theme.accent,
-    },
-    companionChipText: {
-      fontSize: 13,
-      color: theme.textSecondary,
-    },
-    companionChipTextSelected: {
-      color: theme.accent,
-      fontWeight: "600",
-    },
-    incompatibleChip: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 16,
-      backgroundColor: theme.warningLight,
-      borderWidth: 1,
-      borderColor: theme.warning,
-    },
-    incompatibleChipText: {
-      fontSize: 13,
-      color: theme.warning,
-      fontWeight: "600",
-    },
-    sectionHeaderRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginTop: 16,
-      marginBottom: 12,
-    },
-    sectionHeaderText: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: theme.text,
-      flex: 1,
-    },
-    addPestButton: {
-      padding: 4,
-    },
-    pestDiseaseList: {
-      marginBottom: 16,
-    },
-    pestDiseaseCard: {
-      backgroundColor: theme.backgroundSecondary,
-      padding: 16,
-      borderRadius: 12,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: theme.borderDark,
-      position: "relative",
-    },
-    pestDiseaseHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      marginBottom: 8,
-    },
-    pestDiseaseName: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: theme.text,
-      flex: 1,
-    },
-    resolvedBadge: {
-      backgroundColor: theme.primaryLight,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 12,
-    },
-    resolvedText: {
-      fontSize: 11,
-      color: theme.primary,
-      fontWeight: "600",
-    },
-    pestDiseaseDate: {
-      fontSize: 13,
-      color: theme.textSecondary,
-      marginBottom: 4,
-    },
-    pestDiseaseMetaText: {
-      fontSize: 12,
-      color: theme.textTertiary,
-      marginBottom: 4,
-      fontWeight: "500",
-    },
-    pestDiseaseTreatment: {
-      fontSize: 13,
-      color: theme.textSecondary,
-      marginBottom: 4,
-    },
-    pestDiseaseNotes: {
-      fontSize: 13,
-      color: theme.textSecondary,
-      fontStyle: "italic",
-    },
-    deletePestButton: {
-      position: "absolute",
-      top: 12,
-      right: 12,
-      padding: 4,
-    },
-    noPestHistory: {
-      fontSize: 14,
-      color: theme.textTertiary,
-      textAlign: "center",
-      paddingVertical: 20,
-      fontStyle: "italic",
-    },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: theme.overlay,
-      justifyContent: "flex-end",
-    },
-    discardOverlay: {
-      flex: 1,
-      backgroundColor: theme.overlay,
-      justifyContent: "center",
-      alignItems: "center",
-      paddingHorizontal: 32,
-    },
-    discardCard: {
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 20,
-      padding: 28,
-      alignItems: "center",
-      width: "100%",
-      maxWidth: 340,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.15,
-      shadowRadius: 24,
-      elevation: 12,
-    },
-    discardIconWrap: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      backgroundColor: theme.errorLight,
-      justifyContent: "center",
-      alignItems: "center",
-      marginBottom: 16,
-    },
-    discardTitle: {
-      fontSize: 19,
-      fontWeight: "700",
-      color: theme.text,
-      marginBottom: 8,
-    },
-    discardMessage: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      textAlign: "center",
-      lineHeight: 20,
-      marginBottom: 24,
-    },
-    discardActions: {
-      flexDirection: "row",
-      gap: 12,
-      width: "100%",
-    },
-    discardKeepButton: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      paddingVertical: 13,
-      borderRadius: 12,
-      borderWidth: 1.5,
-      borderColor: theme.primary,
-      backgroundColor: theme.primaryLight,
-    },
-    discardKeepText: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: theme.primary,
-    },
-    discardButton: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      paddingVertical: 13,
-      borderRadius: 12,
-      backgroundColor: theme.error,
-    },
-    discardButtonText: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: "#fff",
-    },
-    modalContent: {
-      backgroundColor: theme.backgroundSecondary,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-      paddingTop: 20,
-      paddingHorizontal: 20,
-      maxHeight: "85%",
-    },
-    modalScrollView: {
-      flexGrow: 0,
-      marginBottom: 20,
-    },
-    modalHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 20,
-    },
-    modalTitle: {
-      fontSize: 20,
-      fontWeight: "700",
-      color: theme.text,
-    },
-    typeButtons: {
-      flexDirection: "row",
-      gap: 12,
-      marginBottom: 16,
-    },
-    typeButton: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 16,
-      borderRadius: 12,
-      backgroundColor: theme.background,
-      borderWidth: 1,
-      borderColor: theme.border,
-      gap: 8,
-    },
-    typeButtonActive: {
-      backgroundColor: theme.primaryLight,
-      borderColor: theme.primary,
-    },
-    typeButtonText: {
-      fontSize: 15,
-      color: theme.textSecondary,
-      fontWeight: "500",
-    },
-    typeButtonTextActive: {
-      color: theme.primary,
-      fontWeight: "600",
-    },
-    suggestionsScroll: {
-      marginBottom: 12,
-    },
-    suggestionChip: {
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 16,
-      backgroundColor: theme.accentLight,
-      marginRight: 8,
-    },
-    suggestionChipText: {
-      fontSize: 13,
-      color: theme.accent,
-    },
-    modalSaveButton: {
-      backgroundColor: theme.primary,
-      padding: 16,
-      borderRadius: 12,
-      alignItems: "center",
-      marginTop: 16,
-    },
-    modalSaveButtonText: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: theme.textInverse,
-    },
-  });

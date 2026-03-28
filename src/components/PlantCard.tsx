@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import { Plant } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import { getYearsOld } from '../utils/dateHelpers';
+import { createStyles } from '../styles/plantCardStyles';
 
 interface PlantCardProps {
   plant: Plant;
@@ -93,6 +94,8 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete, compact = 
     plant.watering_frequency_days != null &&
     daysSinceWatered > plant.watering_frequency_days;
 
+  const activePestCount = (plant.pest_disease_history || []).filter(r => !r.resolved).length;
+
   // ── Compact Grid Card ──
   if (compact) {
     return (
@@ -123,8 +126,16 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete, compact = 
           <View style={[styles.waterBadge, isOverdueWater && styles.waterBadgeOverdue]}>
             <Ionicons name="water" size={10} color={isOverdueWater ? '#f44336' : '#2196f3'} />
             <Text style={[styles.waterBadgeText, isOverdueWater && styles.waterBadgeTextOverdue]}>
-              {daysSinceWatered}d
+              {daysSinceWatered === 0 ? 'Today' : `${daysSinceWatered}d`}
             </Text>
+          </View>
+        )}
+
+        {/* Pest badge */}
+        {activePestCount > 0 && (
+          <View style={styles.pestBadgeCompact}>
+            <Ionicons name="bug" size={10} color="#f44336" />
+            <Text style={styles.pestBadgeCompactText}>{activePestCount}</Text>
           </View>
         )}
 
@@ -241,6 +252,14 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete, compact = 
                   </Text>
                 </View>
               )}
+              {activePestCount > 0 && (
+                <View style={[styles.statusChip, styles.pestStatusChip]}>
+                  <Ionicons name="bug" size={12} color="#f44336" />
+                  <Text style={styles.pestStatusChipText}>
+                    {activePestCount} active
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -256,267 +275,3 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete, compact = 
     </TouchableOpacity>
   );
 }
-
-const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
-  // ── Standard Card ──
-  card: {
-    flexDirection: 'row',
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 8,
-    alignItems: 'center',
-    shadowColor: theme.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  imageContainer: {
-    position: 'relative',
-    marginRight: 12,
-  },
-  image: {
-    width: 64,
-    height: 64,
-    borderRadius: 10,
-  },
-  placeholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emoji: {
-    fontSize: 32,
-  },
-  missingImageBadge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.85)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  healthIndicator: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 2,
-    borderColor: theme.backgroundSecondary,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    minWidth: 0,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    minWidth: 0,
-  },
-  name: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.text,
-    flex: 1,
-  },
-  badge: {
-    fontSize: 9,
-    color: theme.accent,
-    backgroundColor: theme.accentLight,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 8,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    maxWidth: 110,
-    overflow: 'hidden',
-  },
-  variety: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    fontStyle: 'italic',
-    marginTop: 1,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 3,
-    minWidth: 0,
-  },
-  metaChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  metaText: {
-    fontSize: 12,
-    color: theme.textTertiary,
-    flexShrink: 1,
-  },
-  metaDot: {
-    fontSize: 12,
-    color: theme.border,
-    marginHorizontal: 5,
-  },
-  ageText: {
-    fontSize: 12,
-    color: theme.primary,
-    fontWeight: '600',
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    gap: 6,
-  },
-  statusChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    backgroundColor: '#e3f2fd',
-    borderWidth: 1,
-    borderColor: '#bbdefb',
-  },
-  statusChipOverdue: {
-    backgroundColor: '#ffebee',
-    borderColor: '#ffcdd2',
-  },
-  statusChipText: {
-    fontSize: 11,
-    color: '#2196f3',
-    fontWeight: '600',
-  },
-  statusChipTextOverdue: {
-    color: '#f44336',
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  cardActions: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-    paddingLeft: 6,
-  },
-  cardActionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: theme.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardDeleteBtn: {
-    backgroundColor: theme.errorLight,
-  },
-
-  // ── Compact Grid Card ──
-  compactCard: {
-    flex: 1,
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: 12,
-    margin: 4,
-    shadowColor: theme.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  healthDot: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: theme.backgroundSecondary,
-    zIndex: 2,
-  },
-  compactImage: {
-    width: '100%',
-    aspectRatio: 1.3,
-  },
-  compactPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  compactEmoji: {
-    fontSize: 36,
-  },
-  waterBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 8,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    zIndex: 2,
-  },
-  waterBadgeOverdue: {
-    backgroundColor: 'rgba(255,235,238,0.95)',
-  },
-  waterBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#2196f3',
-  },
-  waterBadgeTextOverdue: {
-    color: '#f44336',
-  },
-  compactInfo: {
-    padding: 8,
-    paddingTop: 6,
-  },
-  compactName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.text,
-  },
-  compactMeta: {
-    fontSize: 11,
-    color: theme.textTertiary,
-    marginTop: 1,
-  },
-  compactLocation: {
-    fontSize: 10,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  compactActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingBottom: 8,
-  },
-  compactActionBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: theme.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  compactDeleteBtn: {
-    backgroundColor: theme.errorLight,
-  },
-});

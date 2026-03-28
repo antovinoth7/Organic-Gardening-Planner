@@ -9,7 +9,6 @@ import {
   View,
   Text,
   ScrollView,
-  StyleSheet,
   TouchableOpacity,
   RefreshControl,
   Alert,
@@ -19,18 +18,19 @@ import {
 } from "react-native";
 import {
   getTodayTasks,
-  markTaskDone,
   updateTaskTemplate,
   getTodayTaskLogs,
 } from "../services/tasks";
 import { getAllPlants } from "../services/plants";
-import { TaskTemplate, Plant, TaskLog } from "../types/database.types";
+import { TaskTemplate, Plant, TaskLog, TaskType } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
+import { TASK_EMOJIS, TASK_COLORS } from "../utils/taskConstants";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, useThemeMode } from "../theme";
+import { createStyles } from "../styles/todayStyles";
 import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
-import Svg, { Circle } from "react-native-svg";
+import Svg, { Circle, Path } from "react-native-svg";
 import { useTabBarScroll, TAB_BAR_HEIGHT } from "../components/FloatingTabBar";
 
 type AttentionSeverity = "critical" | "high" | "medium";
@@ -49,24 +49,44 @@ const ATTENTION_SEVERITY_RANK: Record<AttentionSeverity, number> = {
   medium: 1,
 };
 
-const TASK_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  water: "water",
-  fertilise: "nutrition",
-  prune: "cut",
-  repot: "move",
-  spray: "sparkles",
-  mulch: "layers",
-  harvest: "basket",
+type TaskGroup = {
+  type: TaskType;
+  overdue: TaskTemplate[];
+  today: TaskTemplate[];
 };
 
-const TASK_COLORS: Record<string, string> = {
-  water: "#2196F3",
-  fertilise: "#FF9800",
-  prune: "#9C27B0",
-  repot: "#4CAF50",
-  spray: "#00BCD4",
-  mulch: "#795548",
-  harvest: "#8BC34A",
+const groupTasksByType = (
+  overdueTasks: TaskTemplate[],
+  todayTasksList: TaskTemplate[],
+): TaskGroup[] => {
+  const map = new Map<TaskType, TaskGroup>();
+
+  for (const task of overdueTasks) {
+    let group = map.get(task.task_type);
+    if (!group) {
+      group = { type: task.task_type, overdue: [], today: [] };
+      map.set(task.task_type, group);
+    }
+    group.overdue.push(task);
+  }
+
+  for (const task of todayTasksList) {
+    let group = map.get(task.task_type);
+    if (!group) {
+      group = { type: task.task_type, overdue: [], today: [] };
+      map.set(task.task_type, group);
+    }
+    group.today.push(task);
+  }
+
+  // Sort: groups with overdue tasks first, then by total count descending
+  return Array.from(map.values()).sort((a, b) => {
+    if (a.overdue.length > 0 && b.overdue.length === 0) return -1;
+    if (b.overdue.length > 0 && a.overdue.length === 0) return 1;
+    const totalA = a.overdue.length + a.today.length;
+    const totalB = b.overdue.length + b.today.length;
+    return totalB - totalA;
+  });
 };
 
 const getGreeting = (): string => {
@@ -76,19 +96,30 @@ const getGreeting = (): string => {
   return "Good Evening";
 };
 
-const getMotivationalText = (rate: number, total: number): string => {
-  if (total === 0) return "No tasks today";
-  if (rate === 100) return "All done! \uD83C\uDF89";
-  if (rate >= 75) return "Almost there!";
-  if (rate >= 50) return "Halfway done!";
-  if (rate >= 25) return "Good start!";
-  return "Let's get started!";
-};
+const DONUT_SIZE = 140;
+const DONUT_STROKE = 14;
+const DONUT_RADIUS = (DONUT_SIZE - DONUT_STROKE) / 2;
+const DONUT_CENTER = DONUT_SIZE / 2;
 
-const RING_SIZE = 80;
-const RING_STROKE = 8;
-const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+/** Build an SVG arc path for a donut segment */
+const describeArc = (
+  cx: number,
+  cy: number,
+  r: number,
+  startAngle: number,
+  endAngle: number,
+): string => {
+  // Clamp arcs to avoid full-circle rendering bugs
+  const clampedEnd = Math.min(endAngle, startAngle + 359.99);
+  const startRad = ((clampedEnd - 90) * Math.PI) / 180;
+  const endRad = ((startAngle - 90) * Math.PI) / 180;
+  const largeArc = clampedEnd - startAngle > 180 ? 1 : 0;
+  const x1 = cx + r * Math.cos(endRad);
+  const y1 = cy + r * Math.sin(endRad);
+  const x2 = cx + r * Math.cos(startRad);
+  const y2 = cy + r * Math.sin(startRad);
+  return `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`;
+};
 
 const THEME_ICONS: Record<
   string,
@@ -113,7 +144,6 @@ export default function TodayScreen({ navigation, route }: any) {
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<TaskTemplate | null>(null);
   const [skipReason, setSkipReason] = useState("");
-  const [completingTaskIds, setCompletingTaskIds] = useState<Set<string>>(new Set());
   const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [optimisticCompletedTaskIds, setOptimisticCompletedTaskIds] = useState<
     string[]
@@ -196,52 +226,6 @@ export default function TodayScreen({ navigation, route }: any) {
     }, [loadData, resetTabBar]),
   );
 
-  const debouncedReload = useCallback(() => {
-    if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
-    reloadTimerRef.current = setTimeout(() => {
-      void loadData({ silent: true });
-    }, 500);
-  }, [loadData]);
-
-  const handleMarkDone = async (task: TaskTemplate) => {
-    if (completingTaskIds.has(task.id)) return; // Already processing this task
-    if (completedTemplateIds.has(task.id)) {
-      Alert.alert(
-        "Already Completed",
-        "This task is already marked as done for today.",
-      );
-      return;
-    }
-
-    setCompletingTaskIds((prev) => new Set(prev).add(task.id));
-    setOptimisticCompletedTaskIds((prev) =>
-      prev.includes(task.id) ? prev : [...prev, task.id],
-    );
-    try {
-      const didMark = await markTaskDone(task, undefined, undefined, {
-        skipAlreadyDoneCheck: true,
-      });
-      if (!didMark) {
-        Alert.alert(
-          "Already Completed",
-          "This task is already marked as done for today.",
-        );
-      }
-      debouncedReload();
-    } catch (error: any) {
-      setOptimisticCompletedTaskIds((prev) =>
-        prev.filter((id) => id !== task.id),
-      );
-      Alert.alert("Error", error.message);
-    } finally {
-      setCompletingTaskIds((prev) => {
-        const next = new Set(prev);
-        next.delete(task.id);
-        return next;
-      });
-    }
-  };
-
   const handleSkipTask = async () => {
     if (!selectedTask || skippingTask) return;
 
@@ -269,35 +253,6 @@ export default function TodayScreen({ navigation, route }: any) {
       setSkippingTask(false);
     }
   };
-
-  const handleSnooze = async (task: TaskTemplate, hours: number) => {
-    try {
-      const snoozeTime = new Date();
-      snoozeTime.setHours(snoozeTime.getHours() + hours);
-
-      await updateTaskTemplate(task.id, {
-        next_due_at: snoozeTime.toISOString(),
-      });
-
-      Alert.alert(
-        "Task Snoozed",
-        `Task snoozed for ${hours} hour${hours > 1 ? "s" : ""}`,
-      );
-      loadData();
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
-    }
-  };
-
-  const getPlantName = useCallback(
-    (plantId: string | null) => {
-      if (!plantId) return "General";
-      if (!plants || plants.length === 0) return "Unknown";
-      const plant = plants.find((p) => p.id === plantId);
-      return plant?.name || "Unknown";
-    },
-    [plants],
-  );
 
   const getDaysSince = useCallback((dateValue?: string | null) => {
     if (!dateValue) return null;
@@ -444,7 +399,7 @@ export default function TodayScreen({ navigation, route }: any) {
   }, [tasks, plants, completedTemplateIds, getDaysSince]);
 
   const cycleTheme = useCallback(() => {
-    const order: Array<"light" | "dark" | "system"> = [
+    const order: ("light" | "dark" | "system")[] = [
       "light",
       "dark",
       "system",
@@ -473,6 +428,79 @@ export default function TodayScreen({ navigation, route }: any) {
       return dueDate.toDateString() === today.toDateString();
     });
   }, [tasks, completedTemplateIds]);
+
+  const taskGroups = useMemo(
+    () => groupTasksByType(overdueTasks, todayTasks),
+    [overdueTasks, todayTasks],
+  );
+
+  // Per-type done/total stats for donut + chips
+  type TypeStat = {
+    type: TaskType;
+    done: number;
+    total: number;
+    remaining: number;
+    overdueCount: number;
+  };
+
+  const typeStats: TypeStat[] = useMemo(() => {
+    // Count completed tasks per type (from today's logs)
+    const doneByType = new Map<TaskType, number>();
+    for (const log of taskLogs) {
+      doneByType.set(log.task_type, (doneByType.get(log.task_type) || 0) + 1);
+    }
+    // Also count optimistic completions
+    for (const id of optimisticCompletedTaskIds) {
+      const task = tasks.find((t) => t.id === id);
+      if (task && !taskLogs.some((l) => l.template_id === id)) {
+        doneByType.set(task.task_type, (doneByType.get(task.task_type) || 0) + 1);
+      }
+    }
+
+    // Gather all task types that appear (remaining or completed)
+    const allTypes = new Set<TaskType>();
+    for (const group of taskGroups) allTypes.add(group.type);
+    for (const [type] of doneByType) allTypes.add(type);
+
+    const result: TypeStat[] = [];
+    for (const type of allTypes) {
+      const group = taskGroups.find((g) => g.type === type);
+      const remaining = group ? group.overdue.length + group.today.length : 0;
+      const done = doneByType.get(type) || 0;
+      const overdueCount = group ? group.overdue.length : 0;
+      result.push({ type, done, total: done + remaining, remaining, overdueCount });
+    }
+
+    // Sort: types with remaining work first (overdue first), then fully done
+    return result.sort((a, b) => {
+      if (a.remaining > 0 && b.remaining === 0) return -1;
+      if (b.remaining > 0 && a.remaining === 0) return 1;
+      if (a.overdueCount > 0 && b.overdueCount === 0) return -1;
+      if (b.overdueCount > 0 && a.overdueCount === 0) return 1;
+      return b.total - a.total;
+    });
+  }, [taskGroups, taskLogs, optimisticCompletedTaskIds, tasks]);
+
+  // Compute donut segments: one per task type (full arc = total for that type)
+  const donutSegments = useMemo(() => {
+    if (stats.totalTasks === 0) return [];
+
+    let angle = 0;
+    return typeStats.map((ts) => {
+      const sweep = (ts.total / stats.totalTasks) * 360;
+      const startAngle = angle;
+      angle += sweep;
+      // Completed fraction within this type's arc
+      const doneSweep = ts.total > 0 ? (ts.done / ts.total) * sweep : 0;
+      return {
+        key: ts.type,
+        color: TASK_COLORS[ts.type] || "#999",
+        startAngle,
+        sweep,
+        doneSweep,
+      };
+    });
+  }, [stats.totalTasks, typeStats]);
 
   return (
     <ScrollView
@@ -508,52 +536,120 @@ export default function TodayScreen({ navigation, route }: any) {
         </View>
       </View>
 
-      {/* Circular Progress Ring */}
-      <View style={styles.progressRingCard}>
-        <View style={styles.progressRingRow}>
-          <View style={styles.progressRingContainer}>
-            <Svg width={RING_SIZE} height={RING_SIZE}>
+      {/* Task Donut — segmented by type */}
+      <View style={styles.donutCard}>
+        <Text style={styles.gardenHealthTitle}>📋 Today's Progress</Text>
+        <View style={styles.donutRow}>
+          {/* Donut (left) */}
+          <View style={styles.donutContainer}>
+            <Svg width={DONUT_SIZE} height={DONUT_SIZE}>
+              {/* Background track */}
               <Circle
-                cx={RING_SIZE / 2}
-                cy={RING_SIZE / 2}
-                r={RING_RADIUS}
+                cx={DONUT_CENTER}
+                cy={DONUT_CENTER}
+                r={DONUT_RADIUS}
                 stroke={theme.border}
-                strokeWidth={RING_STROKE}
+                strokeWidth={DONUT_STROKE}
                 fill="none"
               />
-              <Circle
-                cx={RING_SIZE / 2}
-                cy={RING_SIZE / 2}
-                r={RING_RADIUS}
-                stroke={
-                  stats.completionRate === 100 ? theme.success : theme.primary
-                }
-                strokeWidth={RING_STROKE}
-                fill="none"
-                strokeDasharray={`${RING_CIRCUMFERENCE}`}
-                strokeDashoffset={`${RING_CIRCUMFERENCE - (stats.completionRate / 100) * RING_CIRCUMFERENCE}`}
-                strokeLinecap="round"
-                transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
-              />
+              {/* Per-type arcs: faded = total, solid = done portion */}
+              {donutSegments.map((seg) => (
+                <React.Fragment key={seg.key}>
+                  {/* Full arc (faded) — remaining portion */}
+                  {seg.sweep > 0.5 && (
+                    <Path
+                      d={describeArc(
+                        DONUT_CENTER,
+                        DONUT_CENTER,
+                        DONUT_RADIUS,
+                        seg.startAngle,
+                        seg.startAngle + seg.sweep,
+                      )}
+                      stroke={seg.color + "40"}
+                      strokeWidth={DONUT_STROKE}
+                      strokeLinecap="round"
+                      fill="none"
+                    />
+                  )}
+                  {/* Done portion (solid) */}
+                  {seg.doneSweep > 0.5 && (
+                    <Path
+                      d={describeArc(
+                        DONUT_CENTER,
+                        DONUT_CENTER,
+                        DONUT_RADIUS,
+                        seg.startAngle,
+                        seg.startAngle + seg.doneSweep,
+                      )}
+                      stroke={seg.color}
+                      strokeWidth={DONUT_STROKE}
+                      strokeLinecap="round"
+                      fill="none"
+                    />
+                  )}
+                </React.Fragment>
+              ))}
             </Svg>
-            <Text style={styles.progressRingPercent}>
-              {stats.completionRate}%
-            </Text>
+            <View style={styles.donutCenter}>
+              <Text style={styles.donutPercent}>{stats.completionRate}%</Text>
+              <Text style={styles.donutSubtext}>
+                {stats.completed}/{stats.totalTasks}
+              </Text>
+              {overdueTasks.length > 0 && (
+                <Text style={styles.donutOverdue}>
+                  {overdueTasks.length} overdue
+                </Text>
+              )}
+            </View>
           </View>
-          <View style={styles.progressRingText}>
-            <Text style={styles.progressRingStats}>
-              {stats.completed} of {stats.totalTasks} tasks done
-            </Text>
-            <Text style={styles.progressRingMotivation}>
-              {getMotivationalText(stats.completionRate, stats.totalTasks)}
-            </Text>
-          </View>
+
+          {/* Tiles (right) */}
+          {typeStats.length > 0 && (
+            <View style={styles.chipColumn}>
+              {typeStats.map((ts) => {
+                const color = TASK_COLORS[ts.type] || "#999";
+                const emoji = TASK_EMOJIS[ts.type] || "📌";
+                const allDone = ts.remaining === 0;
+                const hasOverdue = ts.overdueCount > 0;
+                return (
+                  <TouchableOpacity
+                    key={ts.type}
+                    style={[
+                      styles.chip,
+                      { backgroundColor: color + "14" },
+                      allDone && styles.chipDone,
+                      hasOverdue && styles.chipOverdue,
+                    ]}
+                    activeOpacity={0.7}
+                    onPress={() => navigation.navigate("Care Plan")}
+                  >
+                    <Text style={styles.chipEmoji}>{emoji}</Text>
+                    <Text
+                      style={[
+                        styles.chipText,
+                        { color },
+                        allDone && styles.chipTextDone,
+                      ]}
+                    >
+                      {ts.done}/{ts.total}
+                    </Text>
+                    {hasOverdue && (
+                      <Text style={styles.chipOverdueCount}>⚠{ts.overdueCount}</Text>
+                    )}
+                    {allDone && (
+                      <Ionicons name="checkmark" size={13} color={color} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </View>
       </View>
 
       {/* Garden Health Overview */}
       <View style={styles.gardenHealthCard}>
-        <Text style={styles.gardenHealthTitle}>Garden Health</Text>
+        <Text style={styles.gardenHealthTitle}>🌱 Garden Health</Text>
         <View style={styles.gardenHealthRow}>
           <TouchableOpacity
             style={styles.healthColumn}
@@ -650,186 +746,6 @@ export default function TodayScreen({ navigation, route }: any) {
         </View>
       )}
 
-      {overdueTasks.length > 0 && (
-        <View style={styles.taskSectionV}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              🚨 Overdue ({overdueTasks.length})
-            </Text>
-            <View style={styles.priorityBadge}>
-              <Text style={styles.priorityText}>HIGH</Text>
-            </View>
-          </View>
-          {overdueTasks.map((task) => {
-            const taskIcon = TASK_ICONS[task.task_type] || "ellipse";
-            const taskColor = TASK_COLORS[task.task_type] || "#999";
-            const isDone =
-              completingTaskIds.has(task.id) || completedTemplateIds.has(task.id);
-            return (
-              <View key={task.id} style={styles.taskCardV}>
-                <View
-                  style={[
-                    styles.taskCardVBorder,
-                    { backgroundColor: theme.error },
-                  ]}
-                />
-                <View style={styles.taskCardVContent}>
-                  <View style={styles.taskCardVLeft}>
-                    <View
-                      style={[
-                        styles.taskIconV,
-                        { backgroundColor: taskColor + "20" },
-                      ]}
-                    >
-                      <Ionicons name={taskIcon} size={20} color={taskColor} />
-                    </View>
-                    <View style={styles.taskCardVInfo}>
-                      <Text style={styles.taskTypeV}>
-                        {task.task_type.charAt(0).toUpperCase() +
-                          task.task_type.slice(1)}
-                      </Text>
-                      <Text style={styles.taskPlantV} numberOfLines={1}>
-                        {getPlantName(task.plant_id)}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.taskCardVActions}>
-                    <TouchableOpacity
-                      style={[
-                        styles.taskDoneBtnV,
-                        isDone && styles.taskDoneBtnDone,
-                      ]}
-                      onPress={() => !isDone && handleMarkDone(task)}
-                      disabled={isDone}
-                    >
-                      <Ionicons
-                        name="checkmark"
-                        size={16}
-                        color={isDone ? "#fff" : theme.textSecondary}
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.taskActionBtn}
-                      onPress={() => handleSnooze(task, 2)}
-                    >
-                      <Ionicons
-                        name="time-outline"
-                        size={14}
-                        color={theme.info}
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.taskActionBtn}
-                      onPress={() => {
-                        setSelectedTask(task);
-                        setShowSkipModal(true);
-                      }}
-                    >
-                      <Ionicons
-                        name="play-skip-forward-outline"
-                        size={14}
-                        color={theme.warning}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      )}
-
-      {todayTasks.length > 0 && (
-        <View style={styles.taskSectionV}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              📅 Today ({todayTasks.length})
-            </Text>
-            <View style={[styles.priorityBadge, styles.priorityMedium]}>
-              <Text style={[styles.priorityText, { color: theme.warning }]}>
-                MEDIUM
-              </Text>
-            </View>
-          </View>
-          {todayTasks.map((task) => {
-            const taskIcon = TASK_ICONS[task.task_type] || "ellipse";
-            const taskColor = TASK_COLORS[task.task_type] || "#999";
-            const isDone =
-              completingTaskIds.has(task.id) || completedTemplateIds.has(task.id);
-            return (
-              <View key={task.id} style={styles.taskCardV}>
-                <View
-                  style={[
-                    styles.taskCardVBorder,
-                    { backgroundColor: theme.primary },
-                  ]}
-                />
-                <View style={styles.taskCardVContent}>
-                  <View style={styles.taskCardVLeft}>
-                    <View
-                      style={[
-                        styles.taskIconV,
-                        { backgroundColor: taskColor + "20" },
-                      ]}
-                    >
-                      <Ionicons name={taskIcon} size={20} color={taskColor} />
-                    </View>
-                    <View style={styles.taskCardVInfo}>
-                      <Text style={styles.taskTypeV}>
-                        {task.task_type.charAt(0).toUpperCase() +
-                          task.task_type.slice(1)}
-                      </Text>
-                      <Text style={styles.taskPlantV} numberOfLines={1}>
-                        {getPlantName(task.plant_id)}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.taskCardVActions}>
-                    <TouchableOpacity
-                      style={[
-                        styles.taskDoneBtnV,
-                        isDone && styles.taskDoneBtnDone,
-                      ]}
-                      onPress={() => !isDone && handleMarkDone(task)}
-                      disabled={isDone}
-                    >
-                      <Ionicons
-                        name="checkmark"
-                        size={16}
-                        color={isDone ? "#fff" : theme.textSecondary}
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.taskActionBtn}
-                      onPress={() => handleSnooze(task, 4)}
-                    >
-                      <Ionicons
-                        name="time-outline"
-                        size={14}
-                        color={theme.info}
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.taskActionBtn}
-                      onPress={() => {
-                        setSelectedTask(task);
-                        setShowSkipModal(true);
-                      }}
-                    >
-                      <Ionicons
-                        name="play-skip-forward-outline"
-                        size={14}
-                        color={theme.warning}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      )}
-
       {tasks.length === 0 && !loading && (
         <View style={styles.emptyState}>
           <Ionicons name="checkmark-circle-outline" size={64} color="#4caf50" />
@@ -911,498 +827,3 @@ export default function TodayScreen({ navigation, route }: any) {
   );
 }
 
-const createStyles = (theme: any) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.background,
-    },
-    heroHeader: {
-      paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 20,
-      backgroundColor: theme.primary,
-    },
-    headerRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    heroGreeting: {
-      fontSize: 28,
-      fontWeight: "bold",
-      color: "#fff",
-    },
-    heroDate: {
-      fontSize: 14,
-      color: "rgba(255,255,255,0.8)",
-      marginTop: 4,
-    },
-    heroThemeToggle: {
-      alignItems: "center",
-      justifyContent: "center",
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: "rgba(255,255,255,0.2)",
-    },
-    // Progress Ring
-    progressRingCard: {
-      backgroundColor: theme.backgroundSecondary,
-      paddingHorizontal: 20,
-      paddingVertical: 12,
-      marginTop: 1,
-    },
-    progressRingRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 20,
-    },
-    progressRingContainer: {
-      width: 80,
-      height: 80,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    progressRingPercent: {
-      position: "absolute",
-      fontSize: 18,
-      fontWeight: "bold",
-      color: theme.text,
-    },
-    progressRingText: {
-      flex: 1,
-    },
-    progressRingStats: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: theme.text,
-      marginBottom: 4,
-    },
-    progressRingMotivation: {
-      fontSize: 14,
-      color: theme.textSecondary,
-    },
-    // Garden Health
-    gardenHealthCard: {
-      backgroundColor: theme.backgroundSecondary,
-      marginTop: 1,
-      paddingHorizontal: 20,
-      paddingVertical: 12,
-    },
-    gardenHealthTitle: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: theme.textSecondary,
-      marginBottom: 10,
-    },
-    gardenHealthRow: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-    healthColumn: {
-      flex: 1,
-      alignItems: "center",
-      gap: 6,
-    },
-    healthDot: {
-      width: 10,
-      height: 10,
-      borderRadius: 5,
-    },
-    healthCount: {
-      fontSize: 22,
-      fontWeight: "bold",
-      color: theme.text,
-    },
-    healthLabel: {
-      fontSize: 12,
-      color: theme.textSecondary,
-    },
-    healthDivider: {
-      width: 1,
-      height: 40,
-      backgroundColor: theme.border,
-    },
-    // Horizontal attention cards
-    alertsSection: {
-      backgroundColor: theme.backgroundSecondary,
-      paddingTop: 12,
-      paddingBottom: 14,
-      paddingLeft: 16,
-      marginTop: 1,
-    },
-    alertCardH: {
-      width: 150,
-      padding: 12,
-      backgroundColor: theme.errorLight,
-      borderRadius: 14,
-      marginRight: 10,
-      borderWidth: 1,
-      borderColor: theme.error + "30",
-    },
-    alertCardHCritical: {
-      backgroundColor: theme.errorLight,
-      borderColor: theme.error + "40",
-    },
-    alertCardHWarning: {
-      backgroundColor: theme.warningLight,
-      borderColor: theme.warning + "40",
-    },
-    alertCardHInfo: {
-      backgroundColor: theme.primaryLight,
-      borderColor: theme.primary + "40",
-    },
-    alertIconH: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: theme.error,
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: 8,
-    },
-    alertPlantNameH: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: theme.text,
-      marginBottom: 3,
-    },
-    alertTextH: {
-      fontSize: 11,
-      color: theme.textSecondary,
-      lineHeight: 15,
-    },
-    // Sections
-    section: {
-      padding: 16,
-      backgroundColor: theme.backgroundSecondary,
-      marginTop: 1,
-    },
-    taskSection: {
-      paddingVertical: 16,
-      paddingLeft: 16,
-      backgroundColor: theme.backgroundSecondary,
-      marginTop: 1,
-    },
-    sectionHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 12,
-      paddingRight: 16,
-    },
-    sectionTitle: {
-      fontSize: 17,
-      fontWeight: "600",
-      color: theme.text,
-    },
-    seeAllText: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: theme.primary,
-    },
-    priorityBadge: {
-      backgroundColor: theme.errorLight,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: theme.error + "40",
-    },
-    priorityMedium: {
-      backgroundColor: theme.warningLight,
-      borderColor: theme.warning + "40",
-    },
-    priorityText: {
-      fontSize: 10,
-      fontWeight: "700",
-      color: theme.error,
-      letterSpacing: 0.5,
-    },
-    // Horizontal task cards
-    taskCardH: {
-      width: 140,
-      padding: 12,
-      backgroundColor: theme.background,
-      borderRadius: 14,
-      marginRight: 10,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    taskCardHOverdue: {
-      borderColor: theme.error + "50",
-      backgroundColor: theme.errorLight,
-    },
-    taskCardHTop: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 8,
-    },
-    taskIconH: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    taskDoneBtn: {
-      width: 26,
-      height: 26,
-      borderRadius: 13,
-      borderWidth: 2,
-      borderColor: theme.border,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    taskDoneBtnDone: {
-      backgroundColor: theme.success,
-      borderColor: theme.success,
-    },
-    taskTypeH: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: theme.text,
-      marginBottom: 2,
-    },
-    taskPlantH: {
-      fontSize: 12,
-      color: theme.textSecondary,
-      marginBottom: 8,
-    },
-    taskCardHActions: {
-      flexDirection: "row",
-      gap: 8,
-    },
-    taskActionSmall: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 3,
-      paddingHorizontal: 6,
-      paddingVertical: 3,
-      borderRadius: 8,
-      backgroundColor: theme.backgroundSecondary,
-    },
-    taskActionSmallText: {
-      fontSize: 10,
-      color: theme.textSecondary,
-      fontWeight: "600",
-    },
-    // Vertical task cards
-    taskSectionV: {
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      backgroundColor: theme.backgroundSecondary,
-      marginTop: 1,
-    },
-    taskCardV: {
-      flexDirection: "row",
-      backgroundColor: theme.background,
-      borderRadius: 12,
-      marginBottom: 8,
-      overflow: "hidden",
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    taskCardVBorder: {
-      width: 4,
-    },
-    taskCardVContent: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      padding: 12,
-    },
-    taskCardVLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-      flex: 1,
-      gap: 12,
-    },
-    taskIconV: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    taskCardVInfo: {
-      flex: 1,
-    },
-    taskTypeV: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: theme.text,
-    },
-    taskPlantV: {
-      fontSize: 13,
-      color: theme.textSecondary,
-      marginTop: 2,
-    },
-    taskCardVActions: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    taskDoneBtnV: {
-      width: 30,
-      height: 30,
-      borderRadius: 15,
-      borderWidth: 2,
-      borderColor: theme.border,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    taskActionBtn: {
-      width: 30,
-      height: 30,
-      borderRadius: 15,
-      backgroundColor: theme.background,
-      borderWidth: 1,
-      borderColor: theme.border,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    taskWrapper: {
-      marginBottom: 8,
-    },
-    quickActions: {
-      flexDirection: "row",
-      justifyContent: "flex-end",
-      gap: 8,
-      marginTop: 8,
-    },
-    actionButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 16,
-      backgroundColor: theme.background,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    actionText: {
-      fontSize: 12,
-      color: theme.textSecondary,
-      fontWeight: "500",
-    },
-    // Empty state
-    emptyState: {
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 48,
-      marginTop: 48,
-    },
-    emptyText: {
-      fontSize: 20,
-      fontWeight: "600",
-      color: theme.text,
-      marginTop: 16,
-    },
-    emptySubtext: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      marginTop: 4,
-    },
-    emptyButton: {
-      marginTop: 20,
-      paddingHorizontal: 24,
-      paddingVertical: 12,
-      backgroundColor: theme.primary,
-      borderRadius: 24,
-    },
-    emptyButtonText: {
-      color: theme.textInverse,
-      fontSize: 15,
-      fontWeight: "600",
-    },
-    // Modal
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: theme.overlay,
-      justifyContent: "center",
-      alignItems: "center",
-      padding: 20,
-    },
-    modalContent: {
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 20,
-      padding: 24,
-      width: "100%",
-      maxWidth: 400,
-    },
-    modalTitle: {
-      fontSize: 20,
-      fontWeight: "700",
-      color: theme.text,
-      marginBottom: 8,
-    },
-    modalSubtext: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      marginBottom: 16,
-    },
-    modalInput: {
-      backgroundColor: theme.inputBackground,
-      borderRadius: 12,
-      padding: 12,
-      fontSize: 15,
-      color: theme.inputText,
-      minHeight: 80,
-      textAlignVertical: "top",
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: theme.inputBorder,
-    },
-    skipReasons: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-      marginBottom: 20,
-    },
-    reasonChip: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      backgroundColor: theme.primaryLight,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: theme.primary,
-    },
-    reasonText: {
-      fontSize: 13,
-      color: theme.primary,
-      fontWeight: "500",
-    },
-    modalButtons: {
-      flexDirection: "row",
-      gap: 12,
-    },
-    modalButton: {
-      flex: 1,
-      paddingVertical: 14,
-      borderRadius: 12,
-      alignItems: "center",
-    },
-    modalButtonCancel: {
-      backgroundColor: theme.background,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    modalButtonConfirm: {
-      backgroundColor: theme.warning,
-    },
-    modalButtonText: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: theme.textInverse,
-    },
-    modalButtonTextCancel: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: theme.textSecondary,
-    },
-  });

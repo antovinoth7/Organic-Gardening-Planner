@@ -2,10 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   TouchableOpacity,
   Alert,
+  Modal,
+  StatusBar,
 } from "react-native";
 import { Image } from 'expo-image';
 import { getPlant } from "../services/plants";
@@ -20,7 +21,20 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
-import { getYearsOld } from "../utils/dateHelpers";
+import { createStyles } from "../styles/plantDetailStyles";
+import { getYearsOld, formatTimestampDisplay, formatDateDisplay } from "../utils/dateHelpers";
+import { getSeasonalPestAlerts } from "../utils/seasonHelpers";
+import {
+  getCompanionSuggestions,
+  getIncompatiblePlants,
+  calculateExpectedHarvestDate,
+  getCoconutAgeInfo,
+  getCoconutNutrientDeficiencies,
+  getCommonPests,
+  getCommonDiseases,
+} from "../utils/plantHelpers";
+import PestDiseaseHistorySection from "../components/PestDiseaseHistorySection";
+import HarvestHistorySection from "../components/HarvestHistorySection";
 
 export default function PlantDetailScreen({ route, navigation }: any) {
   const theme = useTheme();
@@ -31,6 +45,7 @@ export default function PlantDetailScreen({ route, navigation }: any) {
   const [tasks, setTasks] = useState<TaskTemplate[]>([]);
   const [harvestEntries, setHarvestEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [zoomVisible, setZoomVisible] = useState(false);
   const isMountedRef = React.useRef(true);
 
   const loadData = useCallback(async (options?: { silent?: boolean }) => {
@@ -132,6 +147,14 @@ export default function PlantDetailScreen({ route, navigation }: any) {
   }
 
   const seasonalReminder = getSeasonalCareReminder(plant);
+  const seasonalPestAlerts = getSeasonalPestAlerts(plant.plant_type);
+  const companions = getCompanionSuggestions(plant.plant_variety || plant.name);
+  const incompatible = getIncompatiblePlants(plant.plant_variety || plant.name);
+  const computedHarvestDate = calculateExpectedHarvestDate(plant.plant_variety || plant.name, plant.planting_date, plant.plant_type);
+  const coconutAge = plant.plant_type === "coconut_tree" ? getCoconutAgeInfo(plant.planting_date) : null;
+  const coconutDeficiencies = plant.plant_type === "coconut_tree" ? getCoconutNutrientDeficiencies() : [];
+  const commonPests = getCommonPests(plant.plant_type, plant.plant_variety);
+  const commonDiseases = getCommonDiseases(plant.plant_type, plant.plant_variety);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 48) + 16 }}>
@@ -151,19 +174,46 @@ export default function PlantDetailScreen({ route, navigation }: any) {
       </View>
 
       {plant.photo_url ? (
-        <Image 
-          source={{ uri: plant.photo_url }} 
-          style={styles.photo}
-          contentFit="cover"
-          transition={200}
-          cachePolicy="memory-disk"
-          priority="high"
-        />
+        <TouchableOpacity activeOpacity={0.9} onPress={() => setZoomVisible(true)}>
+          <Image 
+            source={{ uri: plant.photo_url }} 
+            style={styles.photo}
+            contentFit="cover"
+            transition={200}
+            cachePolicy="memory-disk"
+            priority="high"
+          />
+        </TouchableOpacity>
       ) : (
         <View style={[styles.photo, styles.photoPlaceholder]}>
           <Ionicons name="leaf" size={64} color={theme.primary} />
         </View>
       )}
+
+      {/* Fullscreen Image Zoom Modal */}
+      <Modal visible={zoomVisible} transparent animationType="fade" onRequestClose={() => setZoomVisible(false)}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.zoomOverlay}>
+          <TouchableOpacity style={[styles.zoomClose, { top: insets.top + 16 }]} onPress={() => setZoomVisible(false)}>
+            <Ionicons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+          <ScrollView
+            maximumZoomScale={4}
+            minimumZoomScale={1}
+            contentContainerStyle={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+            showsVerticalScrollIndicator={false}
+            showsHorizontalScrollIndicator={false}
+            bouncesZoom
+          >
+            <Image
+              source={{ uri: plant.photo_url! }}
+              style={styles.zoomImage}
+              contentFit="contain"
+              cachePolicy="memory-disk"
+            />
+          </ScrollView>
+        </View>
+      </Modal>
 
       <View style={styles.content}>
         <Text style={styles.name}>{plant.name}</Text>
@@ -212,7 +262,7 @@ export default function PlantDetailScreen({ route, navigation }: any) {
             <View style={styles.infoRow}>
               <Ionicons name="calendar" size={20} color={theme.textSecondary} />
               <Text style={styles.infoText}>
-                Planted {plant.planting_date} (
+                Planted: {formatDateDisplay(plant.planting_date)} (
                 {getYearsOld(plant.planting_date) ?? 0} years old)
               </Text>
             </View>
@@ -235,6 +285,22 @@ export default function PlantDetailScreen({ route, navigation }: any) {
               <Text style={styles.infoText}>
                 {plant.harvest_start_date || ""}
                 {plant.harvest_end_date ? ` - ${plant.harvest_end_date}` : ""}
+              </Text>
+            </View>
+          )}
+          {(plant.expected_harvest_date || computedHarvestDate) && (
+            <View style={styles.infoRow}>
+              <Ionicons name="hourglass" size={20} color={theme.textSecondary} />
+              <Text style={styles.infoText}>
+                Expected Harvest: {formatDateDisplay(plant.expected_harvest_date || computedHarvestDate!)}
+              </Text>
+            </View>
+          )}
+          {plant.mature_height && (
+            <View style={styles.infoRow}>
+              <Ionicons name="resize" size={20} color={theme.textSecondary} />
+              <Text style={styles.infoText}>
+                Mature Height: {plant.mature_height}
               </Text>
             </View>
           )}
@@ -354,6 +420,117 @@ export default function PlantDetailScreen({ route, navigation }: any) {
           )}
         </View>
 
+        {/* Last Care Summary */}
+        {(plant.last_watered_date || plant.last_fertilised_date || plant.last_pruned_date) && (
+          <View style={styles.careSection}>
+            <Text style={styles.sectionTitle}>📋 Last Care</Text>
+            <View style={styles.lastCareGrid}>
+              {plant.last_watered_date && (
+                <View style={styles.lastCareItem}>
+                  <Ionicons name="water" size={22} color="#2196F3" />
+                  <Text style={styles.lastCareLabel}>Watered</Text>
+                  <Text style={styles.lastCareDate}>{formatTimestampDisplay(plant.last_watered_date)}</Text>
+                </View>
+              )}
+              {plant.last_fertilised_date && (
+                <View style={styles.lastCareItem}>
+                  <Ionicons name="nutrition" size={22} color="#FF9800" />
+                  <Text style={styles.lastCareLabel}>Fertilised</Text>
+                  <Text style={styles.lastCareDate}>{formatTimestampDisplay(plant.last_fertilised_date)}</Text>
+                </View>
+              )}
+              {plant.last_pruned_date && (
+                <View style={styles.lastCareItem}>
+                  <Ionicons name="cut" size={22} color="#795548" />
+                  <Text style={styles.lastCareLabel}>Pruned</Text>
+                  <Text style={styles.lastCareDate}>{formatTimestampDisplay(plant.last_pruned_date)}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Coconut-Specific Metrics */}
+        {plant.plant_type === "coconut_tree" && (
+          (plant.coconut_fronds_count || plant.nuts_per_month || plant.spathe_count_per_month || plant.last_climbing_date || plant.nut_fall_count) ? (
+          <View style={styles.careSection}>
+            <Text style={styles.sectionTitle}>🥥 Coconut Metrics</Text>
+            <View style={styles.metricsGrid}>
+              {plant.coconut_fronds_count != null && (
+                <View style={styles.metricCard}>
+                  <Ionicons name="leaf" size={22} color="#4CAF50" />
+                  <Text style={styles.metricValue}>{plant.coconut_fronds_count}</Text>
+                  <Text style={styles.metricLabel}>Fronds</Text>
+                  {(plant.coconut_fronds_count < 30 || plant.coconut_fronds_count > 35) && (
+                    <Text style={styles.metricWarning}>
+                      {plant.coconut_fronds_count < 30 ? "Below healthy (30-35)" : "Above typical (30-35)"}
+                    </Text>
+                  )}
+                </View>
+              )}
+              {plant.nuts_per_month != null && (
+                <View style={styles.metricCard}>
+                  <Ionicons name="ellipse" size={22} color="#8B4513" />
+                  <Text style={styles.metricValue}>{plant.nuts_per_month}</Text>
+                  <Text style={styles.metricLabel}>Nuts / Month</Text>
+                </View>
+              )}
+              {plant.spathe_count_per_month != null && (
+                <View style={styles.metricCard}>
+                  <Ionicons name="flower" size={22} color="#FF9800" />
+                  <Text style={styles.metricValue}>{plant.spathe_count_per_month}</Text>
+                  <Text style={styles.metricLabel}>Spathes / Month</Text>
+                </View>
+              )}
+              {plant.nut_fall_count != null && (
+                <View style={styles.metricCard}>
+                  <Ionicons name="arrow-down-circle" size={22} color="#f44336" />
+                  <Text style={styles.metricValue}>{plant.nut_fall_count}</Text>
+                  <Text style={styles.metricLabel}>Nut Falls</Text>
+                  {plant.last_nut_fall_date && (
+                    <Text style={styles.metricLabel}>Last: {plant.last_nut_fall_date}</Text>
+                  )}
+                </View>
+              )}
+            </View>
+            {plant.last_climbing_date && (
+              <View style={[styles.infoRow, { marginTop: 12 }]}>
+                <Ionicons name="calendar" size={20} color={theme.textSecondary} />
+                <Text style={styles.infoText}>Last Climbing: {plant.last_climbing_date}</Text>
+              </View>
+            )}
+          </View>
+          ) : null
+        )}
+
+        {/* Coconut Age Care Guidance */}
+        {coconutAge && (
+          <View style={styles.careSection}>
+            <Text style={styles.sectionTitle}>🌴 Coconut Age Guidance</Text>
+            <View style={styles.infoRow}>
+              <Ionicons name="time" size={20} color={theme.primary} />
+              <Text style={styles.infoText}>{coconutAge.ageLabel} — {coconutAge.stageLabel}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Ionicons name="analytics" size={20} color={theme.textSecondary} />
+              <Text style={styles.infoText}>Expected Yield: {coconutAge.expectedNutsPerYear}</Text>
+            </View>
+            {coconutAge.careTips.map((tip, i) => (
+              <View key={i} style={styles.careTipItem}>
+                <Text style={styles.careTipBullet}>•</Text>
+                <Text style={styles.careTipText}>{tip}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Pest & Disease History + Seasonal Alerts */}
+        <PestDiseaseHistorySection
+          records={plant.pest_disease_history || []}
+          seasonalAlerts={seasonalPestAlerts}
+          styles={styles}
+        />
+
         {/* PHASE 1: Growth & Pruning Section */}
         {(plant.growth_stage ||
           plant.pruning_frequency_days ||
@@ -391,6 +568,94 @@ export default function PlantDetailScreen({ route, navigation }: any) {
           </View>
         )}
 
+        {/* Companion Planting */}
+        {(companions.length > 0 || incompatible.length > 0) && (
+          <View style={styles.careSection}>
+            <Text style={styles.sectionTitle}>🤝 Companion Planting</Text>
+            {companions.length > 0 && (
+              <>
+                <Text style={styles.subsectionTitle}>Good Companions</Text>
+                <View style={styles.companionRow}>
+                  {companions.map((c) => (
+                    <View key={c} style={styles.companionChip}>
+                      <Text style={styles.companionChipText}>{c}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+            {incompatible.length > 0 && (
+              <>
+                <Text style={styles.subsectionTitle}>Avoid Planting With</Text>
+                <View style={styles.companionRow}>
+                  {incompatible.map((c) => (
+                    <View key={c} style={styles.incompatibleChip}>
+                      <Text style={styles.incompatibleChipText}>{c}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+          </View>
+        )}
+
+        {/* Common Pests & Diseases Awareness */}
+        {(commonPests.length > 0 || commonDiseases.length > 0) && (
+          <View style={styles.careSection}>
+            <Text style={styles.sectionTitle}>🔍 Common Pests & Diseases</Text>
+            {commonPests.length > 0 && (
+              <>
+                <Text style={styles.subsectionTitle}>Pests to Watch</Text>
+                <View style={styles.awarenessRow}>
+                  {commonPests.map((p) => (
+                    <View key={p} style={styles.awarenessChip}>
+                      <Text style={styles.awarenessChipText}>🐛 {p}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+            {commonDiseases.length > 0 && (
+              <>
+                <Text style={styles.subsectionTitle}>Diseases to Watch</Text>
+                <View style={styles.awarenessRow}>
+                  {commonDiseases.map((d) => (
+                    <View key={d} style={styles.awarenessChip}>
+                      <Text style={styles.awarenessChipText}>🦠 {d}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+          </View>
+        )}
+
+        {/* Coconut Nutrient Deficiency Guide */}
+        {coconutDeficiencies.length > 0 && (
+          <View style={styles.careSection}>
+            <Text style={styles.sectionTitle}>🧪 Nutrient Deficiency Guide</Text>
+            {coconutDeficiencies.map((def) => (
+              <View
+                key={def.nutrient}
+                style={[
+                  styles.nutrientCard,
+                  { borderLeftColor: def.urgency === "high" ? "#f44336" : def.urgency === "medium" ? "#FF9800" : "#4CAF50" },
+                ]}
+              >
+                <Text style={styles.nutrientName}>{def.nutrient}</Text>
+                <Text style={styles.nutrientSubTitle}>Symptoms</Text>
+                {def.symptoms.slice(0, 3).map((s, i) => (
+                  <Text key={i} style={styles.nutrientSymptom}>• {s}</Text>
+                ))}
+                <Text style={styles.nutrientSubTitle}>Organic Correction</Text>
+                {def.organicCorrection.slice(0, 2).map((c, i) => (
+                  <Text key={i} style={styles.nutrientCorrection}>✓ {c}</Text>
+                ))}
+              </View>
+            ))}
+          </View>
+        )}
+
         {plant.notes && (
           <View style={styles.notesSection}>
             <Text style={styles.sectionTitle}>Notes</Text>
@@ -399,149 +664,14 @@ export default function PlantDetailScreen({ route, navigation }: any) {
         )}
 
         {/* Harvest History Section */}
-        {(plant.plant_type === "fruit_tree" ||
-          plant.plant_type === "coconut_tree") && (
-          <View style={styles.harvestSection}>
-            <View style={styles.harvestHeader}>
-              <Text style={styles.sectionTitle}>🧺 Harvest History</Text>
-              {harvestEntries.length > 0 && (
-                <TouchableOpacity onPress={openHarvestForm}>
-                  <Ionicons name="add-circle" size={24} color={theme.primary} />
-                </TouchableOpacity>
-              )}
-            </View>
-            {harvestEntries.length > 0 ? (
-              <>
-                {/* Harvest Statistics */}
-                <View style={styles.harvestStats}>
-                  <View style={styles.statCard}>
-                    <Text style={styles.statValue}>
-                      {harvestEntries.length}
-                    </Text>
-                    <Text style={styles.statLabel}>Harvests</Text>
-                  </View>
-                  <View style={styles.statCard}>
-                    <Text style={styles.statValue}>
-                      {harvestEntries
-                        .reduce((sum, e) => sum + (e.harvest_quantity || 0), 0)
-                        .toFixed(1)}
-                    </Text>
-                    <Text style={styles.statLabel}>
-                      Total {harvestEntries[0]?.harvest_unit || "units"}
-                    </Text>
-                  </View>
-                  <View style={styles.statCard}>
-                    <Text style={styles.statValue}>
-                      {(
-                        harvestEntries.reduce(
-                          (sum, e) => sum + (e.harvest_quantity || 0),
-                          0
-                        ) / harvestEntries.length
-                      ).toFixed(1)}
-                    </Text>
-                    <Text style={styles.statLabel}>Avg/harvest</Text>
-                  </View>
-                  {plant.plant_type === "coconut_tree" &&
-                    harvestEntries.length > 0 &&
-                    (() => {
-                      const lastHarvestDate = new Date(
-                        harvestEntries[0].created_at
-                      );
-                      const nextHarvestDate = new Date(lastHarvestDate);
-                      nextHarvestDate.setMonth(nextHarvestDate.getMonth() + 2);
-                      const daysUntil = Math.ceil(
-                        (nextHarvestDate.getTime() - new Date().getTime()) /
-                          (1000 * 60 * 60 * 24)
-                      );
-                      return (
-                        <View style={styles.statCard}>
-                          <Text
-                            style={[
-                              styles.statValue,
-                              {
-                                fontSize: 18,
-                                color:
-                                  daysUntil <= 7
-                                    ? theme.success
-                                    : theme.textSecondary,
-                              },
-                            ]}
-                          >
-                            {daysUntil > 0 ? `${daysUntil}d` : "Ready"}
-                          </Text>
-                          <Text style={styles.statLabel}>Next harvest</Text>
-                        </View>
-                      );
-                    })()}
-                </View>
-
-                {/* Recent Harvests */}
-                <Text style={styles.recentTitle}>Recent Harvests</Text>
-                {harvestEntries.slice(0, 5).map((entry) => (
-                  <View key={entry.id} style={styles.harvestItem}>
-                    <View style={styles.harvestLeft}>
-                      <Text style={styles.harvestDate}>
-                        {new Date(entry.created_at).toLocaleDateString(
-                          "en-US",
-                          { month: "short", day: "numeric", year: "numeric" }
-                        )}
-                      </Text>
-                      <Text style={styles.harvestQuantity}>
-                        {entry.harvest_quantity} {entry.harvest_unit}
-                      </Text>
-                    </View>
-                    <View style={styles.harvestRight}>
-                      {entry.harvest_quality && (
-                        <Text style={styles.qualityBadge}>
-                          {entry.harvest_quality === "excellent"
-                            ? "🌟"
-                            : entry.harvest_quality === "good"
-                            ? "👍"
-                            : entry.harvest_quality === "fair"
-                            ? "👌"
-                            : "👎"}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                ))}
-
-                {harvestEntries.length > 5 && (
-                  <TouchableOpacity
-                    style={styles.viewAllButton}
-                    onPress={() => navigation.navigate("Journal")}
-                  >
-                    <Text style={styles.viewAllText}>View All in Journal</Text>
-                    <Ionicons
-                      name="chevron-forward"
-                      size={16}
-                      color={theme.primary}
-                    />
-                  </TouchableOpacity>
-                )}
-              </>
-            ) : (
-              <View style={styles.emptyHarvest}>
-                <Ionicons
-                  name="basket-outline"
-                  size={48}
-                  color={theme.border}
-                />
-                <Text style={styles.emptyHarvestText}>
-                  No harvests recorded yet
-                </Text>
-                <TouchableOpacity
-                  style={styles.addHarvestButton}
-                  onPress={openHarvestForm}
-                >
-                  <Text style={styles.addHarvestButtonText}>
-                    Record First Harvest
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
+        <HarvestHistorySection
+          plantType={plant.plant_type}
+          harvestEntries={harvestEntries}
+          styles={styles}
+          theme={theme}
+          onRecordHarvest={openHarvestForm}
+          onViewAll={() => navigation.navigate("Journal")}
+        />
 
         <View style={styles.tasksSection}>
           <Text style={styles.sectionTitle}>Tasks ({tasks.length})</Text>
@@ -572,273 +702,3 @@ export default function PlantDetailScreen({ route, navigation }: any) {
   );
 }
 
-const createStyles = (theme: ReturnType<typeof useTheme>) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.background,
-    },
-    header: {
-      position: "absolute",
-      top: 12,
-      left: 0,
-      right: 0,
-      flexDirection: "row",
-      justifyContent: "space-between",
-      paddingHorizontal: 16,
-      zIndex: 10,
-    },
-    backButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: theme.card,
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: theme.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    },
-    editButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: theme.card,
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: theme.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    },
-    photo: {
-      width: "100%",
-      height: 300,
-    },
-    photoPlaceholder: {
-      backgroundColor: theme.backgroundSecondary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    content: {
-      padding: 24,
-    },
-    name: {
-      fontSize: 32,
-      fontWeight: "bold",
-      color: theme.text,
-      marginBottom: 4,
-    },
-    variety: {
-      fontSize: 18,
-      color: theme.textSecondary,
-      fontStyle: "italic",
-      marginBottom: 16,
-    },
-    infoSection: {
-      marginBottom: 24,
-    },
-    careSection: {
-      marginBottom: 24,
-      backgroundColor: theme.card,
-      padding: 16,
-      borderRadius: 12,
-    },
-    infoRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginBottom: 12,
-    },
-    infoText: {
-      fontSize: 16,
-      color: theme.textSecondary,
-      marginLeft: 12,
-    },
-    notesSection: {
-      marginBottom: 24,
-    },
-    sectionTitle: {
-      fontSize: 18,
-      fontWeight: "600",
-      color: theme.text,
-      marginBottom: 12,
-    },
-    notesText: {
-      fontSize: 16,
-      color: theme.textSecondary,
-      lineHeight: 24,
-    },
-    // Phase 1 & 2 styles
-    seasonBox: {
-      backgroundColor: theme.backgroundSecondary,
-      padding: 12,
-      borderRadius: 8,
-      marginBottom: 12,
-    },
-    seasonTitle: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: theme.text,
-      marginBottom: 8,
-    },
-    seasonText: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      marginBottom: 4,
-    },
-    seasonNotes: {
-      fontSize: 13,
-      color: theme.textTertiary,
-      fontStyle: "italic",
-      marginTop: 4,
-    },
-    tasksSection: {
-      marginBottom: 24,
-    },
-    taskItem: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      backgroundColor: theme.card,
-      padding: 16,
-      borderRadius: 12,
-      marginBottom: 8,
-    },
-    taskLeft: {
-      flex: 1,
-    },
-    taskType: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: theme.text,
-    },
-    taskFrequency: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      marginTop: 2,
-    },
-    taskStatus: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: theme.primary,
-    },
-    taskDisabled: {
-      color: theme.textTertiary,
-    },
-    centered: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    link: {
-      color: theme.primary,
-      fontSize: 16,
-      fontWeight: "600",
-      marginTop: 16,
-    },
-    harvestSection: {
-      backgroundColor: theme.card,
-      padding: 16,
-      borderRadius: 12,
-      marginBottom: 16,
-    },
-    harvestHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 16,
-    },
-    harvestStats: {
-      flexDirection: "row",
-      gap: 12,
-      marginBottom: 16,
-    },
-    statCard: {
-      flex: 1,
-      backgroundColor: theme.background,
-      padding: 12,
-      borderRadius: 8,
-      alignItems: "center",
-    },
-    statValue: {
-      fontSize: 24,
-      fontWeight: "700",
-      color: theme.primary,
-    },
-    statLabel: {
-      fontSize: 11,
-      color: theme.textSecondary,
-      marginTop: 4,
-      textAlign: "center",
-    },
-    recentTitle: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: theme.textSecondary,
-      marginBottom: 8,
-    },
-    harvestItem: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-    },
-    harvestLeft: {
-      flex: 1,
-    },
-    harvestDate: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      marginBottom: 4,
-    },
-    harvestQuantity: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: theme.text,
-    },
-    harvestRight: {
-      alignItems: "flex-end",
-    },
-    qualityBadge: {
-      fontSize: 24,
-    },
-    viewAllButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: 12,
-      marginTop: 8,
-    },
-    viewAllText: {
-      fontSize: 14,
-      color: theme.primary,
-      fontWeight: "600",
-      marginRight: 4,
-    },
-    emptyHarvest: {
-      alignItems: "center",
-      paddingVertical: 32,
-    },
-    emptyHarvestText: {
-      fontSize: 16,
-      color: theme.textTertiary,
-      marginTop: 12,
-      marginBottom: 16,
-    },
-    addHarvestButton: {
-      backgroundColor: theme.primary,
-      paddingVertical: 12,
-      paddingHorizontal: 24,
-      borderRadius: 8,
-    },
-    addHarvestButtonText: {
-      color: theme.buttonText,
-      fontSize: 14,
-      fontWeight: "600",
-    },
-  });

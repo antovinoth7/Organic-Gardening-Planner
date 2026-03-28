@@ -29,6 +29,20 @@ export const formatDateDisplay = (dateStr: string): string => {
 };
 
 /**
+ * Format an ISO timestamp or YYYY-MM-DD string to "Mar 27, 2026".
+ * Handles full ISO strings (e.g. "2026-03-27T21:33:21.387Z") directly.
+ */
+export const formatTimestampDisplay = (dateStr: string): string => {
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return dateStr;
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
+/**
  * Calculate age in years from a date (for trees)
  * @param dateValue - Planting date
  * @returns Age in years, or null if invalid

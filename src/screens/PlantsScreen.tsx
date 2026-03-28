@@ -20,7 +20,6 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
-  Dimensions,
 } from "react-native";
 import { getAllPlants, deletePlant } from "../services/plants";
 import {
@@ -40,6 +39,7 @@ import PlantCard from "../components/PlantCard";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
+import { createStyles } from "../styles/plantsStyles";
 import {
   useTabBarScroll,
   TAB_BAR_HEIGHT,
@@ -57,6 +57,7 @@ interface ActiveFilters {
   water: WaterRequirement | "all";
   parentLocation: string;
   childLocation: string;
+  pestStatus: "all" | "active_issues" | "no_issues";
 }
 
 const ITEMS_PER_PAGE = 20;
@@ -79,8 +80,7 @@ export default function PlantsScreen({ navigation, route }: any) {
   const [loading, setLoading] = useState(true);
   const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
-  const [scrolledDown, setScrolledDown] = useState(false);
-  const scrollOffsetRef = useRef(0);
+
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchActive, setSearchActive] = useState(false);
@@ -95,6 +95,7 @@ export default function PlantsScreen({ navigation, route }: any) {
     water: "all",
     parentLocation: "",
     childLocation: "",
+    pestStatus: "all",
   });
   const [showFilters, setShowFilters] = useState(false);
   const [homeHealthFilter, setHomeHealthFilter] = useState<string | null>(null);
@@ -107,19 +108,7 @@ export default function PlantsScreen({ navigation, route }: any) {
 
   const handleScroll = useCallback((e: any) => {
     onTabBarScroll(e);
-    const offsetY = e.nativeEvent.contentOffset.y;
-    scrollOffsetRef.current = offsetY;
-    const isDown = offsetY > 300;
-    if (isDown !== scrolledDown) setScrolledDown(isDown);
-  }, [onTabBarScroll, scrolledDown]);
-
-  const scrollToTop = useCallback(() => {
-    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, []);
-
-  const scrollToBottom = useCallback(() => {
-    flatListRef.current?.scrollToEnd({ animated: true });
-  }, []);
+  }, [onTabBarScroll]);
 
   const loadPlants = async (options?: { silent?: boolean }) => {
     if (!options?.silent) {
@@ -287,6 +276,13 @@ export default function PlantsScreen({ navigation, route }: any) {
       );
     }
 
+    if (filters.pestStatus !== "all") {
+      filtered = filtered.filter((p) => {
+        const activeIssues = (p.pest_disease_history || []).filter(r => !r.resolved).length;
+        return filters.pestStatus === "active_issues" ? activeIssues > 0 : activeIssues === 0;
+      });
+    }
+
     return filtered;
   }, [filters, plants, searchQuery]);
 
@@ -355,6 +351,7 @@ export default function PlantsScreen({ navigation, route }: any) {
     if (filters.water !== "all") count++;
     if (filters.parentLocation !== "") count++;
     if (filters.childLocation !== "") count++;
+    if (filters.pestStatus !== "all") count++;
     return count;
   }, [filters]);
 
@@ -372,6 +369,7 @@ export default function PlantsScreen({ navigation, route }: any) {
       water: "all",
       parentLocation: "",
       childLocation: "",
+      pestStatus: "all",
     });
     setSearchQuery("");
     setHomeHealthFilter(null);
@@ -779,6 +777,22 @@ export default function PlantsScreen({ navigation, route }: any) {
                   ))}
                 </View>
 
+                {/* Pest Status */}
+                <Text style={styles.sheetSectionTitle}>
+                  <Ionicons name="bug" size={14} color={theme.textSecondary} /> Pest & Disease
+                </Text>
+                <View style={styles.sheetChipWrap}>
+                  {([["all", "All"], ["active_issues", "🐛 Active Issues"], ["no_issues", "✅ No Issues"]] as const).map(([val, label]) => (
+                    <TouchableOpacity
+                      key={val}
+                      style={[styles.sheetChip, filters.pestStatus === val && styles.sheetChipActive]}
+                      onPress={() => updateFilter("pestStatus", val)}
+                    >
+                      <Text style={[styles.sheetChipText, filters.pestStatus === val && styles.sheetChipTextActive]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
                 {/* Location */}
                 <Text style={styles.sheetSectionTitle}>
                   <Ionicons name="location" size={14} color={theme.textSecondary} /> Location
@@ -833,13 +847,17 @@ export default function PlantsScreen({ navigation, route }: any) {
         <View style={styles.resultsLeft}>
           <Ionicons name="leaf" size={14} color={theme.primary} />
           <Text style={styles.resultsCount}>{filteredPlants.length}</Text>
-          <Text style={styles.resultsLabel}>
-            {filteredPlants.length === 1 ? 'plant' : 'plants'}
-          </Text>
-          {hasActiveFilters && (
-            <View style={styles.resultsFilteredBadge}>
-              <Text style={styles.resultsFilteredText}>filtered</Text>
-            </View>
+          {hasActiveFilters ? (
+            <>
+              <Text style={styles.resultsLabel}>of {plants.length} {plants.length === 1 ? 'Plant' : 'Plants'}</Text>
+              <View style={styles.resultsFilteredBadge}>
+                <Text style={styles.resultsFilteredText}>filtered</Text>
+              </View>
+            </>
+          ) : (
+            <Text style={styles.resultsLabel}>
+              {filteredPlants.length === 1 ? 'Plant' : 'Plants'}
+            </Text>
           )}
         </View>
       </View>
@@ -954,440 +972,8 @@ export default function PlantsScreen({ navigation, route }: any) {
       {/* Floating Action Button */}
       <AnimatedFAB onPress={() => navigation.navigate("PlantForm")} />
 
-      {/* Scroll navigation arrows */}
-      {displayedPlants.length > 0 && (
-        <View style={[styles.scrollNavContainer, { bottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 16) + 8 }]}>
-          {scrolledDown && (
-            <TouchableOpacity style={styles.scrollNavBtn} onPress={scrollToTop} activeOpacity={0.8}>
-              <Ionicons name="chevron-up" size={20} color={theme.primary} />
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity style={styles.scrollNavBtn} onPress={scrollToBottom} activeOpacity={0.8}>
-            <Ionicons name="chevron-down" size={20} color={theme.primary} />
-          </TouchableOpacity>
-        </View>
-      )}
+
     </View>
   );
 }
 
-const createStyles = (theme: ReturnType<typeof useTheme>) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.background,
-    },
-    header: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      paddingHorizontal: 12,
-      paddingTop: 12,
-      paddingBottom: 12,
-      backgroundColor: theme.backgroundSecondary,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-    },
-    headerTitle: {
-      fontSize: 22,
-      fontWeight: "700",
-      color: theme.text,
-    },
-    headerActions: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    headerIconBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: theme.primaryLight,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    headerIconBtnActive: {
-      backgroundColor: theme.primary,
-    },
-    searchActiveDot: {
-      position: "absolute",
-      bottom: 6,
-      right: 6,
-      width: 7,
-      height: 7,
-      borderRadius: 4,
-      backgroundColor: theme.primary,
-    },
-    searchExpandedRow: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    searchBackBtn: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    searchExpandedWrapper: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.background,
-      borderRadius: 24,
-      borderWidth: 1,
-      borderColor: theme.primary,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      gap: 8,
-    },
-    searchExpandedInput: {
-      flex: 1,
-      fontSize: 16,
-      color: theme.text,
-      padding: 0,
-    },
-    filterBadge: {
-      position: "absolute",
-      top: 1,
-      right: 1,
-      minWidth: 14,
-      height: 14,
-      borderRadius: 7,
-      backgroundColor: theme.primary,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: 2,
-    },
-    filterBadgeText: {
-      fontSize: 9,
-      color: theme.buttonText,
-      fontWeight: "700",
-      lineHeight: 14,
-    },
-    filterToggleButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: theme.primaryLight,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    filterToggleButtonActive: {
-      backgroundColor: theme.primary,
-    },
-    gridRow: {
-      justifyContent: "space-between",
-    },
-    activeFiltersRow: {
-      backgroundColor: theme.background,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-    },
-    activeFiltersScroll: {
-      alignItems: "center",
-      gap: 6,
-    },
-    activeFilterPill: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.primaryLight,
-      borderRadius: 14,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      gap: 4,
-      borderWidth: 1,
-      borderColor: theme.primary,
-    },
-    activeFilterPillText: {
-      fontSize: 12,
-      color: theme.primary,
-      fontWeight: "600",
-    },
-    clearAllPill: {
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-    },
-    clearAllPillText: {
-      fontSize: 12,
-      color: theme.error,
-      fontWeight: "600",
-    },
-    sortMenu: {
-      backgroundColor: theme.backgroundSecondary,
-      marginHorizontal: 16,
-      marginTop: 4,
-      marginBottom: 8,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: theme.border,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    },
-    sortOption: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-      gap: 12,
-    },
-    sortOptionActive: {
-      backgroundColor: theme.background,
-    },
-    sortText: {
-      flex: 1,
-      fontSize: 15,
-      color: theme.text,
-    },
-    sortTextActive: {
-      fontWeight: "600",
-      color: theme.primary,
-    },
-    sheetOverlay: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.4)",
-      justifyContent: "flex-end",
-      zIndex: 1000,
-      elevation: 1000,
-    },
-    sheetContainer: {
-      backgroundColor: theme.background,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-    },
-    sheetHandle: {
-      width: 40,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: theme.border,
-    },
-    sheetHandleArea: {
-      alignItems: "center",
-      paddingTop: 10,
-      paddingBottom: 8,
-    },
-    sheetHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      paddingHorizontal: 20,
-      paddingBottom: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-    },
-    sheetTitle: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: theme.text,
-    },
-    sheetClearBtn: {
-      paddingHorizontal: 12,
-      paddingVertical: 4,
-      borderRadius: 14,
-      backgroundColor: theme.errorLight,
-    },
-    sheetClearText: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: theme.error,
-    },
-    sheetScroll: {
-      paddingHorizontal: 20,
-      maxHeight: Dimensions.get("window").height * 0.55,
-    },
-    sheetSectionTitle: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: theme.textSecondary,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-      marginTop: 16,
-      marginBottom: 8,
-    },
-    sheetSubSectionTitle: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: theme.textSecondary,
-      marginTop: 8,
-      marginBottom: 6,
-    },
-    sheetChipWrap: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-    },
-    sheetChip: {
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 20,
-      backgroundColor: theme.backgroundSecondary,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    sheetChipActive: {
-      backgroundColor: theme.primaryLight,
-      borderColor: theme.primary,
-    },
-    sheetChipText: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      fontWeight: "500",
-    },
-    sheetChipTextActive: {
-      color: theme.primary,
-      fontWeight: "600",
-    },
-
-    resultsHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      backgroundColor: theme.background,
-    },
-    resultsLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-    },
-    resultsCount: {
-      fontSize: 16,
-      fontWeight: "700",
-      color: theme.text,
-    },
-    resultsLabel: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      fontWeight: "500",
-    },
-    resultsFilteredBadge: {
-      backgroundColor: theme.primaryLight,
-      paddingHorizontal: 8,
-      paddingVertical: 2,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: theme.primary,
-    },
-    resultsFilteredText: {
-      fontSize: 10,
-      fontWeight: "700",
-      color: theme.primary,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-    },
-    resultsShowing: {
-      fontSize: 12,
-      color: theme.textTertiary,
-    },
-    listContent: {
-      paddingHorizontal: 16,
-      paddingTop: 8,
-      paddingBottom: 120,
-    },
-    loadingMore: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: 20,
-      gap: 8,
-    },
-    loadingText: {
-      fontSize: 14,
-      color: theme.textSecondary,
-    },
-    loadMoreButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: 16,
-      marginVertical: 8,
-      backgroundColor: theme.primaryLight,
-      borderRadius: 12,
-      gap: 8,
-    },
-    loadMoreText: {
-      fontSize: 14,
-      color: theme.primary,
-      fontWeight: "600",
-    },
-    healthAlertBanner: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.warningLight,
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      gap: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-    },
-    healthAlertText: {
-      flex: 1,
-      fontSize: 13,
-      color: theme.warning,
-      fontWeight: "600",
-    },
-    emptyState: {
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 48,
-      marginTop: 48,
-    },
-    emptyText: {
-      fontSize: 20,
-      fontWeight: "600",
-      color: theme.text,
-      marginTop: 16,
-    },
-    emptySubtext: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      marginTop: 4,
-    },
-    clearFiltersEmptyButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      marginTop: 20,
-      paddingHorizontal: 20,
-      paddingVertical: 10,
-      borderRadius: 20,
-      backgroundColor: theme.primaryLight,
-    },
-    clearFiltersEmptyText: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: theme.primary,
-    },
-    scrollNavContainer: {
-      position: "absolute",
-      left: 12,
-      flexDirection: "column",
-      gap: 6,
-      zIndex: 50,
-    },
-    scrollNavBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: theme.backgroundSecondary,
-      alignItems: "center",
-      justifyContent: "center",
-      borderWidth: 1,
-      borderColor: theme.border,
-      elevation: 3,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.15,
-      shadowRadius: 2,
-    },
-  });

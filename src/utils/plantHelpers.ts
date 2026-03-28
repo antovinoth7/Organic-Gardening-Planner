@@ -602,6 +602,468 @@ export function getCommonDiseases(
   return getTamilNaduPestDiseaseSet(plantType, plantVariety).diseases;
 }
 
+// ---------------------------------------------------------------------------
+// Pest / Disease emoji & category grouping
+// ---------------------------------------------------------------------------
+
+export interface PestDiseaseGroup {
+  category: string;
+  emoji: string;
+  items: string[];
+}
+
+const PEST_CATEGORY_MAP: Record<string, { category: string; emoji: string }> = {
+  // Sap-Sucking
+  "Aphids": { category: "Sap-Sucking", emoji: "🪰" },
+  "Whiteflies": { category: "Sap-Sucking", emoji: "🪰" },
+  "Spiralling Whitefly": { category: "Sap-Sucking", emoji: "🪰" },
+  "Mealybugs": { category: "Sap-Sucking", emoji: "🪰" },
+  "Coconut Mealybug": { category: "Sap-Sucking", emoji: "🪰" },
+  "Papaya Mealybug": { category: "Sap-Sucking", emoji: "🪰" },
+  "Scale Insects": { category: "Sap-Sucking", emoji: "🪰" },
+  "Jassids": { category: "Sap-Sucking", emoji: "🪰" },
+  "Thrips": { category: "Sap-Sucking", emoji: "🪰" },
+  "Mites": { category: "Mites & Spiders", emoji: "🕷️" },
+  "Red Spider Mite": { category: "Mites & Spiders", emoji: "🕷️" },
+  "Eriophyid Mite": { category: "Mites & Spiders", emoji: "🕷️" },
+  "Coconut Mite": { category: "Mites & Spiders", emoji: "🕷️" },
+  "Citrus Psylla": { category: "Sap-Sucking", emoji: "🪰" },
+  "Mango Hopper": { category: "Sap-Sucking", emoji: "🪰" },
+  // Borers & Larvae
+  "Fruit Borer": { category: "Borers & Larvae", emoji: "🐛" },
+  "Fruit and Shoot Borer": { category: "Borers & Larvae", emoji: "🐛" },
+  "Shoot and Fruit Borer": { category: "Borers & Larvae", emoji: "🐛" },
+  "Stem Borer": { category: "Borers & Larvae", emoji: "🐛" },
+  "Leaf Miner": { category: "Borers & Larvae", emoji: "🐛" },
+  "Bud Worm": { category: "Borers & Larvae", emoji: "🐛" },
+  "Bud Borer": { category: "Borers & Larvae", emoji: "🐛" },
+  "Caterpillar": { category: "Borers & Larvae", emoji: "🐛" },
+  "Hairy Caterpillar": { category: "Borers & Larvae", emoji: "🐛" },
+  "Black-Headed Caterpillar": { category: "Borers & Larvae", emoji: "🐛" },
+  "Bark Eating Caterpillar": { category: "Borers & Larvae", emoji: "🐛" },
+  "Pseudostem Borer": { category: "Borers & Larvae", emoji: "🐛" },
+  // Beetles & Weevils
+  "Red Palm Weevil": { category: "Beetles & Weevils", emoji: "🪲" },
+  "Rhinoceros Beetle": { category: "Beetles & Weevils", emoji: "🪲" },
+  "Epilachna Beetle": { category: "Beetles & Weevils", emoji: "🪲" },
+  "Rhizome Weevil": { category: "Beetles & Weevils", emoji: "🪲" },
+  // Other
+  "Nematodes": { category: "Other Pests", emoji: "🪱" },
+  "Termites": { category: "Other Pests", emoji: "🐜" },
+  "Fruit Fly": { category: "Other Pests", emoji: "🪰" },
+  "Pod Fly": { category: "Other Pests", emoji: "🪰" },
+  "Leaf Defoliators": { category: "Other Pests", emoji: "🐜" },
+};
+
+const DISEASE_CATEGORY_MAP: Record<string, { category: string; emoji: string }> = {
+  // Fungal
+  "Powdery Mildew": { category: "Fungal", emoji: "🍄" },
+  "Anthracnose": { category: "Fungal", emoji: "🍄" },
+  "Leaf Spot": { category: "Fungal", emoji: "🍂" },
+  "Cercospora Leaf Spot": { category: "Fungal", emoji: "🍂" },
+  "Sigatoka Leaf Spot": { category: "Fungal", emoji: "🍂" },
+  "Root Rot": { category: "Fungal", emoji: "🍄" },
+  "Rhizome Rot": { category: "Fungal", emoji: "🍄" },
+  "Stem Rot": { category: "Fungal", emoji: "🍄" },
+  "Damping Off": { category: "Fungal", emoji: "💧" },
+  "Rust": { category: "Fungal", emoji: "🍂" },
+  "Bud Rot": { category: "Fungal", emoji: "🍄" },
+  "Early Blight": { category: "Fungal", emoji: "🍂" },
+  "Late Blight": { category: "Fungal", emoji: "🍂" },
+  "Phomopsis Blight": { category: "Fungal", emoji: "🍂" },
+  "Leaf Blight": { category: "Fungal", emoji: "🍂" },
+  "Dieback": { category: "Fungal", emoji: "🍄" },
+  "Gummosis": { category: "Fungal", emoji: "🍄" },
+  "Sooty Mold": { category: "Fungal", emoji: "🍄" },
+  "Stem Bleeding": { category: "Fungal", emoji: "🍄" },
+  "Canker": { category: "Fungal", emoji: "🍄" },
+  // Bacterial
+  "Bacterial Wilt": { category: "Bacterial", emoji: "🦠" },
+  "Bacterial Blight": { category: "Bacterial", emoji: "🦠" },
+  "Wilt": { category: "Bacterial", emoji: "🥀" },
+  "Citrus Canker": { category: "Bacterial", emoji: "🦠" },
+  "Panama Wilt": { category: "Bacterial", emoji: "🥀" },
+  "Thanjavur Wilt": { category: "Bacterial", emoji: "🥀" },
+  "Root Wilt": { category: "Bacterial", emoji: "🥀" },
+  // Viral
+  "Mosaic Virus": { category: "Viral", emoji: "🧬" },
+  "Leaf Curl Virus": { category: "Viral", emoji: "🧬" },
+  "Yellow Vein Mosaic Virus": { category: "Viral", emoji: "🧬" },
+  "Cassava Mosaic Disease": { category: "Viral", emoji: "🧬" },
+  "Bunchy Top Virus": { category: "Viral", emoji: "🧬" },
+  "Papaya Ringspot Virus": { category: "Viral", emoji: "🧬" },
+  "Greening Disease": { category: "Viral", emoji: "🧬" },
+  "Little Leaf Disease": { category: "Viral", emoji: "🧬" },
+  // Other
+  "Nut Fall": { category: "Other", emoji: "🥥" },
+};
+
+function groupByCategory(
+  items: string[],
+  categoryMap: Record<string, { category: string; emoji: string }>,
+  defaultCategory: string,
+  defaultEmoji: string,
+): PestDiseaseGroup[] {
+  const groups: Record<string, PestDiseaseGroup> = {};
+  for (const item of items) {
+    const info = categoryMap[item] || { category: defaultCategory, emoji: defaultEmoji };
+    if (!groups[info.category]) {
+      groups[info.category] = { category: info.category, emoji: info.emoji, items: [] };
+    }
+    groups[info.category].items.push(item);
+  }
+  return Object.values(groups);
+}
+
+/**
+ * Get common pests grouped by category with emojis.
+ */
+export function getGroupedPests(
+  plantType: PlantType | null | undefined,
+  plantVariety?: string | null,
+): PestDiseaseGroup[] {
+  const pests = getCommonPests(plantType, plantVariety);
+  return groupByCategory(pests, PEST_CATEGORY_MAP, "Other Pests", "🐛");
+}
+
+/**
+ * Get common diseases grouped by category with emojis.
+ */
+export function getGroupedDiseases(
+  plantType: PlantType | null | undefined,
+  plantVariety?: string | null,
+): PestDiseaseGroup[] {
+  const diseases = getCommonDiseases(plantType, plantVariety);
+  return groupByCategory(diseases, DISEASE_CATEGORY_MAP, "Other", "💊");
+}
+
+/**
+ * Get the emoji for a specific pest or disease name.
+ */
+export function getPestDiseaseEmoji(name: string, type: "pest" | "disease"): string {
+  if (type === "pest") {
+    return PEST_CATEGORY_MAP[name]?.emoji ?? "🐛";
+  }
+  return DISEASE_CATEGORY_MAP[name]?.emoji ?? "💊";
+}
+
+// ---------------------------------------------------------------------------
+// Organic Treatment Suggestions (South Tamil Nadu / Kanyakumari)
+// ---------------------------------------------------------------------------
+
+export type TreatmentMethod =
+  | "spray"
+  | "trap"
+  | "biocontrol"
+  | "soil"
+  | "manual"
+  | "cultural";
+
+export interface TreatmentInfo {
+  name: string;
+  method: TreatmentMethod;
+  effort: "easy" | "moderate" | "advanced";
+}
+
+const TREATMENT_METHOD_META: Record<TreatmentMethod, { emoji: string; label: string }> = {
+  spray: { emoji: "💨", label: "Sprays" },
+  trap: { emoji: "🪤", label: "Traps" },
+  biocontrol: { emoji: "🐞", label: "Biocontrol" },
+  soil: { emoji: "🌱", label: "Soil Treatment" },
+  manual: { emoji: "✋", label: "Manual / Physical" },
+  cultural: { emoji: "🔄", label: "Cultural Practice" },
+};
+
+const TREATMENT_DETAILS: Record<string, { method: TreatmentMethod; effort: "easy" | "moderate" | "advanced" }> = {
+  // Sprays
+  "Neem oil spray (2–3 ml/L)": { method: "spray", effort: "easy" },
+  "Neem oil spray": { method: "spray", effort: "easy" },
+  "Neem oil": { method: "spray", effort: "easy" },
+  "Neem oil + soap spray": { method: "spray", effort: "easy" },
+  "Neem oil + garlic spray": { method: "spray", effort: "easy" },
+  "Neem oil fruit spray": { method: "spray", effort: "easy" },
+  "Neem oil spray at flowering": { method: "spray", effort: "easy" },
+  "Neem oil spray at pod formation": { method: "spray", effort: "easy" },
+  "Soapnut water spray": { method: "spray", effort: "easy" },
+  "Soapnut solution": { method: "spray", effort: "easy" },
+  "Soapnut spray": { method: "spray", effort: "easy" },
+  "Garlic-chili spray": { method: "spray", effort: "easy" },
+  "Garlic extract spray": { method: "spray", effort: "easy" },
+  "Garlic extract": { method: "spray", effort: "easy" },
+  "Sulfur-based spray": { method: "spray", effort: "easy" },
+  "Sulfur-based fungicide": { method: "spray", effort: "easy" },
+  "Wettable sulfur spray": { method: "spray", effort: "easy" },
+  "Wettable sulfur": { method: "spray", effort: "easy" },
+  "Spinosad (organic)": { method: "spray", effort: "easy" },
+  "Spinosad spray": { method: "spray", effort: "easy" },
+  "Horticultural oil": { method: "spray", effort: "easy" },
+  "Azadirachtin spray": { method: "spray", effort: "easy" },
+  "Azadirachtin 1%": { method: "spray", effort: "easy" },
+  "Bt (Bacillus thuringiensis)": { method: "spray", effort: "easy" },
+  "Bt spray": { method: "spray", effort: "easy" },
+  "Bt spray on fronds": { method: "spray", effort: "easy" },
+  "Neem seed kernel extract": { method: "spray", effort: "easy" },
+  "Neem kernel extract": { method: "spray", effort: "easy" },
+  "Baking soda spray (1 tsp/L)": { method: "spray", effort: "easy" },
+  "Milk spray (1:9)": { method: "spray", effort: "easy" },
+  "Copper-based fungicide": { method: "spray", effort: "easy" },
+  "Copper-based spray": { method: "spray", effort: "easy" },
+  "Copper hydroxide spray": { method: "spray", effort: "easy" },
+  "Copper oxychloride spray": { method: "spray", effort: "easy" },
+  "Copper oxychloride": { method: "spray", effort: "easy" },
+  "Copper fungicide spray": { method: "spray", effort: "easy" },
+  "Copper spray": { method: "spray", effort: "easy" },
+  "Bordeaux paste on crown": { method: "spray", effort: "moderate" },
+  "Apply Bordeaux paste": { method: "spray", effort: "moderate" },
+  "Bordeaux paste on trunk": { method: "spray", effort: "moderate" },
+  "Copper fungicide paste on cuts": { method: "spray", effort: "moderate" },
+  "Apply Bt paste": { method: "spray", effort: "moderate" },
+  "Borax spray during flowering": { method: "spray", effort: "easy" },
+  "Wash with soapnut water": { method: "spray", effort: "easy" },
+  "Isopropyl alcohol swab": { method: "spray", effort: "easy" },
+  "Strong water jet": { method: "spray", effort: "easy" },
+  // Traps
+  "Yellow sticky traps": { method: "trap", effort: "easy" },
+  "Blue sticky traps": { method: "trap", effort: "easy" },
+  "Sticky traps": { method: "trap", effort: "easy" },
+  "Pheromone traps": { method: "trap", effort: "moderate" },
+  "Rhinolure pheromone trap": { method: "trap", effort: "moderate" },
+  "Light traps": { method: "trap", effort: "moderate" },
+  "Bait traps (jaggery+malathion)": { method: "trap", effort: "moderate" },
+  "Trap crops": { method: "trap", effort: "moderate" },
+  "Trap with pseudostems": { method: "trap", effort: "moderate" },
+  // Biocontrol
+  "Lady beetle release": { method: "biocontrol", effort: "advanced" },
+  "Release lacewings": { method: "biocontrol", effort: "advanced" },
+  "Predatory mite release": { method: "biocontrol", effort: "advanced" },
+  "Release parasitic wasps": { method: "biocontrol", effort: "advanced" },
+  "Trichogramma egg cards": { method: "biocontrol", effort: "advanced" },
+  "Release parasitoids (Goniozus nephantidis)": { method: "biocontrol", effort: "advanced" },
+  "Release Cryptolaemus beetle": { method: "biocontrol", effort: "advanced" },
+  "Release Encarsia parasitoid": { method: "biocontrol", effort: "advanced" },
+  "Release Acerophagus papayae": { method: "biocontrol", effort: "advanced" },
+  "Entomopathogenic nematodes": { method: "biocontrol", effort: "advanced" },
+  "Metarhizium anisopliae (fungal biocontrol)": { method: "biocontrol", effort: "advanced" },
+  "Beauveria bassiana": { method: "biocontrol", effort: "advanced" },
+  "Pseudomonas fluorescens": { method: "biocontrol", effort: "advanced" },
+  // Soil treatment
+  "Neem cake soil application": { method: "soil", effort: "easy" },
+  "Neem cake in soil": { method: "soil", effort: "easy" },
+  "Neem cake in manure pits": { method: "soil", effort: "easy" },
+  "Neem cake basal application": { method: "soil", effort: "easy" },
+  "Neem cake application": { method: "soil", effort: "easy" },
+  "Neem cake + Trichoderma in basin": { method: "soil", effort: "moderate" },
+  "Root feeding neem cake": { method: "soil", effort: "easy" },
+  "Castor cake": { method: "soil", effort: "easy" },
+  "Trichoderma viride soil drench": { method: "soil", effort: "moderate" },
+  "Trichoderma soil treatment": { method: "soil", effort: "moderate" },
+  "Trichoderma seed treatment": { method: "soil", effort: "moderate" },
+  "Trichoderma + Pseudomonas soil drench": { method: "soil", effort: "moderate" },
+  "Trichoderma treatment": { method: "soil", effort: "moderate" },
+  "Marigold interplanting": { method: "soil", effort: "moderate" },
+  "Diatomaceous earth": { method: "soil", effort: "easy" },
+  "Cinnamon powder": { method: "soil", effort: "easy" },
+  // Manual / Physical
+  "Handpicking": { method: "manual", effort: "easy" },
+  "Hand picking": { method: "manual", effort: "easy" },
+  "Manual removal with brush": { method: "manual", effort: "easy" },
+  "Manual collection and destruction": { method: "manual", effort: "easy" },
+  "Remove affected leaves": { method: "manual", effort: "easy" },
+  "Remove infected leaves": { method: "manual", effort: "easy" },
+  "Remove and burn infected leaves": { method: "manual", effort: "easy" },
+  "Remove and burn affected leaves": { method: "manual", effort: "easy" },
+  "Remove infected foliage": { method: "manual", effort: "easy" },
+  "Remove infected parts": { method: "manual", effort: "easy" },
+  "Remove and burn infected parts": { method: "manual", effort: "easy" },
+  "Remove infected tissue": { method: "manual", effort: "easy" },
+  "Remove affected fronds": { method: "manual", effort: "easy" },
+  "Remove affected shoots": { method: "manual", effort: "easy" },
+  "Remove and destroy affected parts": { method: "manual", effort: "easy" },
+  "Remove and destroy infected plants": { method: "manual", effort: "moderate" },
+  "Remove infected plants": { method: "manual", effort: "moderate" },
+  "Remove infected plants early": { method: "manual", effort: "moderate" },
+  "Remove infected trees": { method: "manual", effort: "moderate" },
+  "Remove infected bark": { method: "manual", effort: "moderate" },
+  "Prune affected branches": { method: "manual", effort: "moderate" },
+  "Prune and burn affected branches": { method: "manual", effort: "moderate" },
+  "Hook out adults from crown": { method: "manual", effort: "moderate" },
+  "Clean crown regularly": { method: "manual", effort: "moderate" },
+  "Clean frass from tunnels": { method: "manual", effort: "moderate" },
+  "Inject neem oil into trunk": { method: "manual", effort: "advanced" },
+  "Inject neem oil into bore holes": { method: "manual", effort: "advanced" },
+  "Inject neem oil": { method: "manual", effort: "advanced" },
+  "Inject neem solution into pseudostem": { method: "manual", effort: "advanced" },
+  "Seal holes with mud": { method: "manual", effort: "moderate" },
+  "Auger and treat with fungicide": { method: "manual", effort: "advanced" },
+  // Cultural practices
+  "Improve drainage": { method: "cultural", effort: "moderate" },
+  "Reduce watering": { method: "cultural", effort: "easy" },
+  "Avoid overwatering": { method: "cultural", effort: "easy" },
+  "Avoid overhead watering": { method: "cultural", effort: "easy" },
+  "Avoid excess watering": { method: "cultural", effort: "easy" },
+  "Well-drained soil": { method: "cultural", effort: "moderate" },
+  "Improve air circulation": { method: "cultural", effort: "easy" },
+  "Improve spacing": { method: "cultural", effort: "moderate" },
+  "Increase humidity": { method: "cultural", effort: "easy" },
+  "Crop rotation": { method: "cultural", effort: "moderate" },
+  "Early harvest": { method: "cultural", effort: "easy" },
+  "Avoid rain splash": { method: "cultural", effort: "easy" },
+  "Avoid trunk injury": { method: "cultural", effort: "easy" },
+  "Maintain basin hygiene": { method: "cultural", effort: "easy" },
+  "Maintain nutrition": { method: "cultural", effort: "easy" },
+  "Balanced nutrition": { method: "cultural", effort: "easy" },
+  "Avoid water stagnation": { method: "cultural", effort: "easy" },
+  "Avoid infected fields": { method: "cultural", effort: "moderate" },
+  "Resistant varieties": { method: "cultural", effort: "moderate" },
+  "Use resistant varieties": { method: "cultural", effort: "moderate" },
+  "Use tolerant varieties": { method: "cultural", effort: "moderate" },
+  "Use disease-free planting material": { method: "cultural", effort: "moderate" },
+  "Use disease-free stakes": { method: "cultural", effort: "moderate" },
+  "Use virus-free suckers": { method: "cultural", effort: "moderate" },
+  "Control sap-sucking insects first": { method: "cultural", effort: "moderate" },
+  "Control whiteflies": { method: "cultural", effort: "moderate" },
+  "Control citrus psylla": { method: "cultural", effort: "moderate" },
+  "Control banana aphid": { method: "cultural", effort: "moderate" },
+  "Control aphid vectors": { method: "cultural", effort: "moderate" },
+  "Pest control for mites": { method: "cultural", effort: "moderate" },
+};
+
+export interface TreatmentGroup {
+  method: TreatmentMethod;
+  emoji: string;
+  label: string;
+  items: TreatmentInfo[];
+}
+
+const EFFORT_ORDER: Record<string, number> = { easy: 0, moderate: 1, advanced: 2 };
+
+/**
+ * Get organic treatments grouped by method with emoji and effort level.
+ */
+export function getGroupedTreatments(issueName: string): TreatmentGroup[] {
+  const treatments = getOrganicTreatments(issueName);
+  if (treatments.length === 0) return [];
+
+  const groups: Record<string, TreatmentGroup> = {};
+  for (const name of treatments) {
+    const detail = TREATMENT_DETAILS[name] || { method: "spray" as TreatmentMethod, effort: "moderate" as const };
+    const meta = TREATMENT_METHOD_META[detail.method];
+    if (!groups[detail.method]) {
+      groups[detail.method] = { method: detail.method, emoji: meta.emoji, label: meta.label, items: [] };
+    }
+    groups[detail.method].items.push({ name, method: detail.method, effort: detail.effort });
+  }
+
+  // Sort items within each group by effort (easy first)
+  for (const group of Object.values(groups)) {
+    group.items.sort((a, b) => EFFORT_ORDER[a.effort] - EFFORT_ORDER[b.effort]);
+  }
+
+  // Return groups in a meaningful order
+  const methodOrder: TreatmentMethod[] = ["spray", "trap", "biocontrol", "soil", "manual", "cultural"];
+  return methodOrder
+    .filter((m) => groups[m])
+    .map((m) => groups[m]);
+}
+
+/**
+ * Get the effort emoji indicator for a treatment effort level.
+ */
+export function getTreatmentEffortDot(effort: "easy" | "moderate" | "advanced"): string {
+  if (effort === "easy") return "🟢";
+  if (effort === "moderate") return "🟡";
+  return "🔴";
+}
+
+const ORGANIC_TREATMENTS: Record<string, string[]> = {
+  // Pests
+  "Aphids": ["Neem oil spray (2–3 ml/L)", "Soapnut water spray", "Lady beetle release", "Garlic-chili spray"],
+  "Whiteflies": ["Yellow sticky traps", "Neem oil spray", "Soapnut solution", "Garlic extract spray"],
+  "Mealybugs": ["Neem oil + soap spray", "Isopropyl alcohol swab", "Release lacewings", "Diatomaceous earth"],
+  "Thrips": ["Blue sticky traps", "Neem oil spray", "Spinosad (organic)", "Garlic extract"],
+  "Mites": ["Neem oil spray", "Sulfur-based spray", "Predatory mite release", "Strong water jet"],
+  "Red Spider Mite": ["Wettable sulfur spray", "Neem oil spray", "Predatory mite release", "Increase humidity"],
+  "Fruit Fly": ["Pheromone traps", "Neem oil fruit spray", "Bait traps (jaggery+malathion)", "Early harvest"],
+  "Scale Insects": ["Neem oil + soap spray", "Manual removal with brush", "Horticultural oil", "Release parasitic wasps"],
+  "Caterpillar": ["Bt (Bacillus thuringiensis)", "Neem oil spray", "Handpicking", "Trichogramma egg cards"],
+  "Hairy Caterpillar": ["Bt spray", "Light traps", "Neem kernel extract", "Manual collection and destruction"],
+  "Fruit and Shoot Borer": ["Pheromone traps", "Neem seed kernel extract", "Bt spray", "Trap crops"],
+  "Jassids": ["Neem oil spray", "Yellow sticky traps", "Garlic-chili spray"],
+  "Bud Worm": ["Bt spray", "Neem oil", "Pheromone traps", "Hand picking"],
+  "Leaf Miner": ["Neem oil spray", "Remove affected leaves", "Yellow sticky traps", "Spinosad spray"],
+  "Nematodes": ["Neem cake soil application", "Marigold interplanting", "Trichoderma soil treatment", "Castor cake"],
+  "Red Palm Weevil": ["Pheromone traps", "Inject neem oil into trunk", "Entomopathogenic nematodes", "Clean crown regularly"],
+  "Rhinoceros Beetle": ["Rhinolure pheromone trap", "Metarhizium anisopliae (fungal biocontrol)", "Hook out adults from crown", "Neem cake in manure pits"],
+  "Black-Headed Caterpillar": ["Release parasitoids (Goniozus nephantidis)", "Bt spray on fronds", "Remove and burn affected leaves"],
+  "Coconut Mealybug": ["Release Cryptolaemus beetle", "Neem oil spray", "Soapnut solution"],
+  "Eriophyid Mite": ["Neem oil + garlic spray", "Wettable sulfur", "Azadirachtin spray", "Root feeding neem cake"],
+  "Coconut Mite": ["Wettable sulfur spray", "Neem oil spray", "Azadirachtin 1%"],
+  "Citrus Psylla": ["Neem oil spray", "Yellow sticky traps", "Remove affected shoots"],
+  "Mango Hopper": ["Neem oil spray at flowering", "Sticky traps", "Garlic-chili spray", "Avoid excess watering"],
+  "Stem Borer": ["Inject neem oil into bore holes", "Seal holes with mud", "Prune affected branches"],
+  "Bark Eating Caterpillar": ["Clean frass from tunnels", "Inject neem oil", "Apply Bt paste"],
+  "Spiralling Whitefly": ["Neem oil spray", "Release Encarsia parasitoid", "Yellow sticky traps"],
+  "Rhizome Weevil": ["Trap with pseudostems", "Neem cake in soil", "Beauveria bassiana"],
+  "Pseudostem Borer": ["Inject neem solution into pseudostem", "Remove and destroy affected parts"],
+  "Papaya Mealybug": ["Release Acerophagus papayae", "Neem oil spray", "Soapnut spray"],
+  "Pod Fly": ["Neem oil spray at pod formation", "Early harvest", "Pheromone traps"],
+  // Diseases
+  "Powdery Mildew": ["Baking soda spray (1 tsp/L)", "Neem oil", "Milk spray (1:9)", "Sulfur-based fungicide"],
+  "Anthracnose": ["Copper-based fungicide", "Neem oil spray", "Remove infected parts", "Improve air circulation"],
+  "Leaf Spot": ["Copper hydroxide spray", "Neem oil", "Remove and burn infected leaves", "Avoid overhead watering"],
+  "Cercospora Leaf Spot": ["Copper oxychloride spray", "Remove infected foliage", "Improve drainage"],
+  "Root Rot": ["Trichoderma viride soil drench", "Improve drainage", "Reduce watering", "Neem cake in soil"],
+  "Wilt": ["Trichoderma soil treatment", "Pseudomonas fluorescens", "Crop rotation", "Improve drainage"],
+  "Damping Off": ["Trichoderma seed treatment", "Well-drained soil", "Avoid overwatering", "Cinnamon powder"],
+  "Rust": ["Sulfur-based spray", "Neem oil", "Remove infected leaves", "Improve air circulation"],
+  "Bud Rot": ["Bordeaux paste on crown", "Remove infected tissue", "Improve drainage", "Copper oxychloride"],
+  "Stem Bleeding": ["Apply Bordeaux paste", "Avoid trunk injury", "Neem cake basal application"],
+  "Root Wilt": ["Trichoderma + Pseudomonas soil drench", "Neem cake application", "Maintain basin hygiene"],
+  "Leaf Blight": ["Copper fungicide spray", "Remove affected fronds", "Improve air circulation"],
+  "Nut Fall": ["Borax spray during flowering", "Maintain nutrition", "Pest control for mites"],
+  "Thanjavur Wilt": ["Neem cake + Trichoderma in basin", "Avoid water stagnation", "Auger and treat with fungicide"],
+  "Sooty Mold": ["Control sap-sucking insects first", "Wash with soapnut water", "Neem oil spray"],
+  "Citrus Canker": ["Copper-based spray", "Remove and burn infected parts", "Avoid rain splash"],
+  "Gummosis": ["Bordeaux paste on trunk", "Improve drainage", "Remove infected bark"],
+  "Greening Disease": ["Remove infected trees", "Control citrus psylla", "Use disease-free planting material"],
+  "Yellow Vein Mosaic Virus": ["Remove infected plants", "Control whiteflies", "Resistant varieties"],
+  "Cassava Mosaic Disease": ["Use disease-free stakes", "Remove infected plants early", "Control whiteflies"],
+  "Bacterial Blight": ["Copper-based spray", "Resistant varieties", "Crop rotation", "Remove infected parts"],
+  "Sigatoka Leaf Spot": ["Remove affected leaves", "Copper spray", "Improve spacing"],
+  "Panama Wilt": ["Use resistant varieties", "Trichoderma soil treatment", "Avoid infected fields"],
+  "Bunchy Top Virus": ["Remove and destroy infected plants", "Control banana aphid", "Use virus-free suckers"],
+  "Rhizome Rot": ["Trichoderma treatment", "Improve drainage", "Neem cake application"],
+  "Papaya Ringspot Virus": ["Remove infected plants", "Control aphid vectors", "Use tolerant varieties"],
+  "Dieback": ["Prune and burn affected branches", "Copper fungicide paste on cuts", "Balanced nutrition"],
+};
+
+/**
+ * Get organic treatment suggestions for a pest or disease name.
+ * Returns matching treatments using exact match first, then partial name match.
+ */
+export function getOrganicTreatments(issueName: string): string[] {
+  if (!issueName) return [];
+
+  const normalised = issueName.trim().toLowerCase();
+
+  // Exact match (case-insensitive)
+  for (const [key, treatments] of Object.entries(ORGANIC_TREATMENTS)) {
+    if (key.toLowerCase() === normalised) return treatments;
+  }
+
+  // Partial match — find best match
+  for (const [key, treatments] of Object.entries(ORGANIC_TREATMENTS)) {
+    if (
+      key.toLowerCase().includes(normalised) ||
+      normalised.includes(key.toLowerCase())
+    ) {
+      return treatments;
+    }
+  }
+
+  return [];
+}
+
 /**
  * Get default harvest season for a plant (Tamil Nadu-oriented defaults).
  */

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { auth } from '../lib/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from '@firebase/auth';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import FloatingLabelInput from '../components/FloatingLabelInput';
+import { createStyles } from '../styles/authStyles';
 
 export default function AuthScreen() {
   const theme = useTheme();
@@ -111,57 +112,3 @@ export default function AuthScreen() {
     </KeyboardAvoidingView>
   );
 }
-
-const createStyles = (theme: any) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.background,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: theme.text,
-    marginTop: 16,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: theme.textSecondary,
-    marginTop: 8,
-  },
-  form: {
-    width: '100%',
-  },
-  button: {
-    backgroundColor: theme.primary,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    backgroundColor: theme.textTertiary,
-  },
-  buttonText: {
-    color: theme.textInverse,
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  switchButton: {
-    marginTop: 24,
-    alignItems: 'center',
-  },
-  switchText: {
-    color: theme.primary,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-});

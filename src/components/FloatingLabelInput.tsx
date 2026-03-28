@@ -1,14 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
-  Platform,
-  StyleSheet,
   TextInput,
   TextInputProps,
   View,
 } from "react-native";
 import { useTheme } from "../theme";
-import type { Theme } from "../theme/colors";
+import { createStyles } from "../styles/floatingLabelInputStyles";
 
 interface FloatingLabelInputProps extends TextInputProps {
   label: string;
@@ -118,40 +116,3 @@ export default function FloatingLabelInput({
     </View>
   );
 }
-
-const createStyles = (theme: Theme) =>
-  StyleSheet.create({
-    container: {
-      borderWidth: 1,
-      borderRadius: 12,
-      borderColor: theme.inputBorder,
-      backgroundColor: theme.inputBackground,
-      marginBottom: 12,
-      paddingHorizontal: 16,
-      minHeight: 56,
-      justifyContent: "center",
-    },
-    containerMultiline: {
-      minHeight: 80,
-      justifyContent: "flex-start",
-      paddingTop: 18,
-    },
-    containerFocused: {
-      borderWidth: 2,
-    },
-    label: {
-      position: "absolute",
-      left: 12,
-      paddingHorizontal: 4,
-      fontWeight: "500",
-    },
-    input: {
-      fontSize: 16,
-      paddingVertical: Platform.OS === "ios" ? 18 : 14,
-      paddingHorizontal: 0,
-    },
-    inputMultiline: {
-      paddingTop: 4,
-      textAlignVertical: "top",
-    },
-  });

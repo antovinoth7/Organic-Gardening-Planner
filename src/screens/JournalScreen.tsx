@@ -15,7 +15,6 @@ import {
   Alert,
   TextInput,
   Modal,
-  Dimensions,
   LayoutAnimation,
   Platform,
   UIManager,
@@ -35,14 +34,13 @@ import { JournalEntry, JournalEntryType, Plant } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
+import { createStyles } from "../styles/journalStyles";
 import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 import {
   useTabBarScroll,
   TAB_BAR_HEIGHT,
   AnimatedFAB,
 } from "../components/FloatingTabBar";
-
-const { width } = Dimensions.get("window");
 
 export default function JournalScreen({ navigation, route }: any) {
   const theme = useTheme();
@@ -230,9 +228,7 @@ export default function JournalScreen({ navigation, route }: any) {
         filterStart = new Date(now.getFullYear(), 0, 1);
       }
 
-      filtered = filtered.filter(
-        (e) => new Date(e.created_at) >= filterStart,
-      );
+      filtered = filtered.filter((e) => new Date(e.created_at) >= filterStart);
     }
 
     // Sort by newest first
@@ -330,7 +326,11 @@ export default function JournalScreen({ navigation, route }: any) {
                 />
                 {searchQuery !== "" && (
                   <TouchableOpacity onPress={() => setSearchQuery("")}>
-                    <Ionicons name="close-circle" size={18} color={theme.textTertiary} />
+                    <Ionicons
+                      name="close-circle"
+                      size={18}
+                      color={theme.textTertiary}
+                    />
                   </TouchableOpacity>
                 )}
               </View>
@@ -344,7 +344,9 @@ export default function JournalScreen({ navigation, route }: any) {
                   onPress={() => setSearchActive(true)}
                 >
                   <Ionicons name="search" size={20} color={theme.primary} />
-                  {searchQuery !== "" && <View style={styles.searchActiveDot} />}
+                  {searchQuery !== "" && (
+                    <View style={styles.searchActiveDot} />
+                  )}
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
@@ -368,7 +370,9 @@ export default function JournalScreen({ navigation, route }: any) {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.viewToggle}
-                  onPress={() => setViewMode(v => v === "list" ? "gallery" : "list")}
+                  onPress={() =>
+                    setViewMode((v) => (v === "list" ? "gallery" : "list"))
+                  }
                 >
                   <Ionicons
                     name={viewMode === "list" ? "grid" : "list"}
@@ -385,7 +389,9 @@ export default function JournalScreen({ navigation, route }: any) {
       <ScrollView
         ref={scrollViewRef}
         style={styles.content}
-        contentContainerStyle={{ paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 48) + 16 }}
+        contentContainerStyle={{
+          paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 48) + 16,
+        }}
         onScroll={onTabBarScroll}
         scrollEventThrottle={16}
         refreshControl={
@@ -675,15 +681,27 @@ export default function JournalScreen({ navigation, route }: any) {
           <Pressable style={StyleSheet.absoluteFill} onPress={toggleFilters} />
 
           {/* Sheet */}
-          <View style={[styles.sheetContainer, { paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 16) }]}>
-            <TouchableOpacity activeOpacity={0.6} onPress={toggleFilters} style={styles.sheetHandleArea}>
+          <View
+            style={[
+              styles.sheetContainer,
+              { paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 16) },
+            ]}
+          >
+            <TouchableOpacity
+              activeOpacity={0.6}
+              onPress={toggleFilters}
+              style={styles.sheetHandleArea}
+            >
               <View style={styles.sheetHandle} />
             </TouchableOpacity>
 
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>Filter Journal</Text>
               {activeFilterCount > 0 && (
-                <TouchableOpacity onPress={clearAllFilters} style={styles.sheetClearBtn}>
+                <TouchableOpacity
+                  onPress={clearAllFilters}
+                  style={styles.sheetClearBtn}
+                >
                   <Text style={styles.sheetClearText}>Clear All</Text>
                 </TouchableOpacity>
               )}
@@ -698,43 +716,79 @@ export default function JournalScreen({ navigation, route }: any) {
             >
               {/* Date Range */}
               <Text style={styles.sheetSectionTitle}>
-                <Ionicons name="calendar" size={14} color={theme.textSecondary} /> Date Range
+                <Ionicons
+                  name="calendar"
+                  size={14}
+                  color={theme.textSecondary}
+                />{" "}
+                Date Range
               </Text>
               <View style={styles.sheetChipWrap}>
-                {([
-                  ["all", "All Time"],
-                  ["week", "This Week"],
-                  ["month", "This Month"],
-                  ["year", "This Year"],
-                ] as const).map(([val, label]) => (
+                {(
+                  [
+                    ["all", "All Time"],
+                    ["week", "This Week"],
+                    ["month", "This Month"],
+                    ["year", "This Year"],
+                  ] as const
+                ).map(([val, label]) => (
                   <TouchableOpacity
                     key={val}
-                    style={[styles.sheetChip, dateFilter === val && styles.sheetChipActive]}
+                    style={[
+                      styles.sheetChip,
+                      dateFilter === val && styles.sheetChipActive,
+                    ]}
                     onPress={() => setDateFilter(val)}
                   >
-                    <Text style={[styles.sheetChipText, dateFilter === val && styles.sheetChipTextActive]}>{label}</Text>
+                    <Text
+                      style={[
+                        styles.sheetChipText,
+                        dateFilter === val && styles.sheetChipTextActive,
+                      ]}
+                    >
+                      {label}
+                    </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
               {/* Entry Type */}
               <Text style={styles.sheetSectionTitle}>
-                <Ionicons name="document-text" size={14} color={theme.textSecondary} /> Entry Type
+                <Ionicons
+                  name="document-text"
+                  size={14}
+                  color={theme.textSecondary}
+                />{" "}
+                Entry Type
               </Text>
               <View style={styles.sheetChipWrap}>
-                {([
-                  [null, "All"],
-                  [JournalEntryType.Observation, "👁️ Observation"],
-                  [JournalEntryType.Harvest, "🧺 Harvest"],
-                  [JournalEntryType.Issue, "⚠️ Issue"],
-                  [JournalEntryType.Milestone, "🏁 Milestone"],
-                ] as const).map(([val, label]) => (
+                {(
+                  [
+                    [null, "All"],
+                    [JournalEntryType.Observation, "👁️ Observation"],
+                    [JournalEntryType.Harvest, "🧺 Harvest"],
+                    [JournalEntryType.Issue, "⚠️ Issue"],
+                    [JournalEntryType.Milestone, "🏁 Milestone"],
+                  ] as const
+                ).map(([val, label]) => (
                   <TouchableOpacity
                     key={val ?? "all"}
-                    style={[styles.sheetChip, selectedType === val && styles.sheetChipActive]}
-                    onPress={() => setSelectedType(val as JournalEntryType | null)}
+                    style={[
+                      styles.sheetChip,
+                      selectedType === val && styles.sheetChipActive,
+                    ]}
+                    onPress={() =>
+                      setSelectedType(val as JournalEntryType | null)
+                    }
                   >
-                    <Text style={[styles.sheetChipText, selectedType === val && styles.sheetChipTextActive]}>{label}</Text>
+                    <Text
+                      style={[
+                        styles.sheetChipText,
+                        selectedType === val && styles.sheetChipTextActive,
+                      ]}
+                    >
+                      {label}
+                    </Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -772,469 +826,3 @@ export default function JournalScreen({ navigation, route }: any) {
     </View>
   );
 }
-
-const createStyles = (theme: ReturnType<typeof useTheme>) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.backgroundSecondary,
-    },
-    header: {
-      backgroundColor: theme.card,
-      paddingTop: 12,
-      paddingHorizontal: 16,
-      paddingBottom: 10,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-    },
-    headerTop: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-    },
-    headerTitle: {
-      fontSize: 22,
-      fontWeight: "700",
-      color: theme.text,
-    },
-    headerActions: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    searchIconBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: theme.primaryLight,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    searchActiveDot: {
-      position: "absolute",
-      bottom: 6,
-      right: 6,
-      width: 7,
-      height: 7,
-      borderRadius: 4,
-      backgroundColor: theme.primary,
-    },
-    searchExpandedRow: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    searchBackBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    searchExpandedWrapper: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.background,
-      borderRadius: 24,
-      borderWidth: 1,
-      borderColor: theme.primary,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      gap: 8,
-    },
-    searchExpandedInput: {
-      flex: 1,
-      fontSize: 16,
-      color: theme.text,
-      padding: 0,
-    },
-    viewToggle: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: theme.primaryLight,
-    },
-    filterToggleButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: theme.primaryLight,
-    },
-    filterToggleButtonActive: {
-      backgroundColor: theme.primary,
-    },
-    filterBadge: {
-      position: "absolute",
-      top: 1,
-      right: 1,
-      minWidth: 14,
-      height: 14,
-      borderRadius: 7,
-      backgroundColor: theme.primary,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: 2,
-    },
-    filterBadgeText: {
-      fontSize: 9,
-      color: theme.buttonText,
-      fontWeight: "700",
-      lineHeight: 14,
-    },
-    statsRow: {
-      flexDirection: "row",
-      marginTop: 8,
-      marginBottom: 4,
-      marginHorizontal: 12,
-      gap: 8,
-    },
-    statCard: {
-      flex: 1,
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 10,
-      paddingVertical: 8,
-      paddingHorizontal: 4,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    statNumber: {
-      fontSize: 15,
-      fontWeight: "bold",
-      color: theme.text,
-      marginTop: 2,
-    },
-    statLabel: {
-      fontSize: 10,
-      color: theme.textSecondary,
-      marginTop: 1,
-      lineHeight: 12,
-      textAlign: "center",
-    },
-    sheetOverlay: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.4)",
-      justifyContent: "flex-end",
-      zIndex: 1000,
-      elevation: 1000,
-    },
-    sheetContainer: {
-      backgroundColor: theme.background,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-    },
-    sheetHandle: {
-      width: 40,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: theme.border,
-    },
-    sheetHandleArea: {
-      alignItems: "center",
-      paddingTop: 10,
-      paddingBottom: 8,
-    },
-    sheetHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      paddingHorizontal: 20,
-      paddingBottom: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-    },
-    sheetTitle: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: theme.text,
-    },
-    sheetClearBtn: {
-      paddingHorizontal: 12,
-      paddingVertical: 4,
-      borderRadius: 14,
-      backgroundColor: theme.errorLight,
-    },
-    sheetClearText: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: theme.error,
-    },
-    sheetScroll: {
-      paddingHorizontal: 20,
-    },
-    sheetScrollContent: {
-      paddingBottom: 20,
-    },
-    sheetSectionTitle: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: theme.textSecondary,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-      marginTop: 16,
-      marginBottom: 8,
-    },
-    sheetChipWrap: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-    },
-    sheetChip: {
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 20,
-      backgroundColor: theme.backgroundSecondary,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    sheetChipActive: {
-      backgroundColor: theme.primaryLight,
-      borderColor: theme.primary,
-    },
-    sheetChipText: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      fontWeight: "500",
-    },
-    sheetChipTextActive: {
-      color: theme.primary,
-      fontWeight: "600",
-    },
-    content: {
-      flex: 1,
-    },
-    entriesContainer: {
-      padding: 12,
-      paddingBottom: 120,
-    },
-    card: {
-      backgroundColor: theme.card,
-      borderRadius: 14,
-      marginBottom: 12,
-      overflow: "hidden",
-      flexDirection: "row",
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    cardAccent: {
-      width: 4,
-    },
-    cardBody: {
-      flex: 1,
-      padding: 12,
-    },
-    cardTopRow: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-    typeIconCircle: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    cardMeta: {
-      flex: 1,
-      marginLeft: 10,
-    },
-    entryTypeLabel: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: theme.text,
-    },
-    dateText: {
-      fontSize: 11,
-      color: theme.textSecondary,
-      marginTop: 1,
-    },
-    cardActions: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-    },
-    actionBtn: {
-      padding: 6,
-      borderRadius: 8,
-    },
-    tagsRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 6,
-      marginTop: 8,
-    },
-    photosScroll: {
-      marginTop: 10,
-      marginHorizontal: -12,
-    },
-    photosScrollContent: {
-      paddingHorizontal: 12,
-      gap: 8,
-    },
-    photo: {
-      width: 120,
-      height: 90,
-      borderRadius: 8,
-      backgroundColor: theme.backgroundSecondary,
-    },
-    cardContent: {
-      padding: 16,
-    },
-    cardHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 8,
-    },
-    headerLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    headerRight: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-    },
-    date: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: theme.textSecondary,
-    },
-    typeIconBadge: {
-      backgroundColor: theme.primaryLight,
-      borderRadius: 12,
-      padding: 4,
-    },
-    iconButton: {
-      padding: 4,
-    },
-    plantTag: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.primaryLight,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 10,
-      gap: 4,
-    },
-    plantTagText: {
-      fontSize: 11,
-      color: theme.primary,
-      fontWeight: "600",
-    },
-    harvestDetails: {
-      flexDirection: "row",
-      gap: 8,
-      marginBottom: 8,
-    },
-    harvestBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.warningLight,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 10,
-      gap: 4,
-    },
-    harvestText: {
-      fontSize: 11,
-      color: theme.warning,
-      fontWeight: "600",
-    },
-    qualityBadge: {
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 10,
-    },
-    qualityexcellent: {
-      backgroundColor: theme.primaryLight,
-    },
-    qualitygood: {
-      backgroundColor: theme.primaryLight,
-    },
-    qualityfair: {
-      backgroundColor: theme.warningLight,
-    },
-    qualitypoor: {
-      backgroundColor: theme.errorLight,
-    },
-    qualityText: {
-      fontSize: 9,
-      fontWeight: "bold",
-      color: theme.textSecondary,
-    },
-    contentText: {
-      fontSize: 13,
-      color: theme.text,
-      lineHeight: 20,
-      marginTop: 8,
-    },
-    galleryGrid: {
-      flexDirection: "row",
-      padding: 12,
-      paddingBottom: 120,
-      flexWrap: "wrap",
-      gap: 4,
-    },
-    galleryItem: {
-      width: (width - 36) / 3,
-      height: (width - 36) / 3,
-    },
-    galleryImage: {
-      width: "100%",
-      height: "100%",
-      backgroundColor: theme.primaryLight,
-    },
-    emptyState: {
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 48,
-      marginTop: 48,
-    },
-    emptyText: {
-      fontSize: 20,
-      fontWeight: "600",
-      color: theme.text,
-      marginTop: 16,
-    },
-    emptySubtext: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      marginTop: 4,
-      textAlign: "center",
-    },
-    clearFiltersButton: {
-      marginTop: 16,
-      paddingVertical: 10,
-      paddingHorizontal: 20,
-      backgroundColor: theme.primary,
-      borderRadius: 8,
-    },
-    clearFiltersText: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: "#FFFFFF",
-    },
-    modalContainer: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.9)",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    modalClose: {
-      position: "absolute",
-      top: 12,
-      right: 16,
-      zIndex: 10,
-    },
-    modalImage: {
-      width: width,
-      height: width,
-    },
-  });

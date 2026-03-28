@@ -1,6 +1,6 @@
 import React, {
+  useCallback,
   useEffect,
-  useMemo,
   useState,
   useRef,
 } from "react";
@@ -11,7 +11,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Pressable,
-  Modal,
   TextInput,
   Alert,
   Animated,
@@ -19,6 +18,7 @@ import {
   RefreshControl,
   LayoutAnimation,
   UIManager,
+  Modal,
 } from "react-native";
 
 if (
@@ -31,42 +31,28 @@ import {
   GestureHandlerRootView,
   Swipeable,
 } from "react-native-gesture-handler";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import {
-  getTaskTemplates,
-  createTaskTemplate,
   markTaskDone,
-  deleteTasksForPlantIds,
+  updateTaskTemplate,
 } from "../services/tasks";
-import { getAllPlants, plantExists } from "../services/plants";
-import { getJournalMetadata } from "../services/journal";
 import {
   TaskTemplate,
-  Plant,
-  TaskType,
-  JournalEntry,
-  JournalEntryType,
 } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
-import ThemedDropdown from "../components/ThemedDropdown";
-import FloatingLabelInput from "../components/FloatingLabelInput";
-import type { DropdownItem } from "../components/ThemedDropdown";
+import { TASK_EMOJIS, TASK_COLORS } from "../utils/taskConstants";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
-import { isNetworkAvailable } from "../utils/networkState";
+import { createStyles, getStartOfWeek } from "../styles/calendarStyles";
 import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
+import { safeGetItem, safeSetItem } from "../utils/safeStorage";
+import { useCalendarData } from "../hooks/useCalendarData";
 import { useTabBarScroll, TAB_BAR_HEIGHT, AnimatedFAB } from "../components/FloatingTabBar";
-
-const TASK_COLORS: Record<TaskType, string> = {
-  water: "#2196F3",
-  fertilise: "#FF9800",
-  prune: "#9C27B0",
-  repot: "#4CAF50",
-  spray: "#F44336",
-  mulch: "#795548",
-  harvest: "#8BC34A",
-};
+import CreateTaskModal from "../components/CreateTaskModal";
+import CompleteAllModal from "../components/CompleteAllModal";
+import TaskCompletionModal from "../components/TaskCompletionModal";
+import WeekCalendarView from "../components/WeekCalendarView";
+import MonthCalendarView from "../components/MonthCalendarView";
 
 const GROUP_OPTIONS: {
   value: "none" | "location" | "type";
@@ -80,28 +66,18 @@ const GROUP_OPTIONS: {
 
 export default function CalendarScreen() {
   const theme = useTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const { onScroll: onTabBarScroll, resetTabBar } = useTabBarScroll();
-  const TASK_TYPE_ITEMS: DropdownItem[] = [
-    { label: "💧 Water", value: "water" },
-    { label: "🌱 Fertilize", value: "fertilise" },
-    { label: "✂️ Prune", value: "prune" },
-    { label: "🪴 Repot", value: "repot" },
-    { label: "🧴 Spray (Pesticide/Neem)", value: "spray" },
-    { label: "🍂 Mulch", value: "mulch" },
-  ];
   const scrollViewRef = useRef<ScrollView>(null);
   const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
-  const [tasks, setTasks] = useState<TaskTemplate[]>([]);
-  const [plants, setPlants] = useState<Plant[]>([]);
-  const [harvestEntries, setHarvestEntries] = useState<JournalEntry[]>([]);
   const [selectedView, setSelectedView] = useState<"week" | "month">("week");
   const [currentWeekStart, setCurrentWeekStart] = useState(
     getStartOfWeek(new Date()),
   );
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showModal, setShowModal] = useState(false);
+  const [createTaskInitialDate, setCreateTaskInitialDate] = useState<Date | undefined>(undefined);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<TaskTemplate | null>(null);
   const [taskNotes, setTaskNotes] = useState("");
@@ -111,28 +87,51 @@ export default function CalendarScreen() {
   const [completedCount, setCompletedCount] = useState(0);
   const [showCompleteAllModal, setShowCompleteAllModal] = useState(false);
   const [completeAllTasks, setCompleteAllTasks] = useState<TaskTemplate[]>([]);
-  const [taskType, setTaskType] = useState<TaskType>("water");
-  const [selectedPlant, setSelectedPlant] = useState<string>("");
-  const [frequencyDays, setFrequencyDays] = useState("7");
-  const [isOneTimeTask, setIsOneTimeTask] = useState(false);
-  const [startDate, setStartDate] = useState(new Date());
-  const [preferredTime, setPreferredTime] = useState<
-    "morning" | "afternoon" | "evening" | null
-  >(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [groupBy, setGroupBy] = useState<"none" | "location" | "type">("none");
   const [showGroupMenu, setShowGroupMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchActive, setSearchActive] = useState(false);
+  const [showSkipModal, setShowSkipModal] = useState(false);
+  const [skipTask, setSkipTask] = useState<TaskTemplate | null>(null);
+  const [skipReason, setSkipReason] = useState("");
+  const [skippingTask, setSkippingTask] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [showSwipeHint, setShowSwipeHint] = useState(false);
+  const calendarHeight = useRef(new Animated.Value(1)).current; // 1 = expanded, 0 = collapsed
+  const calendarCollapsed = useRef(false);
+  const lastScrollY = useRef(0);
   const searchInputRef = React.useRef<TextInput>(null);
-  const isMountedRef = React.useRef(true);
-  const lastLoadTimeRef = React.useRef(0);
   const normalizeSearchText = (value: string) =>
     sanitizeAlphaNumericSpaces(value).trim().toLowerCase();
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
+
+  const {
+    tasks,
+    plants,
+    initialLoading,
+    refreshing,
+    isMountedRef,
+    loadData,
+    handleRefresh,
+    filteredTasks,
+    filteredHarvestsReady,
+    todayTasks,
+    weekTasks,
+    tasksForDisplay,
+    groupedTasks,
+    isSearching,
+    getTasksForDate,
+    getPlantDetails,
+  } = useCalendarData({
+    normalizedSearchQuery,
+    normalizeSearchText,
+    selectedView,
+    currentWeekStart,
+    currentMonth,
+    selectedDate,
+    groupBy,
+  });
 
   const setTodayView = React.useCallback(() => {
     const today = new Date();
@@ -140,82 +139,6 @@ export default function CalendarScreen() {
     setCurrentWeekStart(getStartOfWeek(today));
     setCurrentMonth(today);
   }, []);
-
-  const loadData = React.useCallback(async (options?: { force?: boolean }) => {
-    // Debounce: skip if loaded recently (within 2s) unless forced
-    const now = Date.now();
-    if (!options?.force && now - lastLoadTimeRef.current < 2000) return;
-    lastLoadTimeRef.current = now;
-
-    try {
-      const [tasksData, plantsData, journalData] = await Promise.all([
-        getTaskTemplates(),
-        getAllPlants(),
-        getJournalMetadata(),
-      ]);
-
-      if (!isMountedRef.current) return;
-
-      const plantIds = new Set(plantsData.map((plant) => plant.id));
-      const filteredTasks = tasksData.filter(
-        (task) =>
-          task.enabled && (!task.plant_id || plantIds.has(task.plant_id)),
-      );
-      const orphanPlantIds = Array.from(
-        new Set(
-          tasksData
-            .filter((task) => task.plant_id && !plantIds.has(task.plant_id))
-            .map((task) => task.plant_id as string),
-        ),
-      );
-
-      setTasks(filteredTasks);
-      setPlants(plantsData);
-      setHarvestEntries(
-        journalData.filter((e) => e.entry_type === JournalEntryType.Harvest),
-      );
-
-      if (orphanPlantIds.length > 0 && isNetworkAvailable()) {
-        const confirmedOrphans = (
-          await Promise.all(
-            orphanPlantIds.map(async (plantId) => {
-              try {
-                const exists = await plantExists(plantId);
-                return exists ? null : plantId;
-              } catch (error) {
-                const errorCode = (error as { code?: string })?.code;
-                if (
-                  errorCode !== "permission-denied" &&
-                  errorCode !== "unauthenticated"
-                ) {
-                  console.warn(`Failed to verify plant ${plantId}:`, error);
-                }
-                return null;
-              }
-            }),
-          )
-        ).filter((plantId): plantId is string => Boolean(plantId));
-
-        if (confirmedOrphans.length > 0) {
-          await deleteTasksForPlantIds(confirmedOrphans);
-        }
-      }
-    } catch (error) {
-      if (!isMountedRef.current) return;
-      console.error(error);
-    }
-  }, []);
-
-  const handleRefresh = React.useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await loadData({ force: true });
-    } finally {
-      if (isMountedRef.current) {
-        setRefreshing(false);
-      }
-    }
-  }, [loadData]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -226,11 +149,66 @@ export default function CalendarScreen() {
     };
   }, [setTodayView, loadData]);
 
+  // Show swipe hint banner for the first 3 visits, then auto-hide
+  useEffect(() => {
+    (async () => {
+      const count = parseInt((await safeGetItem("swipeHintViewCount")) || "0", 10);
+      if (count < 3) {
+        setShowSwipeHint(true);
+        await safeSetItem("swipeHintViewCount", String(count + 1));
+      }
+    })();
+  }, []);
+
+  const dismissSwipeHint = useCallback(() => {
+    setShowSwipeHint(false);
+    safeSetItem("swipeHintViewCount", "3"); // permanently dismiss
+  }, []);
+
+  const handleContentScroll = useCallback((event: any) => {
+    onTabBarScroll(event);
+    const y = event.nativeEvent.contentOffset.y;
+    const delta = y - lastScrollY.current;
+    lastScrollY.current = y;
+
+    // Collapse when scrolling down past 30px, expand when scrolling back to top
+    if (delta > 4 && y > 30 && !calendarCollapsed.current) {
+      calendarCollapsed.current = true;
+      Animated.timing(calendarHeight, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    } else if (y <= 10 && calendarCollapsed.current) {
+      calendarCollapsed.current = false;
+      Animated.timing(calendarHeight, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [onTabBarScroll, calendarHeight]);
+
+  const expandCalendar = useCallback(() => {
+    if (calendarCollapsed.current) {
+      calendarCollapsed.current = false;
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      Animated.timing(calendarHeight, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [calendarHeight]);
+
   // Reset view and refresh data when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
       resetTabBar();
+      calendarCollapsed.current = false;
+      calendarHeight.setValue(1);
+      lastScrollY.current = 0;
       const today = new Date();
       setSelectedDate(today);
       setCurrentWeekStart(getStartOfWeek(today));
@@ -283,272 +261,102 @@ export default function CalendarScreen() {
     }
   };
 
-  const handleCompleteAllForDate = (date: Date) => {
-    const dateTasks = getTasksForDate(date);
-    if (dateTasks.length === 0) return;
-    setCompleteAllTasks(dateTasks);
-    setShowCompleteAllModal(true);
-  };
+  const toggleTaskSelection = useCallback((taskId: string) => {
+    // Close any open swipeable to prevent gesture state conflicts
+    swipeableRefs.current.get(taskId)?.close();
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+  }, []);
 
-  const confirmCompleteAll = async () => {
-    if (isCompletingAll || completeAllTasks.length === 0) return;
+  const handleCompleteSelected = useCallback(() => {
+    const selected = tasks.filter((t) => selectedTaskIds.has(t.id));
+    if (selected.length === 0) return;
+    setCompleteAllTasks(selected);
+    setShowCompleteAllModal(true);
+  }, [tasks, selectedTaskIds]);
+
+  const confirmCompleteAll = async (selectedTasks: TaskTemplate[]) => {
+    if (isCompletingAll || selectedTasks.length === 0) return;
     setIsCompletingAll(true);
     setCompletedCount(0);
-    let succeeded = 0;
-    for (const task of completeAllTasks) {
-      try {
-        await markTaskDone(task);
-        succeeded++;
-        setCompletedCount(succeeded);
-      } catch {
-        // skip failed tasks silently; user can retry individually
-      }
-    }
+    setCompleteAllTasks(selectedTasks);
+
+    // Fire all in parallel for speed; track completions via allSettled
+    const results = await Promise.allSettled(
+      selectedTasks.map(async (task) => {
+        const result = await markTaskDone(task, undefined, undefined, {
+          skipAlreadyDoneCheck: true,
+        });
+        setCompletedCount((prev) => prev + 1);
+        return result;
+      }),
+    );
+
+    const failed = results.filter((r) => r.status === "rejected").length;
     setIsCompletingAll(false);
     setCompletedCount(0);
     setShowCompleteAllModal(false);
     setCompleteAllTasks([]);
+    setSelectedTaskIds(new Set());
     loadData({ force: true });
-  };
-
-  const getMonthTasks = () => {
-    const monthStart = new Date(
-      currentMonth.getFullYear(),
-      currentMonth.getMonth(),
-      1,
-    );
-    monthStart.setHours(0, 0, 0, 0);
-    const monthEnd = new Date(
-      currentMonth.getFullYear(),
-      currentMonth.getMonth() + 1,
-      0,
-    );
-    monthEnd.setHours(23, 59, 59, 999);
-
-    return filteredTasks.filter((task) => {
-      const dueDate = new Date(task.next_due_at);
-      return dueDate >= monthStart && dueDate <= monthEnd;
-    });
-  };
-
-  const handleCreateTask = async () => {
-    // Validate frequency only if it's not a one-time task
-    if (!isOneTimeTask) {
-      const frequency = parseInt(frequencyDays);
-      if (isNaN(frequency) || frequency < 1) {
-        Alert.alert("Error", "Please enter a valid frequency (1 or more days)");
-        return;
-      }
+    if (failed > 0) {
+      Alert.alert("Partial Completion", `${failed} task(s) failed. You can retry them individually.`);
     }
+  };
 
-    setLoading(true);
+  const handleSnooze = async (task: TaskTemplate, hours: number) => {
+    const swipeable = swipeableRefs.current.get(task.id);
+    swipeable?.close();
     try {
-      // Calculate the actual due date based on preferred time
-      const dueDate = new Date(startDate);
-
-      // Apply preferred time if selected
-      if (preferredTime === "morning") {
-        dueDate.setHours(8, 0, 0, 0); // 8:00 AM
-      } else if (preferredTime === "afternoon") {
-        dueDate.setHours(14, 0, 0, 0); // 2:00 PM
-      } else if (preferredTime === "evening") {
-        dueDate.setHours(18, 0, 0, 0); // 6:00 PM
-      }
-
-      // Ensure the due date is not in the past
-      const now = new Date();
-      if (dueDate < now) {
-        // If the calculated time is in the past, set it to tomorrow at that time
-        dueDate.setDate(dueDate.getDate() + 1);
-      }
-
-      await createTaskTemplate({
-        task_type: taskType,
-        plant_id: selectedPlant || null,
-        frequency_days: isOneTimeTask ? 0 : parseInt(frequencyDays),
-        next_due_at: dueDate.toISOString(),
-        enabled: true,
-        preferred_time: preferredTime,
+      const snoozeTime = new Date();
+      snoozeTime.setHours(snoozeTime.getHours() + hours);
+      await updateTaskTemplate(task.id, {
+        next_due_at: snoozeTime.toISOString(),
       });
-      Alert.alert("Success", "Task created successfully!");
-      resetCreateTaskForm();
+      Alert.alert("Task Snoozed", `Task snoozed for ${hours} hour${hours > 1 ? "s" : ""}`);
+      loadData({ force: true });
+    } catch (error: any) {
+      Alert.alert("Error", error.message);
+    }
+  };
+
+  const handleOpenSkipModal = (task: TaskTemplate) => {
+    const swipeable = swipeableRefs.current.get(task.id);
+    swipeable?.close();
+    setSkipTask(task);
+    setSkipReason("");
+    setShowSkipModal(true);
+  };
+
+  const handleConfirmSkip = async () => {
+    if (!skipTask || skippingTask) return;
+    setSkippingTask(true);
+    try {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      await updateTaskTemplate(skipTask.id, {
+        next_due_at: tomorrow.toISOString(),
+      });
+      Alert.alert(
+        "Task Skipped",
+        `Task postponed to tomorrow${skipReason ? `: ${skipReason}` : ""}`,
+      );
+      setShowSkipModal(false);
+      setSkipReason("");
+      setSkipTask(null);
       loadData({ force: true });
     } catch (error: any) {
       Alert.alert("Error", error.message);
     } finally {
-      setLoading(false);
+      setSkippingTask(false);
     }
-  };
-
-  const resetCreateTaskForm = () => {
-    setShowModal(false);
-    setTaskType("water");
-    setSelectedPlant("");
-    setFrequencyDays("7");
-    setIsOneTimeTask(false);
-    setStartDate(new Date());
-    setPreferredTime(null);
-  };
-
-  const applyFrequencyPreset = (days: number, _label: string) => {
-    try {
-      setFrequencyDays(days.toString());
-    } catch (error) {
-      console.error("Error setting frequency:", error);
-    }
-  };
-
-  // Get tasks for today and upcoming week
-  const getTodayTasks = () => {
-    if (!filteredTasks || filteredTasks.length === 0) return [];
-    const today = new Date();
-    return filteredTasks.filter((task) => {
-      if (!task || !task.next_due_at) return false;
-      const dueDate = new Date(task.next_due_at);
-      return dueDate.toDateString() === today.toDateString();
-    });
-  };
-
-  const getWeekTasks = () => {
-    if (!filteredTasks || filteredTasks.length === 0) return [];
-    const weekStart = new Date(currentWeekStart);
-    weekStart.setHours(0, 0, 0, 0);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 7);
-    weekEnd.setHours(0, 0, 0, 0);
-
-    return filteredTasks.filter((task) => {
-      if (!task || !task.next_due_at) return false;
-      const dueDate = new Date(task.next_due_at);
-      dueDate.setHours(0, 0, 0, 0);
-      return dueDate >= weekStart && dueDate < weekEnd;
-    });
-  };
-
-  const getHarvestsReady = () => {
-    if (!plants || plants.length === 0 || !harvestEntries) return [];
-    const fruitTrees = plants.filter(
-      (p) => p.plant_type === "fruit_tree" || p.plant_type === "coconut_tree",
-    );
-
-    return fruitTrees
-      .map((plant) => {
-        const plantHarvests = harvestEntries.filter(
-          (e) => e.plant_id === plant.id,
-        );
-        if (plantHarvests.length === 0) return null;
-
-        const lastHarvest = plantHarvests[0];
-        const lastDate = new Date(lastHarvest.created_at);
-        const nextDate = new Date(lastDate);
-
-        // Coconut tree: 2 months cycle
-        if (plant.plant_type === "coconut_tree") {
-          nextDate.setMonth(nextDate.getMonth() + 2);
-        } else {
-          // Other fruit trees: check harvest season or default 6 months
-          nextDate.setMonth(nextDate.getMonth() + 6);
-        }
-
-        const daysUntil = Math.ceil(
-          (nextDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
-        );
-
-        return {
-          plant,
-          nextDate,
-          daysUntil,
-          isReady: daysUntil <= 7 && daysUntil >= 0,
-        };
-      })
-      .filter(Boolean);
-  };
-
-  // O(1) plant lookup map instead of O(n) .find() per task
-  const plantMap = useMemo(() => {
-    const map = new Map<string, Plant>();
-    for (const p of plants) {
-      map.set(p.id, p);
-    }
-    return map;
-  }, [plants]);
-
-  const getPlantDetails = (plantId: string | null) => {
-    if (!plantId) return { name: "General", location: "", type: "" };
-    const plant = plantMap.get(plantId);
-    if (!plant) return { name: "Unknown", location: "", type: "" };
-    return {
-      name: plant.name || "Unknown",
-      location: plant.location || "",
-      type: plant.plant_type || "",
-    };
-  };
-
-  const filterTasksBySearch = (taskList: TaskTemplate[]) => {
-    if (!normalizedSearchQuery) return taskList;
-    return taskList.filter((task) => {
-      if (!task) return false;
-      const plantDetails = getPlantDetails(task.plant_id);
-      const plantType = plantDetails.type || "";
-      const searchableValues = [
-        plantDetails.name,
-        plantDetails.location,
-        plantType,
-        plantType.replace(/_/g, " "),
-        task.task_type,
-      ];
-      return searchableValues.some(
-        (value) =>
-          typeof value === "string" &&
-          normalizeSearchText(value).includes(normalizedSearchQuery),
-      );
-    });
-  };
-
-  const sortTasks = (taskList: TaskTemplate[]) => {
-    return [...taskList].sort((a, b) => {
-      // First, sort by due date/time (earliest first)
-      const dateA = new Date(a.next_due_at).getTime();
-      const dateB = new Date(b.next_due_at).getTime();
-      if (dateA !== dateB) {
-        return dateA - dateB;
-      }
-
-      // If same date/time, sort by task type alphabetically
-      return a.task_type.localeCompare(b.task_type);
-    });
-  };
-
-  const groupTasks = (taskList: TaskTemplate[]) => {
-    const sorted = sortTasks(taskList);
-
-    if (groupBy === "none") return { "": sorted };
-
-    if (groupBy === "location") {
-      return sorted.reduce(
-        (acc, task) => {
-          const location = getPlantDetails(task.plant_id).location || "General";
-          if (!acc[location]) acc[location] = [];
-          acc[location].push(task);
-          return acc;
-        },
-        {} as Record<string, TaskTemplate[]>,
-      );
-    }
-
-    if (groupBy === "type") {
-      return sorted.reduce(
-        (acc, task) => {
-          const type = task.task_type;
-          if (!acc[type]) acc[type] = [];
-          acc[type].push(task);
-          return acc;
-        },
-        {} as Record<string, TaskTemplate[]>,
-      );
-    }
-
-    return { "": sorted };
   };
 
   const renderSwipeableTask = (task: TaskTemplate) => {
@@ -592,6 +400,59 @@ export default function CalendarScreen() {
       );
     };
 
+    const renderLeftActions = (
+      progress: Animated.AnimatedInterpolation<number>,
+      _dragX: Animated.AnimatedInterpolation<number>,
+    ) => {
+      const scale = progress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0.5, 1],
+        extrapolate: "clamp",
+      });
+      const opacity = progress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, 1],
+        extrapolate: "clamp",
+      });
+
+      return (
+        <View style={styles.swipeLeftActions}>
+          <TouchableOpacity
+            style={styles.swipeSnoozeAction}
+            onPress={() => handleSnooze(task, isOverdue ? 2 : 4)}
+          >
+            <Animated.View
+              style={[
+                styles.swipeActionContent,
+                { opacity, transform: [{ scale }] },
+              ]}
+            >
+              <Ionicons name="time-outline" size={24} color="#fff" />
+              <Text style={styles.swipeActionText}>
+                {isOverdue ? "+2h" : "+4h"}
+              </Text>
+            </Animated.View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.swipeSkipAction}
+            onPress={() => handleOpenSkipModal(task)}
+          >
+            <Animated.View
+              style={[
+                styles.swipeActionContent,
+                { opacity, transform: [{ scale }] },
+              ]}
+            >
+              <Ionicons name="play-skip-forward" size={24} color="#fff" />
+              <Text style={styles.swipeActionText}>Skip</Text>
+            </Animated.View>
+          </TouchableOpacity>
+        </View>
+      );
+    };
+
+    const isSelected = selectedTaskIds.has(task.id);
+
     return (
       <Swipeable
         key={task.id}
@@ -603,12 +464,17 @@ export default function CalendarScreen() {
           }
         }}
         renderRightActions={renderRightActions}
+        renderLeftActions={renderLeftActions}
         friction={2}
         rightThreshold={40}
+        leftThreshold={40}
         overshootRight={false}
-        onSwipeableOpen={() => handleTaskComplete(task)}
+        overshootLeft={false}
+        onSwipeableOpen={(direction) => {
+          if (direction === "right") handleTaskComplete(task);
+        }}
       >
-        <View style={[styles.taskCard, isOverdue && styles.taskCardOverdue]}>
+        <View style={[styles.taskCard, isOverdue && styles.taskCardOverdue, isSelected && styles.taskCardSelected]}>
           <View
             style={[
               styles.taskColorBar,
@@ -617,24 +483,15 @@ export default function CalendarScreen() {
           />
           <View style={styles.taskContent}>
             <View style={styles.taskHeader}>
-              <View style={styles.taskIconContainer}>
-                <Ionicons
-                  name={
-                    task.task_type === "water"
-                      ? "water"
-                      : task.task_type === "fertilise"
-                        ? "nutrition"
-                        : task.task_type === "prune"
-                          ? "cut"
-                          : task.task_type === "repot"
-                            ? "move"
-                            : task.task_type === "spray"
-                              ? "fitness"
-                              : "leaf"
-                  }
-                  size={24}
-                  color={TASK_COLORS[task.task_type]}
-                />
+              <View
+                style={[
+                  styles.taskIconContainer,
+                  { backgroundColor: TASK_COLORS[task.task_type] + "18" },
+                ]}
+              >
+                <Text style={styles.taskIconEmoji}>
+                  {TASK_EMOJIS[task.task_type] || "📌"}
+                </Text>
               </View>
               <View style={styles.taskInfo}>
                 <Text style={styles.taskTitle}>
@@ -659,6 +516,18 @@ export default function CalendarScreen() {
                         day: "numeric",
                       })}
                 </Text>
+                <TouchableOpacity
+                  style={[styles.taskCheckbox, isSelected && styles.taskCheckboxSelected]}
+                  onPress={() => toggleTaskSelection(task.id)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  activeOpacity={0.6}
+                >
+                  <Ionicons
+                    name={isSelected ? "checkmark-circle" : "ellipse-outline"}
+                    size={22}
+                    color={isSelected ? theme.primary : theme.border}
+                  />
+                </TouchableOpacity>
               </View>
             </View>
           </View>
@@ -667,305 +536,7 @@ export default function CalendarScreen() {
     );
   };
 
-  const renderWeekView = () => {
-    const weekDays = Array.from({ length: 7 }).map((_, i) => {
-      const date = new Date(currentWeekStart);
-      date.setDate(date.getDate() + i);
-      return date;
-    });
-
-    return (
-      <View style={styles.weekView}>
-        <View style={styles.weekHeader}>
-          <TouchableOpacity
-            onPress={() => {
-              const newDate = new Date(currentWeekStart);
-              newDate.setDate(newDate.getDate() - 7);
-              setSelectedDate(null);
-              setCurrentWeekStart(newDate);
-            }}
-          >
-            <Ionicons name="chevron-back" size={24} color={theme.text} />
-          </TouchableOpacity>
-          <Text style={styles.weekTitle}>
-            {currentWeekStart.toLocaleDateString("en-US", {
-              month: "long",
-              day: "numeric",
-            })}{" "}
-            -{" "}
-            {weekDays[6].toLocaleDateString("en-US", {
-              month: "long",
-              day: "numeric",
-            })}
-          </Text>
-          <TouchableOpacity
-            onPress={() => {
-              const newDate = new Date(currentWeekStart);
-              newDate.setDate(newDate.getDate() + 7);
-              setSelectedDate(null);
-              setCurrentWeekStart(newDate);
-            }}
-          >
-            <Ionicons name="chevron-forward" size={24} color={theme.text} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.weekDaysRow}>
-          {weekDays.map((date, index) => {
-            const dayTasks = getTasksForDate(date);
-            const isToday = date.toDateString() === new Date().toDateString();
-            const isSelected =
-              selectedDate?.toDateString() === date.toDateString();
-
-            return (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.weekDay,
-                  isToday && styles.weekDayToday,
-                  isSelected && styles.weekDaySelected,
-                ]}
-                onPress={() => setSelectedDate(date)}
-              >
-                <Text
-                  style={[
-                    styles.weekDayName,
-                    isToday && styles.weekDayNameToday,
-                    isSelected && styles.weekDayNameSelected,
-                  ]}
-                >
-                  {date.toLocaleDateString("en-US", { weekday: "short" })}
-                </Text>
-                <Text
-                  style={[
-                    styles.weekDayNumber,
-                    isToday && styles.weekDayNumberToday,
-                    isSelected && styles.weekDayNumberSelected,
-                  ]}
-                >
-                  {date.getDate()}
-                </Text>
-                <View style={styles.weekDayDots}>
-                  {dayTasks.slice(0, 4).map((task, idx) => (
-                    <View
-                      key={idx}
-                      style={[
-                        styles.weekDayDot,
-                        { backgroundColor: TASK_COLORS[task.task_type] },
-                      ]}
-                    />
-                  ))}
-                  {dayTasks.length > 4 && (
-                    <Text style={styles.weekDayMore}>
-                      +{dayTasks.length - 4}
-                    </Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-    );
-  };
-
-  const renderMonthView = () => {
-    const monthStart = new Date(
-      currentMonth.getFullYear(),
-      currentMonth.getMonth(),
-      1,
-    );
-    const monthEnd = new Date(
-      currentMonth.getFullYear(),
-      currentMonth.getMonth() + 1,
-      0,
-    );
-    const startDay = monthStart.getDay();
-    const daysInMonth = monthEnd.getDate();
-
-    const calendarDays = [];
-    // Add empty cells for days before month starts
-    for (let i = 0; i < startDay; i++) {
-      calendarDays.push(null);
-    }
-    // Add days of the month
-    for (let day = 1; day <= daysInMonth; day++) {
-      calendarDays.push(day);
-    }
-
-    return (
-      <View style={styles.monthView}>
-        <View style={styles.monthHeader}>
-          <TouchableOpacity
-            onPress={() => {
-              const newDate = new Date(currentMonth);
-              newDate.setMonth(newDate.getMonth() - 1);
-              setSelectedDate(null);
-              setCurrentMonth(newDate);
-            }}
-          >
-            <Ionicons name="chevron-back" size={24} color={theme.text} />
-          </TouchableOpacity>
-          <Text style={styles.monthTitle}>
-            {currentMonth.toLocaleDateString("en-US", {
-              month: "long",
-              year: "numeric",
-            })}
-          </Text>
-          <TouchableOpacity
-            onPress={() => {
-              const newDate = new Date(currentMonth);
-              newDate.setMonth(newDate.getMonth() + 1);
-              setSelectedDate(null);
-              setCurrentMonth(newDate);
-            }}
-          >
-            <Ionicons name="chevron-forward" size={24} color={theme.text} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Weekday headers */}
-        <View style={styles.monthWeekdays}>
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-            <Text key={day} style={styles.monthWeekday}>
-              {day}
-            </Text>
-          ))}
-        </View>
-
-        {/* Calendar grid */}
-        <View style={styles.monthGrid}>
-          {calendarDays.map((day, index) => {
-            if (!day) {
-              return <View key={`empty-${index}`} style={styles.monthCell} />;
-            }
-
-            const date = new Date(
-              currentMonth.getFullYear(),
-              currentMonth.getMonth(),
-              day,
-            );
-            const dayTasks = getTasksForDate(date);
-            const isToday = date.toDateString() === new Date().toDateString();
-            const isSelected =
-              selectedDate?.toDateString() === date.toDateString();
-
-            return (
-              <TouchableOpacity
-                key={day}
-                style={[
-                  styles.monthCell,
-                  isToday && styles.monthCellToday,
-                  isSelected && styles.monthCellSelected,
-                ]}
-                onPress={() => setSelectedDate(date)}
-              >
-                <Text
-                  style={[
-                    styles.monthCellNumber,
-                    isToday && styles.monthCellNumberToday,
-                    isSelected && styles.monthCellNumberSelected,
-                  ]}
-                >
-                  {day}
-                </Text>
-                <View style={styles.monthCellDots}>
-                  {dayTasks.slice(0, 3).map((task, idx) => (
-                    <View
-                      key={idx}
-                      style={[
-                        styles.monthCellDot,
-                        { backgroundColor: TASK_COLORS[task.task_type] },
-                      ]}
-                    />
-                  ))}
-                  {dayTasks.length > 3 && (
-                    <Text style={styles.monthCellMore}>
-                      +{dayTasks.length - 3}
-                    </Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-    );
-  };
-
-  const isSearching = normalizedSearchQuery.length > 0;
-  const filteredTasks = useMemo(
-    () => filterTasksBySearch(tasks),
-    [tasks, normalizedSearchQuery],
-  );
-
-  // Pre-build a date→tasks map so calendar cells do O(1) lookups instead of O(tasks) per cell
-  const tasksByDateKey = useMemo(() => {
-    const map = new Map<string, TaskTemplate[]>();
-    for (const task of filteredTasks) {
-      if (!task.next_due_at) continue;
-      const key = new Date(task.next_due_at).toDateString();
-      const arr = map.get(key);
-      if (arr) {
-        arr.push(task);
-      } else {
-        map.set(key, [task]);
-      }
-    }
-    return map;
-  }, [filteredTasks]);
-
-  const getTasksForDate = (date: Date) => {
-    return tasksByDateKey.get(date.toDateString()) || [];
-  };
-
-  const harvestsReady = useMemo(
-    () => getHarvestsReady(),
-    [plants, harvestEntries],
-  );
-  const filteredHarvestsReady = useMemo(
-    () =>
-      normalizedSearchQuery
-        ? harvestsReady.filter((item: any) => {
-            const plantName = item?.plant?.name || "";
-            const plantLocation = item?.plant?.location || "";
-            const plantType = item?.plant?.plant_type || "";
-            return [
-              plantName,
-              plantLocation,
-              plantType,
-              plantType.replace(/_/g, " "),
-            ].some((value) =>
-              normalizeSearchText(value).includes(normalizedSearchQuery),
-            );
-          })
-        : harvestsReady,
-    [harvestsReady, normalizedSearchQuery],
-  );
-  const todayTasks = useMemo(
-    () => (isSearching ? [] : getTodayTasks()),
-    [isSearching, filteredTasks],
-  );
-  const weekTasks = useMemo(
-    () => (selectedView === "week" ? getWeekTasks() : getMonthTasks()),
-    [selectedView, filteredTasks, currentWeekStart, currentMonth],
-  );
-  const tasksForDisplay = useMemo(() => {
-    if (isSearching) return filteredTasks;
-    if (!selectedDate) return weekTasks;
-    // Exclude tasks already shown under the selected-date header
-    const selectedKey = selectedDate.toDateString();
-    return weekTasks.filter((t) => {
-      if (!t.next_due_at) return true;
-      return new Date(t.next_due_at).toDateString() !== selectedKey;
-    });
-  }, [isSearching, filteredTasks, weekTasks, selectedDate]);
-  const groupedTasks = useMemo(
-    () => groupTasks(tasksForDisplay),
-    [tasksForDisplay, groupBy, plants],
-  );
-
-  const isViewingToday = useMemo(() => {
+  const isViewingToday = React.useMemo(() => {
     const today = new Date();
     if (selectedView === "week") {
       const todayWeekStart = getStartOfWeek(today);
@@ -1072,73 +643,131 @@ export default function CalendarScreen() {
 
 
 
-        {/* Week or Month View */}
-        {selectedView === "week" ? renderWeekView() : renderMonthView()}
+        {/* Week or Month View — collapses on scroll */}
+        <Animated.View style={{
+          overflow: "hidden",
+          maxHeight: calendarHeight.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, 500],
+          }),
+          opacity: calendarHeight.interpolate({
+            inputRange: [0, 0.3, 1],
+            outputRange: [0, 0.5, 1],
+          }),
+        }}>
+          {selectedView === "week" ? (
+            <WeekCalendarView
+              currentWeekStart={currentWeekStart}
+              selectedDate={selectedDate}
+              styles={styles}
+              theme={theme}
+              taskColors={TASK_COLORS}
+              getTasksForDate={getTasksForDate}
+              onSelectDate={setSelectedDate}
+              onNavigateWeek={(newStart) => {
+                setSelectedDate(null);
+                setCurrentWeekStart(newStart);
+              }}
+            />
+          ) : (
+            <MonthCalendarView
+              currentMonth={currentMonth}
+              selectedDate={selectedDate}
+              styles={styles}
+              theme={theme}
+              taskColors={TASK_COLORS}
+              getTasksForDate={getTasksForDate}
+              onSelectDate={setSelectedDate}
+              onNavigateMonth={(newMonth) => {
+                setSelectedDate(null);
+                setCurrentMonth(newMonth);
+              }}
+            />
+          )}
+        </Animated.View>
 
-        {/* Selected Date Header - outside ScrollView so it stays visible */}
-        {!isSearching && selectedDate && (
-          <View style={styles.selectedDateHeaderFixed}>
-            <Text style={styles.selectedDateTitle}>
-              📅{" "}
-              {selectedDate.toLocaleDateString("en-US", {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-              })}
+        {/* Collapsed date strip — visible when calendar is collapsed */}
+        <Animated.View style={{
+          overflow: "hidden",
+          maxHeight: calendarHeight.interpolate({
+            inputRange: [0, 0.3, 1],
+            outputRange: [44, 20, 0],
+          }),
+          opacity: calendarHeight.interpolate({
+            inputRange: [0, 0.3, 1],
+            outputRange: [1, 0.5, 0],
+          }),
+        }}>
+          <TouchableOpacity
+            style={styles.collapsedStrip}
+            onPress={expandCalendar}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-down" size={16} color={theme.textSecondary} />
+            <Text style={styles.collapsedStripText}>
+              {selectedDate
+                ? selectedDate.toLocaleDateString("en-US", {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                  })
+                : selectedView === "week"
+                  ? `${currentWeekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(currentWeekStart.getTime() + 6 * 86400000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                  : currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
             </Text>
-            <View style={styles.selectedDateActions}>
-              {getTasksForDate(selectedDate).length > 1 && (
-                <TouchableOpacity
-                  style={[
-                    styles.completeAllBtn,
-                    isCompletingAll && styles.completeAllBtnDisabled,
-                  ]}
-                  onPress={() => handleCompleteAllForDate(selectedDate)}
-                  disabled={isCompletingAll}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  {isCompletingAll ? (
-                    <Text style={styles.completeAllProgress}>
-                      {completedCount}/{getTasksForDate(selectedDate).length}
-                    </Text>
-                  ) : (
-                    <Ionicons name="checkmark-done" size={18} color="#fff" />
-                  )}
-                  <Text style={styles.completeAllText}>
-                    {isCompletingAll ? "Completing..." : "All Done"}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        )}
+            {selectedDate && (
+              <Text style={styles.collapsedStripCount}>
+                {getTasksForDate(selectedDate).length}
+              </Text>
+            )}
+            <Ionicons name="chevron-down" size={16} color={theme.textSecondary} />
+          </TouchableOpacity>
+        </Animated.View>
 
         <ScrollView
           ref={scrollViewRef}
           style={styles.content}
           contentContainerStyle={{ paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 48) + 16 }}
-          onScroll={onTabBarScroll}
+          onScroll={handleContentScroll}
           scrollEventThrottle={16}
           nestedScrollEnabled
           keyboardShouldPersistTaps="handled"
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            <RefreshControl refreshing={initialLoading || refreshing} onRefresh={handleRefresh} />
           }
         >
+          {/* Swipe Hint Banner */}
+          {showSwipeHint && (
+            <View style={styles.swipeHintBanner}>
+              <View style={styles.swipeHintBannerContent}>
+                <Ionicons name="swap-horizontal-outline" size={18} color={theme.primary} />
+                <Text style={styles.swipeHintBannerText}>
+                  Swipe cards left to complete, right to skip or snooze
+                </Text>
+              </View>
+              <TouchableOpacity onPress={dismissSwipeHint} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={18} color={theme.textTertiary} />
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* Selected Date Tasks */}
           {!isSearching && selectedDate && (
             <View style={styles.section}>
               {(() => {
                 const selectedDateTasks = getTasksForDate(selectedDate);
+                const isToday = selectedDate.toDateString() === new Date().toDateString();
                 return selectedDateTasks.length > 0 ? (
                   <>
+                    <View style={styles.sectionHeaderRow}>
+                      <Text style={styles.sectionTitle}>
+                        {isToday ? "Today" : selectedDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                      </Text>
+                      <Text style={styles.sectionCount}>{selectedDateTasks.length}</Text>
+                    </View>
                     {selectedDateTasks.map(renderSwipeableTask)}
-                    <Text style={styles.swipeHint}>
-                      ← Swipe left to complete
-                    </Text>
                   </>
-                ) : (
+                ) : !initialLoading ? (
                   <View style={styles.emptyState}>
                     <Ionicons
                       name="calendar-outline"
@@ -1156,7 +785,7 @@ export default function CalendarScreen() {
                     <TouchableOpacity
                       style={styles.addTaskButton}
                       onPress={() => {
-                        setStartDate(selectedDate);
+                        setCreateTaskInitialDate(selectedDate);
                         setShowModal(true);
                       }}
                     >
@@ -1168,12 +797,12 @@ export default function CalendarScreen() {
                       <Text style={styles.addTaskButtonText}>Add Task</Text>
                     </TouchableOpacity>
                   </View>
-                );
+                ) : null;
               })()}
             </View>
           )}
 
-          {isSearching && filteredTasks.length === 0 && (
+          {isSearching && filteredTasks.length === 0 && !initialLoading && (
             <View style={styles.emptyState}>
               <Ionicons name="search-outline" size={48} color={theme.border} />
               <Text style={styles.emptyStateText}>No tasks found</Text>
@@ -1196,7 +825,10 @@ export default function CalendarScreen() {
           {/* Harvest Ready Section */}
           {filteredHarvestsReady.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>🧺 Harvest Ready</Text>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>🧺 Harvest Ready</Text>
+                <Text style={styles.sectionCount}>{filteredHarvestsReady.length}</Text>
+              </View>
               {filteredHarvestsReady.map(
                 (item: any) =>
                   item && (
@@ -1234,11 +866,13 @@ export default function CalendarScreen() {
           {todayTasks.length > 0 &&
             !(selectedDate && selectedDate.toDateString() === new Date().toDateString()) && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                Today ({todayTasks.length})
-              </Text>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>
+                  Today
+                </Text>
+                <Text style={styles.sectionCount}>{todayTasks.length}</Text>
+              </View>
               {todayTasks.map(renderSwipeableTask)}
-              <Text style={styles.swipeHint}>← Swipe left to complete</Text>
             </View>
           )}
 
@@ -1248,32 +882,36 @@ export default function CalendarScreen() {
             ? Object.keys(groupedTasks).map((groupName) => (
                 <View key={groupName} style={styles.section}>
                   {groupName && (
-                    <Text style={styles.sectionTitle}>
-                      {groupBy === "location"
-                        ? `📍 ${groupName}`
-                        : groupBy === "type"
-                          ? `${groupName.charAt(0).toUpperCase() + groupName.slice(1)}`
-                          : "This Week"}
-                    </Text>
+                    <View style={styles.sectionHeaderRow}>
+                      <Text style={styles.sectionTitle}>
+                        {groupBy === "location"
+                          ? `📍 ${groupName}`
+                          : groupBy === "type"
+                            ? `${groupName.charAt(0).toUpperCase() + groupName.slice(1)}`
+                            : "This Week"}
+                      </Text>
+                      <Text style={styles.sectionCount}>{groupedTasks[groupName].length}</Text>
+                    </View>
                   )}
                   {!groupName && (
-                    <Text style={styles.sectionTitle}>
-                      {isSearching
-                        ? `Search Results (${tasksForDisplay.length})`
-                        : `This Week (${weekTasks.length})`}
-                    </Text>
+                    <View style={styles.sectionHeaderRow}>
+                      <Text style={styles.sectionTitle}>
+                        {isSearching
+                          ? "Search Results"
+                          : "This Week"}
+                      </Text>
+                      <Text style={styles.sectionCount}>
+                        {isSearching ? tasksForDisplay.length : weekTasks.length}
+                      </Text>
+                    </View>
                   )}
                   {groupedTasks[groupName].map(renderSwipeableTask)}
-                  {groupedTasks[groupName].length > 0 && !groupName && (
-                    <Text style={styles.swipeHint}>
-                      ← Swipe left to complete
-                    </Text>
-                  )}
                 </View>
               ))
             : !isSearching &&
               todayTasks.length === 0 &&
-              !selectedDate && (
+              !selectedDate &&
+              !initialLoading && (
                 <View style={styles.emptyState}>
                   <Ionicons
                     name="checkbox-outline"
@@ -1298,6 +936,44 @@ export default function CalendarScreen() {
                 </View>
               )}
         </ScrollView>
+
+        {/* Floating Selection Bar */}
+        {selectedTaskIds.size > 0 && (
+          <View style={[styles.selectionBar, { bottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 16) + 8 }]}>
+            <TouchableOpacity
+              style={styles.selectionBarCancel}
+              onPress={() => setSelectedTaskIds(new Set())}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close" size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
+            <Text style={styles.selectionBarText}>
+              {selectedTaskIds.size} selected
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.selectionBarBtn,
+                isCompletingAll && styles.selectionBarBtnDisabled,
+              ]}
+              onPress={handleCompleteSelected}
+              disabled={isCompletingAll}
+              activeOpacity={0.7}
+            >
+              {isCompletingAll ? (
+                <Text style={styles.selectionBarBtnText}>
+                  {completedCount}/{selectedTaskIds.size}
+                </Text>
+              ) : (
+                <>
+                  <Ionicons name="checkmark-done" size={18} color="#fff" />
+                  <Text style={styles.selectionBarBtnText}>
+                    Complete ({selectedTaskIds.size})
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Floating Action Button */}
         <AnimatedFAB onPress={() => setShowModal(true)} />
@@ -1355,472 +1031,110 @@ export default function CalendarScreen() {
         )}
 
         {/* Create Task Modal */}
-        <Modal
+        <CreateTaskModal
           visible={showModal}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setShowModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Create Task</Text>
-                <TouchableOpacity onPress={() => setShowModal(false)}>
-                  <Ionicons name="close" size={24} color={theme.text} />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{
-                  paddingBottom: Math.max(insets.bottom, 12),
-                }}
-              >
-                <View style={styles.modalBody}>
-                  <ThemedDropdown
-                    items={TASK_TYPE_ITEMS}
-                    selectedValue={taskType}
-                    onValueChange={(v) => setTaskType(v as TaskType)}
-                    label="Task Type *"
-                    placeholder="Task Type"
-                  />
-
-                  <ThemedDropdown
-                    items={[
-                      { label: "General Task", value: "" },
-                      ...plants.map((p) => ({ label: p.name, value: p.id })),
-                    ]}
-                    selectedValue={selectedPlant}
-                    onValueChange={setSelectedPlant}
-                    label="Plant (Optional)"
-                    placeholder="Plant"
-                    searchable
-                  />
-
-                  <Text style={styles.label}>Start Date</Text>
-                  <TouchableOpacity
-                    style={styles.dateButton}
-                    onPress={() => setShowDatePicker(true)}
-                  >
-                    <Ionicons name="calendar-outline" size={20} color="#666" />
-                    <Text style={styles.dateButtonText}>
-                      {startDate.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {showDatePicker && (
-                    <DateTimePicker
-                      value={startDate}
-                      mode="date"
-                      display={Platform.OS === "ios" ? "spinner" : "default"}
-                      onChange={(event, selectedDate) => {
-                        setShowDatePicker(Platform.OS === "ios");
-                        if (selectedDate) setStartDate(selectedDate);
-                      }}
-                    />
-                  )}
-
-                  <Text style={styles.label}>Preferred Time (Optional)</Text>
-                  <View style={styles.timeButtons}>
-                    <TouchableOpacity
-                      style={[
-                        styles.timeButton,
-                        preferredTime === "morning" && styles.timeButtonActive,
-                      ]}
-                      onPress={() =>
-                        setPreferredTime(
-                          preferredTime === "morning" ? null : "morning",
-                        )
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.timeButtonText,
-                          preferredTime === "morning" &&
-                            styles.timeButtonTextActive,
-                        ]}
-                      >
-                        🌅 Morning
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.timeButton,
-                        preferredTime === "afternoon" &&
-                          styles.timeButtonActive,
-                      ]}
-                      onPress={() =>
-                        setPreferredTime(
-                          preferredTime === "afternoon" ? null : "afternoon",
-                        )
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.timeButtonText,
-                          preferredTime === "afternoon" &&
-                            styles.timeButtonTextActive,
-                        ]}
-                      >
-                        ☀️ Afternoon
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.timeButton,
-                        preferredTime === "evening" && styles.timeButtonActive,
-                      ]}
-                      onPress={() =>
-                        setPreferredTime(
-                          preferredTime === "evening" ? null : "evening",
-                        )
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.timeButtonText,
-                          preferredTime === "evening" &&
-                            styles.timeButtonTextActive,
-                        ]}
-                      >
-                        🌙 Evening
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <Text style={styles.label}>Schedule</Text>
-                  <View style={styles.taskTypeToggle}>
-                    <TouchableOpacity
-                      style={[
-                        styles.toggleButton,
-                        !isOneTimeTask && styles.toggleButtonActive,
-                      ]}
-                      onPress={() => setIsOneTimeTask(false)}
-                    >
-                      <Text
-                        style={[
-                          styles.toggleButtonText,
-                          !isOneTimeTask && styles.toggleButtonTextActive,
-                        ]}
-                      >
-                        🔄 Repeating
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.toggleButton,
-                        isOneTimeTask && styles.toggleButtonActive,
-                      ]}
-                      onPress={() => setIsOneTimeTask(true)}
-                    >
-                      <Text
-                        style={[
-                          styles.toggleButtonText,
-                          isOneTimeTask && styles.toggleButtonTextActive,
-                        ]}
-                      >
-                        ✓ One-Time
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {!isOneTimeTask && (
-                    <>
-                      <Text style={styles.label}>Repeat Every (days) *</Text>
-
-                      {/* Quick Presets */}
-                      <View style={styles.presets}>
-                        <TouchableOpacity
-                          style={[
-                            styles.presetButton,
-                            frequencyDays === "1" && styles.presetButtonActive,
-                          ]}
-                          onPress={() => applyFrequencyPreset(1, "Daily")}
-                          activeOpacity={0.7}
-                        >
-                          <Text
-                            style={[
-                              styles.presetText,
-                              frequencyDays === "1" && styles.presetTextActive,
-                            ]}
-                          >
-                            Daily
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.presetButton,
-                            frequencyDays === "7" && styles.presetButtonActive,
-                          ]}
-                          onPress={() => applyFrequencyPreset(7, "Weekly")}
-                          activeOpacity={0.7}
-                        >
-                          <Text
-                            style={[
-                              styles.presetText,
-                              frequencyDays === "7" && styles.presetTextActive,
-                            ]}
-                          >
-                            Weekly
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.presetButton,
-                            frequencyDays === "14" && styles.presetButtonActive,
-                          ]}
-                          onPress={() => applyFrequencyPreset(14, "Bi-weekly")}
-                          activeOpacity={0.7}
-                        >
-                          <Text
-                            style={[
-                              styles.presetText,
-                              frequencyDays === "14" && styles.presetTextActive,
-                            ]}
-                          >
-                            Bi-weekly
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.presetButton,
-                            frequencyDays === "30" && styles.presetButtonActive,
-                          ]}
-                          onPress={() => applyFrequencyPreset(30, "Monthly")}
-                          activeOpacity={0.7}
-                        >
-                          <Text
-                            style={[
-                              styles.presetText,
-                              frequencyDays === "30" && styles.presetTextActive,
-                            ]}
-                          >
-                            Monthly
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      <FloatingLabelInput
-                        label="Frequency (days)"
-                        value={frequencyDays}
-                        onChangeText={setFrequencyDays}
-                        keyboardType="numeric"
-                      />
-
-                      {/* Preview */}
-                      {frequencyDays && parseInt(frequencyDays) > 0 && (
-                        <View style={styles.preview}>
-                          <Text style={styles.previewTitle}>
-                            📅 Schedule Preview
-                          </Text>
-                          <Text style={styles.previewText}>
-                            • First task:{" "}
-                            {startDate.toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                            {preferredTime && ` (${preferredTime})`}
-                          </Text>
-                          <Text style={styles.previewText}>
-                            • Next task:{" "}
-                            {new Date(
-                              startDate.getTime() +
-                                parseInt(frequencyDays) * 24 * 60 * 60 * 1000,
-                            ).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </Text>
-                          <Text style={styles.previewText}>
-                            • Repeats every {frequencyDays}{" "}
-                            {parseInt(frequencyDays) === 1 ? "day" : "days"}
-                          </Text>
-                        </View>
-                      )}
-                    </>
-                  )}
-
-                  {isOneTimeTask && (
-                    <View style={styles.preview}>
-                      <Text style={styles.previewTitle}>📅 One-Time Task</Text>
-                      <Text style={styles.previewText}>
-                        • Due:{" "}
-                        {startDate.toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                        {preferredTime && ` (${preferredTime})`}
-                      </Text>
-                      <Text style={styles.previewText}>
-                        • Will not repeat after completion
-                      </Text>
-                    </View>
-                  )}
-
-                  <TouchableOpacity
-                    style={[
-                      styles.createButton,
-                      loading && styles.createButtonDisabled,
-                    ]}
-                    onPress={handleCreateTask}
-                    disabled={loading}
-                  >
-                    <Text style={styles.createButtonText}>
-                      {loading ? "Creating..." : "Create Task"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
+          plants={plants}
+          styles={styles}
+          bottomInset={insets.bottom}
+          initialStartDate={createTaskInitialDate}
+          onClose={() => setShowModal(false)}
+          onCreated={() => {
+            setShowModal(false);
+            loadData({ force: true });
+          }}
+        />
 
         {/* Complete All Modal */}
-        <Modal
+        <CompleteAllModal
           visible={showCompleteAllModal}
-          animationType="fade"
-          transparent={true}
-          onRequestClose={() => {
-            if (!isCompletingAll) {
-              setShowCompleteAllModal(false);
-              setCompleteAllTasks([]);
-            }
+          tasks={completeAllTasks}
+          isCompleting={isCompletingAll}
+          completedCount={completedCount}
+          styles={styles}
+          getPlantName={(plantId) => getPlantDetails(plantId).name}
+          onCancel={() => {
+            setShowCompleteAllModal(false);
+            setCompleteAllTasks([]);
           }}
-        >
-          <View style={styles.completeAllOverlay}>
-            <View style={styles.completeAllCard}>
-              <View style={styles.completeAllIconRow}>
-                <View style={styles.completeAllIconCircle}>
-                  <Ionicons
-                    name={isCompletingAll ? "hourglass" : "checkmark-done"}
-                    size={28}
-                    color="#fff"
-                  />
-                </View>
-              </View>
-
-              <Text style={styles.completeAllTitle}>
-                {isCompletingAll
-                  ? `Completing... ${completedCount}/${completeAllTasks.length}`
-                  : `Mark all ${completeAllTasks.length} tasks as done?`}
-              </Text>
-
-              {isCompletingAll && (
-                <View style={styles.progressBarOuter}>
-                  <View
-                    style={[
-                      styles.progressBarInner,
-                      {
-                        width: `${completeAllTasks.length > 0 ? (completedCount / completeAllTasks.length) * 100 : 0}%`,
-                      },
-                    ]}
-                  />
-                </View>
-              )}
-
-              {!isCompletingAll && (
-                <View style={styles.completeAllActions}>
-                  <TouchableOpacity
-                    style={styles.completeAllCancelBtn}
-                    onPress={() => {
-                      setShowCompleteAllModal(false);
-                      setCompleteAllTasks([]);
-                    }}
-                  >
-                    <Text style={styles.completeAllCancelText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.completeAllConfirmBtn}
-                    onPress={confirmCompleteAll}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="checkmark-done" size={18} color="#fff" />
-                    <Text style={styles.completeAllConfirmText}>Complete All</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          </View>
-        </Modal>
+          onConfirm={confirmCompleteAll}
+        />
 
         {/* Task Notes Modal */}
-        <Modal
+        <TaskCompletionModal
           visible={showNotesModal}
+          task={selectedTask}
+          taskNotes={taskNotes}
+          productUsed={productUsed}
+          isCompleting={isCompletingTask}
+          plantName={selectedTask ? getPlantDetails(selectedTask.plant_id).name : ""}
+          styles={styles}
+          bottomInset={insets.bottom}
+          onChangeNotes={(text) => setTaskNotes(sanitizeAlphaNumericSpaces(text))}
+          onChangeProduct={(text) => setProductUsed(sanitizeAlphaNumericSpaces(text))}
+          onClose={() => setShowNotesModal(false)}
+          onConfirm={confirmTaskComplete}
+        />
+
+        {/* Skip Task Modal */}
+        <Modal
+          visible={showSkipModal}
           animationType="slide"
           transparent={true}
-          onRequestClose={() => setShowNotesModal(false)}
+          onRequestClose={() => setShowSkipModal(false)}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Complete Task</Text>
-                <TouchableOpacity
-                  onPress={() => setShowNotesModal(false)}
-                  disabled={isCompletingTask}
-                >
-                  <Ionicons name="close" size={24} color="#333" />
-                </TouchableOpacity>
+          <View style={styles.skipModalOverlay}>
+            <View style={styles.skipModalContent}>
+              <Text style={styles.skipModalTitle}>Skip Task</Text>
+              <Text style={styles.skipModalSubtext}>
+                This task will be postponed to tomorrow
+              </Text>
+
+              <TextInput
+                style={styles.skipModalInput}
+                placeholder="Reason (optional)"
+                value={skipReason}
+                onChangeText={(text) =>
+                  setSkipReason(sanitizeAlphaNumericSpaces(text))
+                }
+                placeholderTextColor={theme.textTertiary}
+                multiline
+              />
+
+              <View style={styles.skipReasonChips}>
+                {["Weather", "Already done", "Not needed", "Too busy"].map(
+                  (reason) => (
+                    <TouchableOpacity
+                      key={reason}
+                      style={styles.skipReasonChip}
+                      onPress={() => setSkipReason(reason)}
+                    >
+                      <Text style={styles.skipReasonChipText}>{reason}</Text>
+                    </TouchableOpacity>
+                  ),
+                )}
               </View>
 
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{
-                  paddingBottom: Math.max(insets.bottom, 12),
-                }}
-              >
-                <View style={styles.modalBody}>
-                  {selectedTask && (
-                    <View style={styles.selectedTaskInfo}>
-                      <Text style={styles.selectedTaskTitle}>
-                        {selectedTask.task_type.charAt(0).toUpperCase() +
-                          selectedTask.task_type.slice(1)}
-                      </Text>
-                      <Text style={styles.selectedTaskPlant}>
-                        {getPlantDetails(selectedTask.plant_id).name}
-                      </Text>
-                    </View>
-                  )}
-
-                  <FloatingLabelInput
-                    label="Notes (Optional)"
-                    value={taskNotes}
-                    onChangeText={(text) =>
-                      setTaskNotes(sanitizeAlphaNumericSpaces(text))
-                    }
-                    multiline
-                    numberOfLines={3}
-                  />
-
-                  <FloatingLabelInput
-                    label="Product Used (Optional)"
-                    value={productUsed}
-                    onChangeText={(text) =>
-                      setProductUsed(sanitizeAlphaNumericSpaces(text))
-                    }
-                  />
-
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      style={[
-                        styles.actionButton,
-                        styles.skipButton,
-                        isCompletingTask && styles.actionButtonDisabled,
-                      ]}
-                      onPress={confirmTaskComplete}
-                      disabled={isCompletingTask}
-                      activeOpacity={isCompletingTask ? 1 : 0.7}
-                    >
-                      <Text style={styles.skipButtonText}>
-                        {isCompletingTask ? "Completing..." : "Complete"}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </ScrollView>
+              <View style={styles.skipModalButtons}>
+                <TouchableOpacity
+                  style={[styles.skipModalBtn, styles.skipModalBtnCancel]}
+                  onPress={() => {
+                    setShowSkipModal(false);
+                    setSkipReason("");
+                    setSkipTask(null);
+                  }}
+                >
+                  <Text style={styles.skipModalBtnCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.skipModalBtn, styles.skipModalBtnConfirm]}
+                  onPress={handleConfirmSkip}
+                  disabled={skippingTask}
+                >
+                  <Text style={styles.skipModalBtnText}>
+                    {skippingTask ? "Skipping..." : "Skip to Tomorrow"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </Modal>
@@ -1829,982 +1143,3 @@ export default function CalendarScreen() {
   );
 }
 
-function getStartOfWeek(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day;
-  d.setDate(diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-const createStyles = (theme: ReturnType<typeof useTheme>) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.background,
-    },
-    header: {
-      paddingHorizontal: 16,
-      paddingBottom: 12,
-      backgroundColor: theme.backgroundSecondary,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-    },
-    headerTop: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-    },
-    headerTitle: {
-      fontSize: 22,
-      fontWeight: "700",
-      color: theme.text,
-    },
-    searchIconBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: theme.primaryLight,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    searchActiveDot: {
-      position: "absolute",
-      bottom: 6,
-      right: 6,
-      width: 7,
-      height: 7,
-      borderRadius: 4,
-      backgroundColor: theme.primary,
-    },
-    searchExpandedRow: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    searchBackBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    searchExpandedWrapper: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.background,
-      borderRadius: 24,
-      borderWidth: 1,
-      borderColor: theme.primary,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      gap: 8,
-    },
-    searchExpandedInput: {
-      flex: 1,
-      fontSize: 16,
-      color: theme.text,
-      padding: 0,
-    },
-    headerActions: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    viewToggle: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      backgroundColor: theme.primaryLight,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: theme.primary,
-    },
-    viewToggleText: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: theme.primary,
-    },
-    todayButton: {
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      borderRadius: 16,
-      backgroundColor: theme.warning + "20",
-      borderWidth: 1,
-      borderColor: theme.warning,
-    },
-    todayButtonText: {
-      fontSize: 12,
-      fontWeight: "700",
-      color: theme.warning,
-    },
-    groupMenuButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: theme.primaryLight,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    groupMenuButtonActive: {
-      backgroundColor: theme.primary,
-    },
-    sheetOverlay: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.4)",
-      justifyContent: "flex-end",
-      zIndex: 1000,
-      elevation: 1000,
-    },
-    sheetContainer: {
-      backgroundColor: theme.background,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-    },
-    sheetHandle: {
-      width: 40,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: theme.border,
-    },
-    sheetHandleArea: {
-      alignItems: "center",
-      paddingTop: 10,
-      paddingBottom: 8,
-    },
-    sheetHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      paddingHorizontal: 20,
-      paddingBottom: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-    },
-    sheetTitle: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: theme.text,
-    },
-    sheetClearBtn: {
-      paddingHorizontal: 12,
-      paddingVertical: 4,
-      borderRadius: 14,
-      backgroundColor: theme.errorLight,
-    },
-    sheetClearText: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: theme.error,
-    },
-    sheetScroll: {
-      paddingHorizontal: 20,
-    },
-    sheetScrollContent: {
-      paddingBottom: 20,
-    },
-    sheetSectionTitle: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: theme.textSecondary,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-      marginTop: 16,
-      marginBottom: 8,
-    },
-    sheetChipWrap: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-    },
-    sheetChip: {
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 20,
-      backgroundColor: theme.backgroundSecondary,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    sheetChipActive: {
-      backgroundColor: theme.primaryLight,
-      borderColor: theme.primary,
-    },
-    sheetChipText: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      fontWeight: "500",
-    },
-    sheetChipTextActive: {
-      color: theme.primary,
-      fontWeight: "600",
-    },
-    weekView: {
-      backgroundColor: theme.card,
-      margin: 16,
-      marginBottom: 8,
-      borderRadius: 20,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.1,
-      shadowRadius: 12,
-      elevation: 5,
-    },
-    weekHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      padding: 12,
-      paddingBottom: 8,
-    },
-    weekTitle: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: theme.text,
-    },
-    weekDaysRow: {
-      flexDirection: "row",
-      paddingHorizontal: 8,
-      paddingBottom: 12,
-      gap: 4,
-    },
-    weekDay: {
-      flex: 1,
-      alignItems: "center",
-      paddingVertical: 10,
-      paddingHorizontal: 2,
-      borderRadius: 12,
-      backgroundColor: theme.background,
-    },
-    weekDayToday: {
-      backgroundColor: theme.primary,
-      shadowColor: theme.primary,
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.3,
-      shadowRadius: 5,
-      elevation: 4,
-    },
-    weekDaySelected: {
-      backgroundColor: theme.accent,
-      shadowColor: theme.accent,
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.3,
-      shadowRadius: 5,
-      elevation: 4,
-    },
-    weekDayName: {
-      fontSize: 12,
-      color: theme.textSecondary,
-      marginBottom: 4,
-    },
-    weekDayNameToday: {
-      color: theme.textInverse,
-    },
-    weekDayNameSelected: {
-      color: theme.textInverse,
-    },
-    weekDayNumber: {
-      fontSize: 20,
-      fontWeight: "bold",
-      color: theme.text,
-      marginBottom: 8,
-    },
-    weekDayNumberToday: {
-      color: theme.textInverse,
-    },
-    weekDayNumberSelected: {
-      color: theme.textInverse,
-    },
-    weekDayDots: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      justifyContent: "center",
-      gap: 3,
-      minHeight: 16,
-    },
-    weekDayDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-    },
-    weekDayMore: {
-      fontSize: 10,
-      color: theme.textTertiary,
-    },
-    monthView: {
-      backgroundColor: theme.card,
-      borderBottomWidth: 0,
-      margin: 16,
-      marginBottom: 8,
-      borderRadius: 20,
-      padding: 16,
-      paddingBottom: 12,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.1,
-      shadowRadius: 12,
-      elevation: 5,
-    },
-    monthHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 12,
-      paddingBottom: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border + "30",
-    },
-    monthTitle: {
-      fontSize: 20,
-      fontWeight: "700",
-      color: theme.text,
-      letterSpacing: 0.5,
-    },
-    monthWeekdays: {
-      flexDirection: "row",
-      marginBottom: 4,
-      paddingVertical: 4,
-    },
-    monthWeekday: {
-      flexBasis: "13.5%",
-      flexGrow: 0,
-      flexShrink: 0,
-      marginHorizontal: "0.35%",
-      textAlign: "center",
-      fontSize: 11,
-      fontWeight: "700",
-      color: theme.textSecondary,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-    },
-    monthGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-    },
-    monthCell: {
-      flexBasis: "13.5%",
-      flexGrow: 0,
-      flexShrink: 0,
-      aspectRatio: 1,
-      minHeight: 42,
-      maxHeight: 48,
-      padding: 3,
-      marginHorizontal: "0.35%",
-      marginVertical: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      borderWidth: 0,
-      borderRadius: 8,
-      backgroundColor: "transparent",
-    },
-    monthCellToday: {
-      backgroundColor: theme.primary + "20",
-      borderWidth: 2,
-      borderColor: theme.primary,
-    },
-    monthCellSelected: {
-      backgroundColor: theme.primary,
-      borderWidth: 0,
-      shadowColor: theme.primary,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 4,
-      elevation: 3,
-    },
-    monthCellNumber: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: theme.text,
-      marginBottom: 2,
-    },
-    monthCellNumberToday: {
-      color: theme.primary,
-      fontWeight: "700",
-    },
-    monthCellNumberSelected: {
-      color: "#FFFFFF",
-      fontWeight: "700",
-    },
-    monthCellDots: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      justifyContent: "center",
-      gap: 2,
-      minHeight: 5,
-    },
-    monthCellDot: {
-      width: 4,
-      height: 4,
-      borderRadius: 2,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.2,
-      shadowRadius: 2,
-      elevation: 1,
-    },
-    monthCellMore: {
-      fontSize: 8,
-      color: theme.textTertiary,
-    },
-    content: {
-      flex: 1,
-      paddingBottom: 120,
-    },
-    section: {
-      padding: 16,
-      paddingBottom: 16,
-    },
-    selectedDateHeaderFixed: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      paddingVertical: 10,
-      paddingHorizontal: 16,
-      backgroundColor: theme.primaryLight,
-      borderLeftWidth: 3,
-      borderLeftColor: theme.primary,
-    },
-    selectedDateHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 8,
-      paddingVertical: 8,
-      paddingHorizontal: 12,
-      backgroundColor: theme.primaryLight,
-      borderRadius: 10,
-      borderLeftWidth: 3,
-      borderLeftColor: theme.primary,
-    },
-    sectionTitle: {
-      fontSize: 20,
-      fontWeight: "700",
-      color: theme.text,
-      marginBottom: 16,
-      letterSpacing: 0.3,
-    },
-    selectedDateTitle: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: theme.text,
-    },
-    selectedDateActions: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-    },
-    completeAllBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      backgroundColor: theme.primary,
-      paddingVertical: 8,
-      paddingHorizontal: 14,
-      borderRadius: 8,
-      minHeight: 36,
-    },
-    completeAllBtnDisabled: {
-      opacity: 0.6,
-    },
-    completeAllText: {
-      color: "#fff",
-      fontSize: 12,
-      fontWeight: "600",
-    },
-    completeAllProgress: {
-      color: "#fff",
-      fontSize: 12,
-      fontWeight: "700",
-    },
-    completeAllOverlay: {
-      flex: 1,
-      backgroundColor: theme.overlay,
-      justifyContent: "center",
-      alignItems: "center",
-      padding: 32,
-    },
-    completeAllCard: {
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 20,
-      padding: 24,
-      width: "100%",
-      maxWidth: 340,
-      alignItems: "center",
-    },
-    completeAllIconRow: {
-      marginBottom: 12,
-    },
-    completeAllIconCircle: {
-      width: 52,
-      height: 52,
-      borderRadius: 26,
-      backgroundColor: theme.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    completeAllTitle: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: theme.text,
-      marginBottom: 16,
-      textAlign: "center",
-    },
-    progressBarOuter: {
-      width: "100%",
-      height: 6,
-      backgroundColor: theme.border,
-      borderRadius: 3,
-      overflow: "hidden",
-      marginBottom: 16,
-    },
-    progressBarInner: {
-      height: 6,
-      backgroundColor: theme.primary,
-      borderRadius: 3,
-    },
-    completeAllActions: {
-      flexDirection: "row",
-      gap: 12,
-      width: "100%",
-    },
-    completeAllCancelBtn: {
-      flex: 1,
-      padding: 14,
-      borderRadius: 12,
-      alignItems: "center",
-      backgroundColor: theme.background,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    completeAllCancelText: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: theme.textSecondary,
-    },
-    completeAllConfirmBtn: {
-      flex: 1,
-      padding: 14,
-      borderRadius: 12,
-      alignItems: "center",
-      backgroundColor: theme.primary,
-      flexDirection: "row",
-      justifyContent: "center",
-      gap: 6,
-    },
-    completeAllConfirmText: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: "#fff",
-    },
-    emptyState: {
-      alignItems: "center",
-      padding: 32,
-      backgroundColor: theme.background,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: theme.border,
-      borderStyle: "dashed",
-    },
-    emptyStateText: {
-      fontSize: 18,
-      fontWeight: "600",
-      color: theme.text,
-      marginTop: 16,
-      textAlign: "center",
-    },
-    emptyStateSubtext: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      marginTop: 8,
-      marginBottom: 16,
-      textAlign: "center",
-    },
-    clearSearchButton: {
-      marginTop: 8,
-      paddingVertical: 10,
-      paddingHorizontal: 20,
-      backgroundColor: theme.primary,
-      borderRadius: 8,
-    },
-    clearSearchText: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: "#FFFFFF",
-    },
-    addTaskButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      paddingVertical: 8,
-      paddingHorizontal: 16,
-      backgroundColor: theme.primaryLight,
-      borderRadius: 20,
-    },
-    addTaskButtonText: {
-      fontSize: 14,
-      color: theme.primary,
-      fontWeight: "600",
-    },
-    taskCard: {
-      flexDirection: "row",
-      backgroundColor: theme.card,
-      borderRadius: 16,
-      marginBottom: 12,
-      overflow: "hidden",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      elevation: 3,
-    },
-    taskCardOverdue: {
-      borderWidth: 1.5,
-      borderColor: theme.error + "60",
-      backgroundColor: theme.errorLight,
-    },
-    taskColorBar: {
-      width: 5,
-    },
-    taskContent: {
-      flex: 1,
-      padding: 16,
-    },
-    taskHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-    taskIconContainer: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: theme.primaryLight,
-      alignItems: "center",
-      justifyContent: "center",
-      marginRight: 12,
-    },
-    taskInfo: {
-      flex: 1,
-    },
-    taskTitle: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: theme.text,
-      marginBottom: 2,
-    },
-    taskPlant: {
-      fontSize: 14,
-      color: theme.textSecondary,
-    },
-    taskLocation: {
-      fontSize: 12,
-      color: theme.textTertiary,
-      marginTop: 2,
-    },
-    taskRight: {
-      alignItems: "flex-end",
-    },
-    taskTime: {
-      fontSize: 12,
-      color: theme.textSecondary,
-    },
-    taskTimeOverdue: {
-      color: theme.error,
-      fontWeight: "600",
-    },
-    swipeAction: {
-      backgroundColor: "#4CAF50",
-      justifyContent: "center",
-      alignItems: "center",
-      width: 100,
-      borderRadius: 16,
-      marginBottom: 12,
-    },
-    swipeActionContent: {
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    swipeActionText: {
-      color: theme.backgroundSecondary,
-      fontSize: 12,
-      fontWeight: "600",
-      marginTop: 4,
-    },
-    swipeHint: {
-      fontSize: 13,
-      color: theme.textTertiary,
-      textAlign: "center",
-      marginTop: 12,
-      marginBottom: 8,
-      fontStyle: "italic",
-      opacity: 0.7,
-    },
-    harvestCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.card,
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: theme.border + "40",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.06,
-      shadowRadius: 6,
-      elevation: 2,
-    },
-    harvestCardReady: {
-      borderColor: "#4CAF50",
-      backgroundColor: "#4CAF50" + "10",
-      borderWidth: 2,
-      shadowColor: "#4CAF50",
-      shadowOpacity: 0.15,
-    },
-    harvestIcon: {
-      marginRight: 16,
-    },
-    harvestEmoji: {
-      fontSize: 36,
-    },
-    harvestInfo: {
-      flex: 1,
-    },
-    harvestPlant: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: theme.text,
-      marginBottom: 4,
-    },
-    harvestDate: {
-      fontSize: 14,
-      color: theme.textSecondary,
-    },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: theme.overlay,
-      justifyContent: "flex-end",
-    },
-    modalContent: {
-      backgroundColor: theme.backgroundSecondary,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      maxHeight: "85%",
-    },
-    modalHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      padding: 24,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-    },
-    modalTitle: {
-      fontSize: 20,
-      fontWeight: "bold",
-      color: theme.text,
-    },
-    modalBody: {
-      padding: 24,
-      paddingBottom: 40,
-    },
-    label: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: theme.textSecondary,
-      marginBottom: 8,
-    },
-
-    input: {
-      backgroundColor: theme.inputBackground,
-      padding: 16,
-      borderRadius: 12,
-      fontSize: 16,
-      color: theme.inputText,
-      borderWidth: 1,
-      borderColor: theme.inputBorder,
-      marginBottom: 12,
-    },
-    dateButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-      backgroundColor: theme.inputBackground,
-      padding: 16,
-      borderRadius: 12,
-      marginBottom: 16,
-      borderWidth: 1,
-      borderColor: theme.inputBorder,
-    },
-    dateButtonText: {
-      fontSize: 16,
-      color: theme.text,
-      fontWeight: "500",
-    },
-    timeButtons: {
-      flexDirection: "row",
-      gap: 8,
-      marginBottom: 16,
-    },
-    timeButton: {
-      flex: 1,
-      paddingVertical: 12,
-      paddingHorizontal: 8,
-      borderRadius: 12,
-      borderWidth: 2,
-      borderColor: theme.border,
-      backgroundColor: theme.backgroundSecondary,
-      alignItems: "center",
-    },
-    timeButtonActive: {
-      borderColor: theme.primary,
-      backgroundColor: theme.primaryLight,
-    },
-    timeButtonText: {
-      fontSize: 12,
-      color: theme.textSecondary,
-      fontWeight: "500",
-    },
-    timeButtonTextActive: {
-      color: theme.primary,
-      fontWeight: "600",
-    },
-    taskTypeToggle: {
-      flexDirection: "row",
-      gap: 8,
-      marginBottom: 16,
-    },
-    toggleButton: {
-      flex: 1,
-      paddingVertical: 14,
-      paddingHorizontal: 12,
-      borderRadius: 12,
-      borderWidth: 2,
-      borderColor: theme.border,
-      backgroundColor: theme.backgroundSecondary,
-      alignItems: "center",
-    },
-    toggleButtonActive: {
-      borderColor: theme.primary,
-      backgroundColor: theme.primaryLight,
-    },
-    toggleButtonText: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      fontWeight: "500",
-    },
-    toggleButtonTextActive: {
-      color: theme.primary,
-      fontWeight: "600",
-    },
-    presets: {
-      flexDirection: "row",
-      gap: 8,
-      marginBottom: 12,
-      flexWrap: "wrap",
-    },
-    presetButton: {
-      paddingVertical: 8,
-      paddingHorizontal: 16,
-      borderRadius: 20,
-      backgroundColor: theme.background,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    presetButtonActive: {
-      backgroundColor: theme.primaryLight,
-      borderColor: theme.primary,
-    },
-    presetText: {
-      fontSize: 12,
-      color: theme.textSecondary,
-      fontWeight: "600",
-    },
-    presetTextActive: {
-      color: theme.primary,
-    },
-    preview: {
-      backgroundColor: theme.accentLight,
-      padding: 16,
-      borderRadius: 12,
-      marginTop: 8,
-      marginBottom: 16,
-      borderLeftWidth: 4,
-      borderLeftColor: theme.accent,
-    },
-    previewTitle: {
-      fontSize: 14,
-      fontWeight: "bold",
-      color: theme.text,
-      marginBottom: 8,
-    },
-    previewText: {
-      fontSize: 13,
-      color: theme.textSecondary,
-      marginBottom: 4,
-      lineHeight: 20,
-    },
-    helperText: {
-      fontSize: 12,
-      color: theme.textTertiary,
-      marginBottom: 24,
-    },
-    createButton: {
-      backgroundColor: theme.primary,
-      padding: 16,
-      borderRadius: 12,
-      alignItems: "center",
-    },
-    createButtonDisabled: {
-      opacity: 0.6,
-    },
-    createButtonText: {
-      color: theme.backgroundSecondary,
-      fontSize: 16,
-      fontWeight: "600",
-    },
-    selectedTaskInfo: {
-      backgroundColor: theme.background,
-      padding: 16,
-      borderRadius: 12,
-      marginBottom: 16,
-    },
-    selectedTaskTitle: {
-      fontSize: 18,
-      fontWeight: "bold",
-      color: theme.text,
-      marginBottom: 4,
-    },
-    selectedTaskPlant: {
-      fontSize: 14,
-      color: theme.textSecondary,
-    },
-    notesInput: {
-      minHeight: 80,
-    },
-    modalActions: {
-      flexDirection: "row",
-      gap: 12,
-      marginTop: 8,
-    },
-    actionButton: {
-      flex: 1,
-      padding: 16,
-      borderRadius: 12,
-      alignItems: "center",
-    },
-    actionButtonDisabled: {
-      opacity: 0.6,
-    },
-    skipButton: {
-      backgroundColor: theme.primary,
-    },
-    skipButtonText: {
-      color: theme.backgroundSecondary,
-      fontSize: 16,
-      fontWeight: "600",
-    },
-  });
