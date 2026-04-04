@@ -25,8 +25,12 @@
 
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
+
+type AssetWithFileSize = MediaLibrary.Asset & { fileSize?: number };
+type AssetInfoWithFileSize = MediaLibrary.AssetInfo & { fileSize?: number; localUri?: string };
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { logger } from '../utils/logger';
 
 /**
  * Check if running in Expo Go (which has limited MediaLibrary permissions)
@@ -132,7 +136,7 @@ const getAndroidMediaLibrarySize = async (): Promise<number> => {
 
       seenAssetIds.add(assetKey);
 
-      const assetInlineSize = (asset as any).fileSize;
+      const assetInlineSize = (asset as AssetWithFileSize).fileSize;
       if (typeof assetInlineSize === 'number' && assetInlineSize > 0) {
         totalSize += assetInlineSize;
         continue;
@@ -146,13 +150,14 @@ const getAndroidMediaLibrarySize = async (): Promise<number> => {
 
       try {
         const info = await MediaLibrary.getAssetInfoAsync(asset.id);
-        const infoInlineSize = (info as any).fileSize;
+        const infoWithExtra = info as AssetInfoWithFileSize;
+        const infoInlineSize = infoWithExtra.fileSize;
         if (typeof infoInlineSize === 'number' && infoInlineSize > 0) {
           totalSize += infoInlineSize;
           continue;
         }
 
-        const fallbackUri = (info as any).localUri ?? info.uri ?? null;
+        const fallbackUri = infoWithExtra.localUri ?? info.uri ?? null;
         totalSize += await getFileSize(fallbackUri);
       } catch {
         // Ignore malformed or stale assets and continue.
@@ -181,7 +186,7 @@ const requestMediaLibraryPermissions = async (): Promise<boolean> => {
   // In Expo Go, MediaLibrary permissions are not available on Android
   // due to Android's permission restrictions. Skip and use fallback storage.
   if (isExpoGo) {
-    console.log('Running in Expo Go - MediaLibrary not available, using documentDirectory');
+    logger.debug('Running in Expo Go - MediaLibrary not available, using documentDirectory');
     return false;
   }
   
@@ -191,7 +196,7 @@ const requestMediaLibraryPermissions = async (): Promise<boolean> => {
     const { status } = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
     return status === 'granted';
   } catch (error) {
-    console.warn('MediaLibrary permissions not available, falling back to documentDirectory:', error);
+    logger.warn('MediaLibrary permissions not available, falling back to documentDirectory', error as Error);
     return false;
   }
 };
@@ -264,7 +269,7 @@ const getAndroidMediaLookup = async (): Promise<Map<string, string>> => {
         // Also do a broader scan for legacy or manually restored data not in the album.
         await scanMediaAssets(lookup);
       } catch (error) {
-        console.warn('Failed to build MediaLibrary lookup cache:', error);
+        logger.warn('Failed to build MediaLibrary lookup cache', error as Error);
       }
 
       mediaLookupCache = lookup;
@@ -288,10 +293,10 @@ const initImageStorage = async (): Promise<void> => {
     const dirInfo = await FileSystem.getInfoAsync(IMAGES_DIR);
     if (!dirInfo.exists) {
       await FileSystem.makeDirectoryAsync(IMAGES_DIR, { intermediates: true });
-      console.log('Created images directory:', IMAGES_DIR);
+      logger.debug('Created images directory: ' + IMAGES_DIR);
     }
   } catch (error) {
-    console.error('Error initializing image storage:', error);
+    logger.error('Error initializing image storage', error as Error);
     throw error;
   }
 };
@@ -320,7 +325,7 @@ const saveImageLocally = async (
       if (!hasPermission) {
         // Fall back to documentDirectory storage (works in Expo Go)
         // Note: These images won't persist across app reinstalls but will work for development
-        console.log('Using documentDirectory fallback for image storage');
+        logger.debug('Using documentDirectory fallback for image storage');
         await initImageStorage();
         
         const timestamp = Date.now();
@@ -334,7 +339,7 @@ const saveImageLocally = async (
           to: destinationUri,
         });
         
-        console.log('Image saved to documentDirectory (fallback):', destinationUri);
+        logger.debug('Image saved to documentDirectory (fallback): ' + destinationUri);
         return destinationUri;
       }
 
@@ -355,7 +360,7 @@ const saveImageLocally = async (
             await FileSystem.copyAsync({ from: sourceUri, to: tempUri });
             assetSourceUri = tempUri;
           } catch (copyError) {
-            console.warn('Failed to copy content URI, using original source:', copyError);
+            logger.warn('Failed to copy content URI, using original source', copyError as Error);
           }
         }
       }
@@ -372,7 +377,7 @@ const saveImageLocally = async (
           await MediaLibrary.createAlbumAsync(ALBUM_NAME, asset, false);
         }
       } catch (albumError) {
-        console.warn('Could not save directly to album, falling back to default media library:', albumError);
+        logger.warn('Could not save directly to album, falling back to default media library', albumError as Error);
         asset = await MediaLibrary.createAssetAsync(assetSourceUri);
       }
       clearMediaLookupCache();
@@ -382,11 +387,11 @@ const saveImageLocally = async (
         try {
           await FileSystem.deleteAsync(assetSourceUri, { idempotent: true });
         } catch (cleanupError) {
-          console.warn('Failed to delete temp image file:', cleanupError);
+          logger.warn('Failed to delete temp image file', cleanupError as Error);
         }
       }
 
-      console.log('Image saved to MediaLibrary (persistent):', asset.uri);
+      logger.debug('Image saved to MediaLibrary (persistent): ' + asset.uri);
       return asset.uri;
     }
     
@@ -406,10 +411,10 @@ const saveImageLocally = async (
       to: destinationUri,
     });
     
-    console.log('Image saved locally:', destinationUri);
+    logger.debug('Image saved locally: ' + destinationUri);
     return destinationUri;
   } catch (error) {
-    console.error('Error saving image locally:', error);
+    logger.error('Error saving image locally', error as Error);
     throw error;
   }
 };
@@ -431,11 +436,11 @@ export const deleteImageLocally = async (imageUri: string | null): Promise<void>
         const asset = await MediaLibrary.getAssetInfoAsync(imageUri);
         if (asset) {
           await MediaLibrary.deleteAssetsAsync([asset.id]);
-          console.log('Image deleted from MediaLibrary:', imageUri);
+          logger.debug('Image deleted from MediaLibrary: ' + imageUri);
           return;
         }
       } catch (mlError) {
-        console.warn('Could not delete from MediaLibrary, trying FileSystem:', mlError);
+        logger.warn('Could not delete from MediaLibrary, trying FileSystem', mlError as Error);
       }
     }
     
@@ -443,10 +448,10 @@ export const deleteImageLocally = async (imageUri: string | null): Promise<void>
     const fileInfo = await FileSystem.getInfoAsync(imageUri);
     if (fileInfo.exists) {
       await FileSystem.deleteAsync(imageUri);
-      console.log('Image deleted:', imageUri);
+      logger.debug('Image deleted: ' + imageUri);
     }
   } catch (error) {
-    console.error('Error deleting image:', error);
+    logger.error('Error deleting image', error as Error);
     // Don't throw - file might already be deleted
   }
 };
@@ -490,7 +495,7 @@ export const imageExists = async (imageUri: string | null): Promise<boolean> => 
             } catch (secondError) {
               // URI is stale or invalid - this is common after device restarts
               if (__DEV__) {
-                console.warn('MediaLibrary asset not found (stale URI)');
+                logger.warn('MediaLibrary asset not found (stale URI)');
               }
               return false;
             }
@@ -509,7 +514,7 @@ export const imageExists = async (imageUri: string | null): Promise<boolean> => 
       setTimeout(() => {
         // Only log in development to reduce noise
         if (__DEV__) {
-          console.warn('imageExists timeout (file likely missing)');
+          logger.warn('imageExists timeout (file likely missing)');
         }
         resolve(false);
       }, timeoutMs);
@@ -519,7 +524,7 @@ export const imageExists = async (imageUri: string | null): Promise<boolean> => 
   } catch (error) {
     // Only log errors in development
     if (__DEV__) {
-      console.warn('imageExists error:', error);
+      logger.warn('imageExists error', error as Error);
     }
     return false;
   }
@@ -540,7 +545,7 @@ export const getImageStorageSize = async (): Promise<number> => {
     ]);
     return directorySize + mediaLibrarySize;
   } catch (error) {
-    console.error('Error calculating storage size:', error);
+    logger.error('Error calculating storage size', error as Error);
     return 0;
   }
 };
@@ -568,7 +573,7 @@ export const getFilenameFromUri = (uri: string): string | null => {
     const filename = cleanUri.split('/').pop();
     return filename ? decodeURIComponent(filename) : null;
   } catch (error) {
-    console.warn('Failed to extract filename from URI:', uri, error);
+    logger.warn('Failed to extract filename from URI: ' + uri, error as Error);
     return uri.split('/').pop()?.split('?')[0] || null;
   }
 };
@@ -796,7 +801,7 @@ export const migrateImagesToMediaLibrary = async (): Promise<{
       };
     }
 
-    console.log(`Found ${files.length} images to migrate to MediaLibrary`);
+    logger.info(`Found ${files.length} images to migrate to MediaLibrary`);
 
     let migratedCount = 0;
     let duplicateCount = 0;
@@ -811,7 +816,7 @@ export const migrateImagesToMediaLibrary = async (): Promise<{
         const fileInfo = await FileSystem.getInfoAsync(oldUri);
         
         if (!fileInfo.exists) {
-          console.warn(`File does not exist: ${oldUri}`);
+          logger.warn(`File does not exist: ${oldUri}`);
           errorCount++;
           continue;
         }
@@ -844,9 +849,9 @@ export const migrateImagesToMediaLibrary = async (): Promise<{
         await FileSystem.deleteAsync(oldUri, { idempotent: true });
         
         migratedCount++;
-        console.log(`Migrated: ${file}${migratedUri ? ` -> ${migratedUri}` : ''}`);
+        logger.debug(`Migrated: ${file}${migratedUri ? ` -> ${migratedUri}` : ''}`);
       } catch (error) {
-        console.error(`Error migrating ${file}:`, error);
+        logger.error(`Error migrating ${file}`, error as Error);
         errorCount++;
       }
     }
@@ -863,7 +868,7 @@ export const migrateImagesToMediaLibrary = async (): Promise<{
       message: `Migrated ${migratedCount} images to persistent storage. Skipped ${duplicateCount} duplicates. ${errorCount} errors.`,
     };
   } catch (error) {
-    console.error('Error during migration:', error);
+    logger.error('Error during migration', error as Error);
     return {
       completed: false,
       success: false,

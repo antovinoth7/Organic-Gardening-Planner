@@ -6,6 +6,24 @@ import {
   PlantCatalog,
   PlantCareProfiles,
 } from "../types/database.types";
+
+export interface UsePlantFormDataReturn {
+  existingPlants: Plant[];
+  setExistingPlants: React.Dispatch<React.SetStateAction<Plant[]>>;
+  plantCatalog: PlantCatalog;
+  plantCareProfiles: Partial<PlantCareProfiles>;
+  careProfilesLoaded: boolean;
+  locationShortNames: Record<string, string>;
+  parentLocationOptions: string[];
+  childLocationOptions: string[];
+  specificPlantOptions: string[];
+  varietySuggestions: string[];
+  harvestSeasonOptions: string[];
+  basicFieldCount: number;
+  locationFieldCount: number;
+  harvestSectionFieldCount: number;
+  notesHistoryFieldCount: number;
+}
 import {
   DEFAULT_CHILD_LOCATIONS,
   DEFAULT_PARENT_LOCATIONS,
@@ -17,6 +35,7 @@ import {
 } from "../services/plantCatalog";
 import { getPlantCareProfiles } from "../services/plantCareProfiles";
 import { useFocusEffect } from "@react-navigation/native";
+import { logger } from "../utils/logger";
 
 interface UsePlantFormDataOptions {
   plantType: PlantType | string;
@@ -36,14 +55,12 @@ export function usePlantFormData({
   harvestSeason,
   formMode,
   customVarietyMode,
-}: UsePlantFormDataOptions) {
+}: UsePlantFormDataOptions): UsePlantFormDataReturn {
   const [existingPlants, setExistingPlants] = useState<Plant[]>([]);
   const [plantCatalog, setPlantCatalog] = useState<PlantCatalog>(
     DEFAULT_PLANT_CATALOG,
   );
-  const [plantCareProfiles, setPlantCareProfiles] = useState<PlantCareProfiles>(
-    {} as PlantCareProfiles,
-  );
+  const [plantCareProfiles, setPlantCareProfiles] = useState<Partial<PlantCareProfiles>>({});
   const [careProfilesLoaded, setCareProfilesLoaded] = useState(false);
   const [parentLocations, setParentLocations] = useState<string[]>(
     DEFAULT_PARENT_LOCATIONS,
@@ -60,7 +77,7 @@ export function usePlantFormData({
       setChildLocations(config.childLocations);
       setLocationShortNames(config.parentLocationShortNames ?? {});
     } catch (error) {
-      console.error("Error loading locations:", error);
+      logger.error("Error loading locations", error as Error);
     }
   };
 
@@ -69,7 +86,7 @@ export function usePlantFormData({
       const catalog = await getPlantCatalog();
       setPlantCatalog(catalog);
     } catch (error) {
-      console.error("Error loading plant catalog:", error);
+      logger.error("Error loading plant catalog", error as Error);
     }
   };
 
@@ -78,7 +95,7 @@ export function usePlantFormData({
       const plants = await getAllPlants();
       setExistingPlants(plants);
     } catch (error) {
-      console.error("Error loading plants for naming:", error);
+      logger.error("Error loading plants for naming", error as Error);
     }
   };
 
@@ -87,7 +104,7 @@ export function usePlantFormData({
       const profiles = await getPlantCareProfiles();
       setPlantCareProfiles(profiles);
     } catch (error) {
-      console.error("Error loading plant care profiles:", error);
+      logger.error("Error loading plant care profiles", error as Error);
     } finally {
       setCareProfilesLoaded(true);
     }
@@ -156,7 +173,7 @@ export function usePlantFormData({
 
   // Section field counts
   const basicFieldCount = React.useMemo(() => {
-    let count = 4;
+    let count = 3; // photo moved to hero outside section
     if (formMode === "advanced") {
       count += 2;
       if (varietySuggestions.length > 0 && customVarietyMode) {

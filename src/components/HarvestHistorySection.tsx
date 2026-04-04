@@ -1,13 +1,14 @@
 import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { JournalEntry, PlantType } from "../types/database.types";
+import { useTheme } from "../theme";
+import type { Theme } from "../theme/colors";
 
 interface HarvestHistorySectionProps {
   plantType: PlantType;
   harvestEntries: JournalEntry[];
-  styles: any;
-  theme: any;
+  styles: StyleSheet.NamedStyles<Record<string, unknown>>;
   onRecordHarvest: () => void;
   onViewAll: () => void;
 }
@@ -16,10 +17,10 @@ export default function HarvestHistorySection({
   plantType,
   harvestEntries,
   styles,
-  theme,
   onRecordHarvest,
   onViewAll,
 }: HarvestHistorySectionProps) {
+  const theme = useTheme() as Theme;
   if (plantType !== "fruit_tree" && plantType !== "coconut_tree") {
     return null;
   }

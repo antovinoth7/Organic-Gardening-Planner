@@ -1,6 +1,7 @@
 import { StyleSheet } from "react-native";
+import type { Theme } from "../theme/colors";
 
-export const createStyles = (theme: any) =>
+export const createStyles = (theme: Theme) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -46,6 +47,10 @@ export const createStyles = (theme: any) =>
       flexDirection: "row",
       alignItems: "center",
     },
+    donutWrap: {
+      alignItems: "center",
+      width: 140,
+    },
     donutContainer: {
       width: 140,
       height: 140,
@@ -66,11 +71,20 @@ export const createStyles = (theme: any) =>
       color: theme.textSecondary,
       marginTop: 1,
     },
-    donutOverdue: {
-      fontSize: 10,
+    donutOverdueBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      borderRadius: 12,
+      backgroundColor: theme.error,
+      marginTop: 6,
+    },
+    donutOverdueBadgeText: {
+      fontSize: 11,
       fontWeight: "700",
-      color: theme.error,
-      marginTop: 2,
+      color: "#fff",
     },
     // Tile grid beside donut (2 per row)
     chipColumn: {
@@ -90,6 +104,9 @@ export const createStyles = (theme: any) =>
       gap: 3,
       width: "47%",
     },
+    chipEmpty: {
+      opacity: 0.35,
+    },
     chipDone: {
       opacity: 0.55,
     },
@@ -106,11 +123,6 @@ export const createStyles = (theme: any) =>
     },
     chipTextDone: {
       textDecorationLine: "line-through",
-    },
-    chipOverdueCount: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: theme.error,
     },
     // Garden Health
     gardenHealthCard: {
@@ -204,221 +216,34 @@ export const createStyles = (theme: any) =>
       lineHeight: 15,
     },
     // Sections
-    section: {
-      padding: 16,
-      backgroundColor: theme.backgroundSecondary,
-      marginTop: 1,
-    },
-    taskSection: {
-      paddingVertical: 16,
-      paddingLeft: 16,
-      backgroundColor: theme.backgroundSecondary,
-      marginTop: 1,
-    },
-    sectionHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 12,
-      paddingRight: 16,
-    },
     sectionTitle: {
       fontSize: 17,
       fontWeight: "600",
       color: theme.text,
     },
-    seeAllText: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: theme.primary,
-    },
-    priorityBadge: {
-      backgroundColor: theme.errorLight,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
+    // Seasonal tip banner
+    seasonalBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginHorizontal: 16,
+      marginTop: 12,
+      marginBottom: 4,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
       borderRadius: 12,
-      borderWidth: 1,
-      borderColor: theme.error + "40",
-    },
-    priorityMedium: {
       backgroundColor: theme.warningLight,
+      borderWidth: 1,
       borderColor: theme.warning + "40",
     },
-    priorityText: {
-      fontSize: 10,
-      fontWeight: "700",
-      color: theme.error,
-      letterSpacing: 0.5,
-    },
-    // Horizontal task cards
-    taskCardH: {
-      width: 140,
-      padding: 12,
-      backgroundColor: theme.background,
-      borderRadius: 14,
-      marginRight: 10,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    taskCardHOverdue: {
-      borderColor: theme.error + "50",
-      backgroundColor: theme.errorLight,
-    },
-    taskCardHTop: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 8,
-    },
-    taskIconH: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    taskDoneBtn: {
-      width: 26,
-      height: 26,
-      borderRadius: 13,
-      borderWidth: 2,
-      borderColor: theme.border,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    taskDoneBtnDone: {
-      backgroundColor: theme.success,
-      borderColor: theme.success,
-    },
-    taskTypeH: {
-      fontSize: 14,
-      fontWeight: "600",
-      color: theme.text,
-      marginBottom: 2,
-    },
-    taskPlantH: {
-      fontSize: 12,
-      color: theme.textSecondary,
-      marginBottom: 8,
-    },
-    taskCardHActions: {
-      flexDirection: "row",
-      gap: 8,
-    },
-    taskActionSmall: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 3,
-      paddingHorizontal: 6,
-      paddingVertical: 3,
-      borderRadius: 8,
-      backgroundColor: theme.backgroundSecondary,
-    },
-    taskActionSmallText: {
-      fontSize: 10,
-      color: theme.textSecondary,
-      fontWeight: "600",
-    },
-    // Vertical task cards
-    taskSectionV: {
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      backgroundColor: theme.backgroundSecondary,
-      marginTop: 1,
-    },
-    taskCardV: {
-      flexDirection: "row",
-      backgroundColor: theme.background,
-      borderRadius: 12,
-      marginBottom: 8,
-      overflow: "hidden",
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    taskCardVBorder: {
-      width: 4,
-    },
-    taskCardVContent: {
+    seasonalBannerText: {
       flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      padding: 12,
-    },
-    taskCardVLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-      flex: 1,
-      gap: 12,
-    },
-    taskIconV: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    taskCardVInfo: {
-      flex: 1,
-    },
-    taskTypeV: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: theme.text,
-    },
-    taskPlantV: {
       fontSize: 13,
-      color: theme.textSecondary,
-      marginTop: 2,
+      color: theme.text,
+      lineHeight: 18,
     },
-    taskCardVActions: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    taskDoneBtnV: {
-      width: 30,
-      height: 30,
-      borderRadius: 15,
-      borderWidth: 2,
-      borderColor: theme.border,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    taskActionBtn: {
-      width: 30,
-      height: 30,
-      borderRadius: 15,
-      backgroundColor: theme.background,
-      borderWidth: 1,
-      borderColor: theme.border,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    taskWrapper: {
-      marginBottom: 8,
-    },
-    quickActions: {
-      flexDirection: "row",
-      justifyContent: "flex-end",
-      gap: 8,
-      marginTop: 8,
-    },
-    actionButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 16,
-      backgroundColor: theme.background,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    actionText: {
-      fontSize: 12,
-      color: theme.textSecondary,
-      fontWeight: "500",
+    seasonalBannerClose: {
+      padding: 2,
     },
     // Empty state
     emptyState: {
@@ -449,90 +274,5 @@ export const createStyles = (theme: any) =>
       color: theme.textInverse,
       fontSize: 15,
       fontWeight: "600",
-    },
-    // Modal
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: theme.overlay,
-      justifyContent: "center",
-      alignItems: "center",
-      padding: 20,
-    },
-    modalContent: {
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 20,
-      padding: 24,
-      width: "100%",
-      maxWidth: 400,
-    },
-    modalTitle: {
-      fontSize: 20,
-      fontWeight: "700",
-      color: theme.text,
-      marginBottom: 8,
-    },
-    modalSubtext: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      marginBottom: 16,
-    },
-    modalInput: {
-      backgroundColor: theme.inputBackground,
-      borderRadius: 12,
-      padding: 12,
-      fontSize: 15,
-      color: theme.inputText,
-      minHeight: 80,
-      textAlignVertical: "top",
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: theme.inputBorder,
-    },
-    skipReasons: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-      marginBottom: 20,
-    },
-    reasonChip: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      backgroundColor: theme.primaryLight,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: theme.primary,
-    },
-    reasonText: {
-      fontSize: 13,
-      color: theme.primary,
-      fontWeight: "500",
-    },
-    modalButtons: {
-      flexDirection: "row",
-      gap: 12,
-    },
-    modalButton: {
-      flex: 1,
-      paddingVertical: 14,
-      borderRadius: 12,
-      alignItems: "center",
-    },
-    modalButtonCancel: {
-      backgroundColor: theme.background,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    modalButtonConfirm: {
-      backgroundColor: theme.warning,
-    },
-    modalButtonText: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: theme.textInverse,
-    },
-    modalButtonTextCancel: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: theme.textSecondary,
     },
   });

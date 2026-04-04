@@ -38,8 +38,11 @@ import {
 import PlantCard from "../components/PlantCard";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNavigation, useRoute, NavigationProp, ParamListBase } from "@react-navigation/native";
 import { useTheme } from "../theme";
 import { createStyles } from "../styles/plantsStyles";
+import { logger } from "../utils/logger";
+import { getErrorMessage } from "../utils/errorLogging";
 import {
   useTabBarScroll,
   TAB_BAR_HEIGHT,
@@ -62,6 +65,14 @@ interface ActiveFilters {
 
 const ITEMS_PER_PAGE = 20;
 
+const SORT_LABELS: Record<SortOption, string> = {
+  name: "A–Z",
+  newest: "Newest",
+  oldest: "Oldest",
+  health: "Health",
+  age: "Age",
+};
+
 if (
   Platform.OS === "android" &&
   UIManager.setLayoutAnimationEnabledExperimental
@@ -69,24 +80,29 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export default function PlantsScreen({ navigation, route }: any) {
+export default function PlantsScreen() {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const route = useRoute();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const flatListRef = useRef<FlatList>(null);
-  const loadMoreTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const loadMoreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { onScroll: onTabBarScroll, resetTabBar } = useTabBarScroll();
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
-
+  const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
   const [loadingMore, setLoadingMore] = useState(false);
+
+  // searchInput: raw controlled value; searchQuery: debounced, drives filtering
+  const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchActive, setSearchActive] = useState(false);
   const searchInputRef = useRef<TextInput>(null);
+
   const [sortBy, setSortBy] = useState<SortOption>("newest");
-  const [showSortMenu, setShowSortMenu] = useState(false);
   const [filters, setFilters] = useState<ActiveFilters>({
     type: "all",
     health: "all",
@@ -110,7 +126,15 @@ export default function PlantsScreen({ navigation, route }: any) {
     onTabBarScroll(e);
   }, [onTabBarScroll]);
 
-  const loadPlants = async (options?: { silent?: boolean }) => {
+  const handleSearchChange = useCallback((text: string) => {
+    setSearchInput(text);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      setSearchQuery(text);
+    }, 300);
+  }, []);
+
+  const loadPlants = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) {
       setLoading(true);
     }
@@ -120,31 +144,29 @@ export default function PlantsScreen({ navigation, route }: any) {
       if (!options?.silent) {
         setDisplayCount(ITEMS_PER_PAGE);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (!options?.silent) {
-        Alert.alert("Error", error.message);
+        Alert.alert("Error", getErrorMessage(error));
       }
     } finally {
       if (!options?.silent) {
         setLoading(false);
       }
     }
-  };
+  }, []);
 
-  const loadLocations = async () => {
+  const loadLocations = useCallback(async () => {
     try {
       const config = await getLocationConfig();
       setParentLocations(config.parentLocations);
       setChildLocations(config.childLocations);
     } catch (error) {
-      console.error("Error loading locations:", error);
+      logger.error("Error loading locations", error as Error);
     }
-  };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
-
-    // Load data on mount
     loadLocations();
     loadPlants();
 
@@ -158,28 +180,24 @@ export default function PlantsScreen({ navigation, route }: any) {
     return () => {
       isMounted = false;
       unsubscribe();
-      // Clear any pending loadMore timeout
-      if (loadMoreTimeoutRef.current) {
-        clearTimeout(loadMoreTimeoutRef.current);
-      }
+      if (loadMoreTimeoutRef.current) clearTimeout(loadMoreTimeoutRef.current);
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     };
-  }, [navigation]);
+  }, [navigation, loadPlants, loadLocations, resetTabBar]);
 
-  // Listen for refresh param from child screens (after add/edit/delete)
   useEffect(() => {
-    const refreshParam = route?.params?.refresh;
-    if (refreshParam) {
+    const params = route.params as Record<string, unknown> | undefined;
+    if (params?.refresh) {
       flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
       resetTabBar();
       loadPlants();
-      // Clear the param to prevent repeated refreshes
       navigation.setParams({ refresh: undefined });
     }
-  }, [route?.params?.refresh, navigation]);
+  }, [route.params, navigation, loadPlants, resetTabBar]);
 
-  // Handle healthFilter param from Home screen Garden Health tiles
   useEffect(() => {
-    const healthFilter = route?.params?.healthFilter;
+    const params = route.params as Record<string, unknown> | undefined;
+    const healthFilter = params?.healthFilter;
     if (healthFilter) {
       if (healthFilter === "healthy") {
         setFilters((prev) => ({ ...prev, health: "healthy" as HealthStatus }));
@@ -191,12 +209,12 @@ export default function PlantsScreen({ navigation, route }: any) {
         setFilters((prev) => ({ ...prev, health: "stressed" as HealthStatus }));
         setHomeHealthFilter("stressed");
       }
-      setShowFilters(true);
+      setShowFilters(false);
       navigation.setParams({ healthFilter: undefined });
     }
-  }, [route?.params?.healthFilter, navigation]);
+  }, [route.params, navigation]);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     Alert.alert("Delete Plant", "Are you sure you want to delete this plant?", [
       { text: "Cancel", style: "cancel" },
       {
@@ -207,19 +225,40 @@ export default function PlantsScreen({ navigation, route }: any) {
             await deletePlant(id);
             loadPlants();
             Alert.alert("Deleted", "Plant removed successfully.");
-          } catch (error: any) {
-            Alert.alert("Error", error.message);
+          } catch (error: unknown) {
+            Alert.alert("Error", getErrorMessage(error));
           }
         },
       },
     ]);
-  };
+  }, [loadPlants]);
+
+  // Per-category counts from unfiltered plants for chip display
+  const plantCounts = useMemo(() => {
+    const type: Record<string, number> = {};
+    const health: Record<string, number> = {};
+    const space: Record<string, number> = {};
+    const sunlight: Record<string, number> = {};
+    const water: Record<string, number> = {};
+    let pestActive = 0;
+
+    plants.forEach((p) => {
+      type[p.plant_type] = (type[p.plant_type] || 0) + 1;
+      const h = p.health_status || "healthy";
+      health[h] = (health[h] || 0) + 1;
+      if (p.space_type) space[p.space_type] = (space[p.space_type] || 0) + 1;
+      if (p.sunlight) sunlight[p.sunlight] = (sunlight[p.sunlight] || 0) + 1;
+      if (p.water_requirement) water[p.water_requirement] = (water[p.water_requirement] || 0) + 1;
+      if ((p.pest_disease_history || []).some((r) => !r.resolved)) pestActive++;
+    });
+
+    return { type, health, space, sunlight, water, pestActive, pestNone: plants.length - pestActive };
+  }, [plants]);
 
   const getFilteredPlants = useCallback(() => {
     if (!plants || plants.length === 0) return [];
     let filtered = [...plants];
 
-    // Search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
@@ -227,8 +266,7 @@ export default function PlantsScreen({ navigation, route }: any) {
           p &&
           p.name &&
           (p.name.toLowerCase().includes(query) ||
-            (p.plant_variety &&
-              p.plant_variety.toLowerCase().includes(query)) ||
+            (p.plant_variety && p.plant_variety.toLowerCase().includes(query)) ||
             (p.variety && p.variety.toLowerCase().includes(query)) ||
             (p.location && p.location.toLowerCase().includes(query)) ||
             (p.landmarks && p.landmarks.toLowerCase().includes(query))),
@@ -278,7 +316,7 @@ export default function PlantsScreen({ navigation, route }: any) {
 
     if (filters.pestStatus !== "all") {
       filtered = filtered.filter((p) => {
-        const activeIssues = (p.pest_disease_history || []).filter(r => !r.resolved).length;
+        const activeIssues = (p.pest_disease_history || []).filter((r) => !r.resolved).length;
         return filters.pestStatus === "active_issues" ? activeIssues > 0 : activeIssues === 0;
       });
     }
@@ -289,29 +327,19 @@ export default function PlantsScreen({ navigation, route }: any) {
   const getSortedPlants = useCallback(
     (plantsToSort: Plant[]) => {
       const sorted = [...plantsToSort];
-
       switch (sortBy) {
         case "name":
           return sorted.sort((a, b) => a.name.localeCompare(b.name));
         case "newest":
           return sorted.sort(
-            (a, b) =>
-              new Date(b.created_at).getTime() -
-              new Date(a.created_at).getTime(),
+            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
           );
         case "oldest":
           return sorted.sort(
-            (a, b) =>
-              new Date(a.created_at).getTime() -
-              new Date(b.created_at).getTime(),
+            (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
           );
         case "health": {
-          const healthOrder = {
-            healthy: 0,
-            recovering: 1,
-            stressed: 2,
-            sick: 3,
-          };
+          const healthOrder = { healthy: 0, recovering: 1, stressed: 2, sick: 3 };
           return sorted.sort((a, b) => {
             const aHealth = a.health_status || "healthy";
             const bHealth = b.health_status || "healthy";
@@ -320,12 +348,8 @@ export default function PlantsScreen({ navigation, route }: any) {
         }
         case "age":
           return sorted.sort((a, b) => {
-            const aDate = a.planting_date
-              ? new Date(a.planting_date).getTime()
-              : 0;
-            const bDate = b.planting_date
-              ? new Date(b.planting_date).getTime()
-              : 0;
+            const aDate = a.planting_date ? new Date(a.planting_date).getTime() : 0;
+            const bDate = b.planting_date ? new Date(b.planting_date).getTime() : 0;
             return aDate - bDate;
           });
         default:
@@ -371,6 +395,7 @@ export default function PlantsScreen({ navigation, route }: any) {
       childLocation: "",
       pestStatus: "all",
     });
+    setSearchInput("");
     setSearchQuery("");
     setHomeHealthFilter(null);
     setDisplayCount(ITEMS_PER_PAGE);
@@ -396,17 +421,10 @@ export default function PlantsScreen({ navigation, route }: any) {
 
   const loadMore = () => {
     if (loadingMore || !hasMore) return;
-
-    // Clear any existing timeout
-    if (loadMoreTimeoutRef.current) {
-      clearTimeout(loadMoreTimeoutRef.current);
-    }
-
+    if (loadMoreTimeoutRef.current) clearTimeout(loadMoreTimeoutRef.current);
     setLoadingMore(true);
     loadMoreTimeoutRef.current = setTimeout(() => {
-      setDisplayCount((prev) =>
-        Math.min(prev + ITEMS_PER_PAGE, filteredPlants.length),
-      );
+      setDisplayCount((prev) => Math.min(prev + ITEMS_PER_PAGE, filteredPlants.length));
       setLoadingMore(false);
       loadMoreTimeoutRef.current = null;
     }, 300);
@@ -416,17 +434,37 @@ export default function PlantsScreen({ navigation, route }: any) {
     setDisplayCount(ITEMS_PER_PAGE);
   }, [filters, searchQuery, sortBy]);
 
+  const plantKeyExtractor = useCallback((item: Plant) => item.id, []);
+
+  const renderPlantItem = useCallback(
+    ({ item }: { item: Plant }) => (
+      <PlantCard
+        plant={item}
+        compact={viewMode === "grid"}
+        searchQuery={searchQuery}
+        onPress={() => navigation.navigate("PlantDetail", { plantId: item.id })}
+        onEdit={() => navigation.navigate("PlantForm", { plantId: item.id })}
+        onDelete={() => handleDelete(item.id)}
+      />
+    ),
+    [viewMode, navigation, handleDelete, searchQuery],
+  );
+
   return (
     <View style={styles.container}>
+      {/* ── Header ── */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         {searchActive ? (
-          /* ── Expanded search bar ── */
           <View style={styles.searchExpandedRow}>
             <TouchableOpacity
               style={styles.searchBackBtn}
               onPress={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                 setSearchActive(false);
-                if (!searchQuery.trim()) setSearchQuery("");
+                if (!searchInput.trim()) {
+                  setSearchInput("");
+                  setSearchQuery("");
+                }
               }}
             >
               <Ionicons name="arrow-back" size={22} color={theme.text} />
@@ -437,46 +475,47 @@ export default function PlantsScreen({ navigation, route }: any) {
                 ref={searchInputRef}
                 style={styles.searchExpandedInput}
                 placeholder="Search plants..."
-                value={searchQuery}
-                onChangeText={(text) => setSearchQuery(text)}
+                value={searchInput}
+                onChangeText={handleSearchChange}
                 placeholderTextColor={theme.inputPlaceholder}
                 autoFocus
                 returnKeyType="search"
+                onSubmitEditing={() => {
+                  if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+                  setSearchQuery(searchInput);
+                }}
               />
-              {searchQuery.trim() !== "" && (
-                <TouchableOpacity onPress={() => setSearchQuery("")}>
+              {searchInput.trim() !== "" && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setSearchInput("");
+                    setSearchQuery("");
+                  }}
+                >
                   <Ionicons name="close-circle" size={18} color={theme.textTertiary} />
                 </TouchableOpacity>
               )}
             </View>
           </View>
         ) : (
-          /* ── Collapsed header with action icons ── */
           <>
             <Text style={styles.headerTitle}>Plants</Text>
             <View style={styles.headerActions}>
               <TouchableOpacity
                 style={styles.headerIconBtn}
-                onPress={() => setSearchActive(true)}
+                onPress={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setSearchActive(true);
+              }}
               >
-                <Ionicons name="search" size={20} color={searchQuery.trim() ? theme.primary : theme.primary} />
-                {searchQuery.trim() !== "" && <View style={styles.searchActiveDot} />}
+                <Ionicons name="search" size={20} color={theme.primary} />
+                {searchInput.trim() !== "" && <View style={styles.searchActiveDot} />}
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.headerIconBtn}
                 onPress={() => navigation.navigate("ArchivedPlants")}
               >
                 <Ionicons name="archive" size={20} color={theme.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.headerIconBtn}
-                onPress={() => setViewMode(v => v === 'list' ? 'grid' : 'list')}
-              >
-                <Ionicons
-                  name={viewMode === 'list' ? 'grid' : 'list'}
-                  size={20}
-                  color={theme.primary}
-                />
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
@@ -496,369 +535,287 @@ export default function PlantsScreen({ navigation, route }: any) {
                   </View>
                 )}
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.headerIconBtn}
-                onPress={() => setShowSortMenu(!showSortMenu)}
-              >
-                <Ionicons name="swap-vertical" size={22} color={theme.primary} />
-              </TouchableOpacity>
             </View>
           </>
         )}
       </View>
 
-      {/* Sort Menu */}
-      {showSortMenu && (
-        <View style={[StyleSheet.absoluteFill, { zIndex: 1000, elevation: 1000 }]} pointerEvents="box-none">
-          <TouchableOpacity
-            style={{ flex: 1 }}
-            activeOpacity={1}
-            onPress={() => setShowSortMenu(false)}
-          >
-            <TouchableOpacity
-              activeOpacity={1}
-              style={[styles.sortMenu, { marginTop: insets.top + 68 }]}
-              onPress={() => {}}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.sortOption,
-                  sortBy === "name" && styles.sortOptionActive,
-                ]}
-                onPress={() => {
-                  setSortBy("name");
-                  setShowSortMenu(false);
-                }}
-              >
-                <Ionicons
-                  name="text"
-                  size={18}
-                  color={
-                    sortBy === "name" ? theme.primary : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.sortText,
-                    sortBy === "name" && styles.sortTextActive,
-                  ]}
-                >
-                  Name (A-Z)
-                </Text>
-                {sortBy === "name" && (
-                  <Ionicons name="checkmark" size={18} color={theme.primary} />
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.sortOption,
-                  sortBy === "newest" && styles.sortOptionActive,
-                ]}
-                onPress={() => {
-                  setSortBy("newest");
-                  setShowSortMenu(false);
-                }}
-              >
-                <Ionicons
-                  name="time"
-                  size={18}
-                  color={
-                    sortBy === "newest" ? theme.primary : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.sortText,
-                    sortBy === "newest" && styles.sortTextActive,
-                  ]}
-                >
-                  Newest First
-                </Text>
-                {sortBy === "newest" && (
-                  <Ionicons name="checkmark" size={18} color={theme.primary} />
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.sortOption,
-                  sortBy === "oldest" && styles.sortOptionActive,
-                ]}
-                onPress={() => {
-                  setSortBy("oldest");
-                  setShowSortMenu(false);
-                }}
-              >
-                <Ionicons
-                  name="hourglass"
-                  size={18}
-                  color={
-                    sortBy === "oldest" ? theme.primary : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.sortText,
-                    sortBy === "oldest" && styles.sortTextActive,
-                  ]}
-                >
-                  Oldest First
-                </Text>
-                {sortBy === "oldest" && (
-                  <Ionicons name="checkmark" size={18} color={theme.primary} />
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.sortOption,
-                  sortBy === "health" && styles.sortOptionActive,
-                ]}
-                onPress={() => {
-                  setSortBy("health");
-                  setShowSortMenu(false);
-                }}
-              >
-                <Ionicons
-                  name="fitness"
-                  size={18}
-                  color={
-                    sortBy === "health" ? theme.primary : theme.textSecondary
-                  }
-                />
-                <Text
-                  style={[
-                    styles.sortText,
-                    sortBy === "health" && styles.sortTextActive,
-                  ]}
-                >
-                  Health Status
-                </Text>
-                {sortBy === "health" && (
-                  <Ionicons name="checkmark" size={18} color={theme.primary} />
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.sortOption,
-                  sortBy === "age" && styles.sortOptionActive,
-                ]}
-                onPress={() => {
-                  setSortBy("age");
-                  setShowSortMenu(false);
-                }}
-              >
-                <Ionicons
-                  name="trending-up"
-                  size={18}
-                  color={sortBy === "age" ? theme.primary : theme.textSecondary}
-                />
-                <Text
-                  style={[
-                    styles.sortText,
-                    sortBy === "age" && styles.sortTextActive,
-                  ]}
-                >
-                  Age (Oldest)
-                </Text>
-                {sortBy === "age" && (
-                  <Ionicons name="checkmark" size={18} color={theme.primary} />
-                )}
-              </TouchableOpacity>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Filter Bottom Sheet */}
+      {/* ── Filter + Sort Bottom Sheet ── */}
       {showFilters && (
         <View style={[StyleSheet.absoluteFill, styles.sheetOverlay]}>
-            {/* Backdrop - tapping closes */}
-            <Pressable style={StyleSheet.absoluteFill} onPress={toggleFilters} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={toggleFilters} />
+          <View style={[styles.sheetContainer, { paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 16) }]}>
+            <TouchableOpacity activeOpacity={0.6} onPress={toggleFilters} style={styles.sheetHandleArea}>
+              <View style={styles.sheetHandle} />
+            </TouchableOpacity>
 
-            {/* Sheet content - sits at bottom, not nested inside backdrop */}
-            <View style={[styles.sheetContainer, { paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 16) }]}>
-              {/* Handle bar */}
-              <TouchableOpacity activeOpacity={0.6} onPress={toggleFilters} style={styles.sheetHandleArea}>
-                <View style={styles.sheetHandle} />
-              </TouchableOpacity>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Sort & Filter</Text>
+              {hasActiveFilters && (
+                <TouchableOpacity onPress={clearAllFilters} style={styles.sheetClearBtn}>
+                  <Text style={styles.sheetClearText}>Clear All</Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
-              {/* Header */}
-              <View style={styles.sheetHeader}>
-                <Text style={styles.sheetTitle}>Filter Plants</Text>
-                {hasActiveFilters && (
-                  <TouchableOpacity onPress={clearAllFilters} style={styles.sheetClearBtn}>
-                    <Text style={styles.sheetClearText}>Clear All</Text>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.sheetScroll}
+              bounces={false}
+              nestedScrollEnabled
+            >
+              {/* Sort By */}
+              <Text style={styles.sheetSectionTitle}>
+                <Ionicons name="swap-vertical" size={14} color={theme.textSecondary} /> Sort By
+              </Text>
+              <View style={styles.sheetChipWrap}>
+                {([
+                  ["newest", "🕐 Newest"],
+                  ["oldest", "⌛ Oldest"],
+                  ["name", "A–Z"],
+                  ["health", "❤️ Health"],
+                  ["age", "🌱 Age"],
+                ] as const).map(([val, label]) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[styles.sheetChip, sortBy === val && styles.sheetChipActive]}
+                    onPress={() => setSortBy(val)}
+                  >
+                    <Text style={[styles.sheetChipText, sortBy === val && styles.sheetChipTextActive]}>
+                      {label}
+                    </Text>
                   </TouchableOpacity>
-                )}
+                ))}
               </View>
 
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                style={styles.sheetScroll}
-                bounces={false}
-                nestedScrollEnabled
-              >
-                {/* Plant Type */}
-                <Text style={styles.sheetSectionTitle}>
-                  <Ionicons name="apps" size={14} color={theme.textSecondary} /> Plant Type
-                </Text>
-                <View style={styles.sheetChipWrap}>
-                  {([["all", "All"], ["vegetable", "🥕 Vegetable"], ["fruit_tree", "🍇 Fruit"], ["coconut_tree", "🥥 Coconut"], ["herb", "🌿 Herb"], ["timber_tree", "🌳 Timber"], ["flower", "🌸 Flower"], ["shrub", "🪴 Shrub"]] as const).map(([val, label]) => (
-                    <TouchableOpacity
-                      key={val}
-                      style={[styles.sheetChip, filters.type === val && styles.sheetChipActive]}
-                      onPress={() => updateFilter("type", val as FilterType)}
-                    >
-                      <Text style={[styles.sheetChipText, filters.type === val && styles.sheetChipTextActive]}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Health */}
-                <Text style={styles.sheetSectionTitle}>
-                  <Ionicons name="fitness" size={14} color={theme.textSecondary} /> Health
-                </Text>
-                <View style={styles.sheetChipWrap}>
-                  {([["all", "All"], ["healthy", "✅ Healthy"], ["stressed", "⚠️ Stressed"], ["recovering", "🔄 Recovering"], ["sick", "❌ Sick"]] as const).map(([val, label]) => (
-                    <TouchableOpacity
-                      key={val}
-                      style={[styles.sheetChip, filters.health === val && styles.sheetChipActive]}
-                      onPress={() => updateFilter("health", val as HealthStatus | "all")}
-                    >
-                      <Text style={[styles.sheetChipText, filters.health === val && styles.sheetChipTextActive]}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Space */}
-                <Text style={styles.sheetSectionTitle}>
-                  <Ionicons name="cube" size={14} color={theme.textSecondary} /> Space Type
-                </Text>
-                <View style={styles.sheetChipWrap}>
-                  {([["all", "All"], ["pot", "Pot"], ["bed", "Bed"], ["ground", "Ground"]] as const).map(([val, label]) => (
-                    <TouchableOpacity
-                      key={val}
-                      style={[styles.sheetChip, filters.space === val && styles.sheetChipActive]}
-                      onPress={() => updateFilter("space", val as SpaceType | "all")}
-                    >
-                      <Text style={[styles.sheetChipText, filters.space === val && styles.sheetChipTextActive]}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Sunlight */}
-                <Text style={styles.sheetSectionTitle}>
-                  <Ionicons name="sunny" size={14} color={theme.textSecondary} /> Sunlight
-                </Text>
-                <View style={styles.sheetChipWrap}>
-                  {([["all", "All"], ["full_sun", "☀️ Full Sun"], ["partial_sun", "⛅ Partial"], ["shade", "🌤️ Shade"]] as const).map(([val, label]) => (
-                    <TouchableOpacity
-                      key={val}
-                      style={[styles.sheetChip, filters.sunlight === val && styles.sheetChipActive]}
-                      onPress={() => updateFilter("sunlight", val as SunlightLevel | "all")}
-                    >
-                      <Text style={[styles.sheetChipText, filters.sunlight === val && styles.sheetChipTextActive]}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Water */}
-                <Text style={styles.sheetSectionTitle}>
-                  <Ionicons name="water" size={14} color={theme.textSecondary} /> Water Requirement
-                </Text>
-                <View style={styles.sheetChipWrap}>
-                  {([["all", "All"], ["low", "💧 Low"], ["medium", "💧💧 Medium"], ["high", "💧💧💧 High"]] as const).map(([val, label]) => (
-                    <TouchableOpacity
-                      key={val}
-                      style={[styles.sheetChip, filters.water === val && styles.sheetChipActive]}
-                      onPress={() => updateFilter("water", val as WaterRequirement | "all")}
-                    >
-                      <Text style={[styles.sheetChipText, filters.water === val && styles.sheetChipTextActive]}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Pest Status */}
-                <Text style={styles.sheetSectionTitle}>
-                  <Ionicons name="bug" size={14} color={theme.textSecondary} /> Pest & Disease
-                </Text>
-                <View style={styles.sheetChipWrap}>
-                  {([["all", "All"], ["active_issues", "🐛 Active Issues"], ["no_issues", "✅ No Issues"]] as const).map(([val, label]) => (
-                    <TouchableOpacity
-                      key={val}
-                      style={[styles.sheetChip, filters.pestStatus === val && styles.sheetChipActive]}
-                      onPress={() => updateFilter("pestStatus", val)}
-                    >
-                      <Text style={[styles.sheetChipText, filters.pestStatus === val && styles.sheetChipTextActive]}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Location */}
-                <Text style={styles.sheetSectionTitle}>
-                  <Ionicons name="location" size={14} color={theme.textSecondary} /> Location
-                </Text>
-                <View style={styles.sheetChipWrap}>
+              {/* Plant Type */}
+              <Text style={styles.sheetSectionTitle}>
+                <Ionicons name="apps" size={14} color={theme.textSecondary} /> Plant Type
+              </Text>
+              <View style={styles.sheetChipWrap}>
+                {([
+                  ["all", "All"],
+                  ["vegetable", "🥕 Vegetable"],
+                  ["fruit_tree", "🍇 Fruit"],
+                  ["coconut_tree", "🥥 Coconut"],
+                  ["herb", "🌿 Herb"],
+                  ["timber_tree", "🌳 Timber"],
+                  ["flower", "🌸 Flower"],
+                  ["shrub", "🪴 Shrub"],
+                ] as const).map(([val, label]) => (
                   <TouchableOpacity
-                    style={[styles.sheetChip, filters.parentLocation === "" && styles.sheetChipActive]}
-                    onPress={() => { updateFilter("parentLocation", ""); updateFilter("childLocation", ""); }}
+                    key={val}
+                    style={[styles.sheetChip, filters.type === val && styles.sheetChipActive]}
+                    onPress={() => updateFilter("type", val as FilterType)}
                   >
-                    <Text style={[styles.sheetChipText, filters.parentLocation === "" && styles.sheetChipTextActive]}>All</Text>
+                    <Text style={[styles.sheetChipText, filters.type === val && styles.sheetChipTextActive]}>
+                      {label}{val !== "all" && plantCounts.type[val] ? ` (${plantCounts.type[val]})` : ""}
+                    </Text>
                   </TouchableOpacity>
-                  {parentLocations.map((loc) => (
-                    <TouchableOpacity
-                      key={loc}
-                      style={[styles.sheetChip, filters.parentLocation === loc && styles.sheetChipActive]}
-                      onPress={() => { updateFilter("parentLocation", loc); updateFilter("childLocation", ""); }}
-                    >
-                      <Text style={[styles.sheetChipText, filters.parentLocation === loc && styles.sheetChipTextActive]}>📍 {loc}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                {filters.parentLocation !== "" && (
-                  <>
-                    <Text style={styles.sheetSubSectionTitle}>Direction</Text>
-                    <View style={styles.sheetChipWrap}>
-                      <TouchableOpacity
-                        style={[styles.sheetChip, filters.childLocation === "" && styles.sheetChipActive]}
-                        onPress={() => updateFilter("childLocation", "")}
-                      >
-                        <Text style={[styles.sheetChipText, filters.childLocation === "" && styles.sheetChipTextActive]}>All</Text>
-                      </TouchableOpacity>
-                      {childLocations.filter(loc => loc.trim()).map((loc) => (
-                        <TouchableOpacity
-                          key={loc}
-                          style={[styles.sheetChip, filters.childLocation === loc && styles.sheetChipActive]}
-                          onPress={() => updateFilter("childLocation", loc)}
-                        >
-                          <Text style={[styles.sheetChipText, filters.childLocation === loc && styles.sheetChipTextActive]}>◉ {loc}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </>
-                )}
+                ))}
+              </View>
 
-                <View style={{ height: 12 }} />
-              </ScrollView>
-            </View>
+              {/* Health */}
+              <Text style={styles.sheetSectionTitle}>
+                <Ionicons name="fitness" size={14} color={theme.textSecondary} /> Health
+              </Text>
+              <View style={styles.sheetChipWrap}>
+                {([
+                  ["all", "All"],
+                  ["healthy", "✅ Healthy"],
+                  ["stressed", "⚠️ Stressed"],
+                  ["recovering", "🔄 Recovering"],
+                  ["sick", "❌ Sick"],
+                ] as const).map(([val, label]) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[styles.sheetChip, filters.health === val && styles.sheetChipActive]}
+                    onPress={() => updateFilter("health", val as HealthStatus | "all")}
+                  >
+                    <Text style={[styles.sheetChipText, filters.health === val && styles.sheetChipTextActive]}>
+                      {label}{val !== "all" && plantCounts.health[val] ? ` (${plantCounts.health[val]})` : ""}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Space */}
+              <Text style={styles.sheetSectionTitle}>
+                <Ionicons name="cube" size={14} color={theme.textSecondary} /> Space Type
+              </Text>
+              <View style={styles.sheetChipWrap}>
+                {([
+                  ["all", "All"],
+                  ["pot", "Pot"],
+                  ["bed", "Bed"],
+                  ["ground", "Ground"],
+                ] as const).map(([val, label]) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[styles.sheetChip, filters.space === val && styles.sheetChipActive]}
+                    onPress={() => updateFilter("space", val as SpaceType | "all")}
+                  >
+                    <Text style={[styles.sheetChipText, filters.space === val && styles.sheetChipTextActive]}>
+                      {label}{val !== "all" && plantCounts.space[val] ? ` (${plantCounts.space[val]})` : ""}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Sunlight */}
+              <Text style={styles.sheetSectionTitle}>
+                <Ionicons name="sunny" size={14} color={theme.textSecondary} /> Sunlight
+              </Text>
+              <View style={styles.sheetChipWrap}>
+                {([
+                  ["all", "All"],
+                  ["full_sun", "☀️ Full Sun"],
+                  ["partial_sun", "⛅ Partial"],
+                  ["shade", "🌤️ Shade"],
+                ] as const).map(([val, label]) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[styles.sheetChip, filters.sunlight === val && styles.sheetChipActive]}
+                    onPress={() => updateFilter("sunlight", val as SunlightLevel | "all")}
+                  >
+                    <Text style={[styles.sheetChipText, filters.sunlight === val && styles.sheetChipTextActive]}>
+                      {label}{val !== "all" && plantCounts.sunlight[val] ? ` (${plantCounts.sunlight[val]})` : ""}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Water */}
+              <Text style={styles.sheetSectionTitle}>
+                <Ionicons name="water" size={14} color={theme.textSecondary} /> Water Requirement
+              </Text>
+              <View style={styles.sheetChipWrap}>
+                {([
+                  ["all", "All"],
+                  ["low", "💧 Low"],
+                  ["medium", "💧💧 Medium"],
+                  ["high", "💧💧💧 High"],
+                ] as const).map(([val, label]) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[styles.sheetChip, filters.water === val && styles.sheetChipActive]}
+                    onPress={() => updateFilter("water", val as WaterRequirement | "all")}
+                  >
+                    <Text style={[styles.sheetChipText, filters.water === val && styles.sheetChipTextActive]}>
+                      {label}{val !== "all" && plantCounts.water[val] ? ` (${plantCounts.water[val]})` : ""}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Pest Status */}
+              <Text style={styles.sheetSectionTitle}>
+                <Ionicons name="bug" size={14} color={theme.textSecondary} /> Pest & Disease
+              </Text>
+              <View style={styles.sheetChipWrap}>
+                {([
+                  ["all", "All"],
+                  ["active_issues", "🐛 Active Issues"],
+                  ["no_issues", "✅ No Issues"],
+                ] as const).map(([val, label]) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[styles.sheetChip, filters.pestStatus === val && styles.sheetChipActive]}
+                    onPress={() => updateFilter("pestStatus", val)}
+                  >
+                    <Text style={[styles.sheetChipText, filters.pestStatus === val && styles.sheetChipTextActive]}>
+                      {label}
+                      {val === "active_issues" && plantCounts.pestActive > 0 ? ` (${plantCounts.pestActive})` : ""}
+                      {val === "no_issues" && plantCounts.pestNone > 0 ? ` (${plantCounts.pestNone})` : ""}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Location */}
+              <Text style={styles.sheetSectionTitle}>
+                <Ionicons name="location" size={14} color={theme.textSecondary} /> Location
+              </Text>
+              <View style={styles.sheetChipWrap}>
+                <TouchableOpacity
+                  style={[styles.sheetChip, filters.parentLocation === "" && styles.sheetChipActive]}
+                  onPress={() => { updateFilter("parentLocation", ""); updateFilter("childLocation", ""); }}
+                >
+                  <Text style={[styles.sheetChipText, filters.parentLocation === "" && styles.sheetChipTextActive]}>All</Text>
+                </TouchableOpacity>
+                {parentLocations.map((loc) => (
+                  <TouchableOpacity
+                    key={loc}
+                    style={[styles.sheetChip, filters.parentLocation === loc && styles.sheetChipActive]}
+                    onPress={() => { updateFilter("parentLocation", loc); updateFilter("childLocation", ""); }}
+                  >
+                    <Text style={[styles.sheetChipText, filters.parentLocation === loc && styles.sheetChipTextActive]}>📍 {loc}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {filters.parentLocation !== "" && (
+                <>
+                  <Text style={styles.sheetSubSectionTitle}>Direction</Text>
+                  <View style={styles.sheetChipWrap}>
+                    <TouchableOpacity
+                      style={[styles.sheetChip, filters.childLocation === "" && styles.sheetChipActive]}
+                      onPress={() => updateFilter("childLocation", "")}
+                    >
+                      <Text style={[styles.sheetChipText, filters.childLocation === "" && styles.sheetChipTextActive]}>All</Text>
+                    </TouchableOpacity>
+                    {childLocations.filter((loc) => loc.trim()).map((loc) => (
+                      <TouchableOpacity
+                        key={loc}
+                        style={[styles.sheetChip, filters.childLocation === loc && styles.sheetChipActive]}
+                        onPress={() => updateFilter("childLocation", loc)}
+                      >
+                        <Text style={[styles.sheetChipText, filters.childLocation === loc && styles.sheetChipTextActive]}>◉ {loc}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
+
+              <View style={{ height: 12 }} />
+            </ScrollView>
+          </View>
         </View>
       )}
 
+      {/* ── Results & Toolbar Bar ── */}
       <View style={styles.resultsHeader}>
         <View style={styles.resultsLeft}>
           <Ionicons name="leaf" size={14} color={theme.primary} />
           <Text style={styles.resultsCount}>{filteredPlants.length}</Text>
           {hasActiveFilters ? (
             <>
-              <Text style={styles.resultsLabel}>of {plants.length} {plants.length === 1 ? 'Plant' : 'Plants'}</Text>
+              <Text style={styles.resultsLabel}>of {plants.length} {plants.length === 1 ? "Plant" : "Plants"}</Text>
               <View style={styles.resultsFilteredBadge}>
                 <Text style={styles.resultsFilteredText}>filtered</Text>
               </View>
             </>
           ) : (
             <Text style={styles.resultsLabel}>
-              {filteredPlants.length === 1 ? 'Plant' : 'Plants'}
+              {filteredPlants.length === 1 ? "Plant" : "Plants"}
             </Text>
           )}
+        </View>
+        <View style={styles.resultsRight}>
+          <TouchableOpacity style={styles.sortPill} onPress={toggleFilters}>
+            <Ionicons name="swap-vertical" size={13} color={theme.textSecondary} />
+            <Text style={styles.sortPillText}>{SORT_LABELS[sortBy]}</Text>
+            <Ionicons name="chevron-down" size={12} color={theme.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.viewToggleBtn}
+            onPress={() => setViewMode((v) => (v === "list" ? "grid" : "list"))}
+          >
+            <Ionicons
+              name={viewMode === "list" ? "grid" : "list"}
+              size={16}
+              color={theme.textSecondary}
+            />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -866,26 +823,14 @@ export default function PlantsScreen({ navigation, route }: any) {
         ref={flatListRef}
         data={displayedPlants}
         key={viewMode}
-        numColumns={viewMode === 'grid' ? 2 : 1}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <PlantCard
-            plant={item}
-            compact={viewMode === 'grid'}
-            onPress={() =>
-              navigation.navigate("PlantDetail", { plantId: item.id })
-            }
-            onEdit={() =>
-              navigation.navigate("PlantForm", { plantId: item.id })
-            }
-            onDelete={() => handleDelete(item.id)}
-          />
-        )}
+        numColumns={viewMode === "grid" ? 2 : 1}
+        keyExtractor={plantKeyExtractor}
+        renderItem={renderPlantItem}
         contentContainerStyle={[
           styles.listContent,
           { paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 48) + 16 },
         ]}
-        columnWrapperStyle={viewMode === 'grid' ? styles.gridRow : undefined}
+        columnWrapperStyle={viewMode === "grid" ? styles.gridRow : undefined}
         onScroll={handleScroll}
         scrollEventThrottle={16}
         refreshControl={
@@ -898,52 +843,68 @@ export default function PlantsScreen({ navigation, route }: any) {
             <View style={styles.emptyState}>
               <Ionicons
                 name={
-                  homeHealthFilter === "healthy"
-                    ? "happy-outline"
-                    : homeHealthFilter === "sick"
-                      ? "medkit-outline"
-                      : homeHealthFilter === "stressed"
-                        ? "warning-outline"
-                        : "leaf-outline"
+                  plants.length === 0
+                    ? "leaf-outline"
+                    : homeHealthFilter === "healthy"
+                      ? "happy-outline"
+                      : homeHealthFilter === "sick"
+                        ? "medkit-outline"
+                        : homeHealthFilter === "stressed"
+                          ? "warning-outline"
+                          : "search-outline"
                 }
                 size={64}
                 color={
-                  homeHealthFilter === "healthy"
-                    ? theme.success
-                    : homeHealthFilter === "sick"
-                      ? theme.error
-                      : homeHealthFilter === "stressed"
-                        ? theme.warning
-                        : theme.border
+                  plants.length === 0
+                    ? theme.primary
+                    : homeHealthFilter === "healthy"
+                      ? theme.success
+                      : homeHealthFilter === "sick"
+                        ? theme.error
+                        : homeHealthFilter === "stressed"
+                          ? theme.warning
+                          : theme.border
                 }
               />
               <Text style={styles.emptyText}>
-                {homeHealthFilter === "healthy"
-                  ? "No healthy plants yet"
-                  : homeHealthFilter === "sick"
-                    ? "No sick plants — great news!"
-                    : homeHealthFilter === "stressed"
-                      ? "No stressed plants — looking good!"
-                      : "No plants found"}
+                {plants.length === 0
+                  ? "Your garden is empty"
+                  : homeHealthFilter === "healthy"
+                    ? "No healthy plants yet"
+                    : homeHealthFilter === "sick"
+                      ? "No sick plants — great news!"
+                      : homeHealthFilter === "stressed"
+                        ? "No stressed plants — looking good!"
+                        : "No plants match"}
               </Text>
               <Text style={styles.emptySubtext}>
-                {homeHealthFilter === "healthy"
-                  ? "Add plants and keep them thriving"
-                  : homeHealthFilter === "sick"
-                    ? "All your plants are doing well 🌱"
-                    : homeHealthFilter === "stressed"
-                      ? "Your garden is healthy and happy 🎉"
-                      : "Try adjusting your filters or add a new plant"}
+                {plants.length === 0
+                  ? "Tap + to add your first plant and start tracking your garden"
+                  : homeHealthFilter === "healthy"
+                    ? "Add plants and keep them thriving"
+                    : homeHealthFilter === "sick"
+                      ? "All your plants are doing well 🌱"
+                      : homeHealthFilter === "stressed"
+                        ? "Your garden is healthy and happy 🎉"
+                        : "Try adjusting your filters or search"}
               </Text>
-              {homeHealthFilter && (
+              {plants.length === 0 ? (
+                <TouchableOpacity
+                  style={styles.clearFiltersEmptyButton}
+                  onPress={() => navigation.navigate("PlantForm")}
+                >
+                  <Ionicons name="add" size={16} color={theme.primary} />
+                  <Text style={styles.clearFiltersEmptyText}>Add First Plant</Text>
+                </TouchableOpacity>
+              ) : hasActiveFilters ? (
                 <TouchableOpacity
                   style={styles.clearFiltersEmptyButton}
                   onPress={clearAllFilters}
                 >
-                  <Ionicons name="arrow-back" size={16} color={theme.primary} />
-                  <Text style={styles.clearFiltersEmptyText}>Show All Plants</Text>
+                  <Ionicons name="close-circle-outline" size={16} color={theme.primary} />
+                  <Text style={styles.clearFiltersEmptyText}>Clear Filters</Text>
                 </TouchableOpacity>
-              )}
+              ) : null}
             </View>
           ) : null
         }
@@ -960,20 +921,14 @@ export default function PlantsScreen({ navigation, route }: any) {
             </TouchableOpacity>
           ) : null
         }
-        // Memory optimization settings
         initialNumToRender={10}
         maxToRenderPerBatch={10}
         windowSize={5}
         removeClippedSubviews={true}
-        // Critical: Prevent memory leaks from unmounting images
         updateCellsBatchingPeriod={50}
       />
 
-      {/* Floating Action Button */}
       <AnimatedFAB onPress={() => navigation.navigate("PlantForm")} />
-
-
     </View>
   );
 }
-

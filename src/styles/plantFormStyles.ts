@@ -1,6 +1,7 @@
 import { StyleSheet } from "react-native";
+import type { Theme } from "../theme/colors";
 
-export const createStyles = (theme: any) =>
+export const createStyles = (theme: Theme) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -10,21 +11,31 @@ export const createStyles = (theme: any) =>
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      padding: 16,
-      paddingTop: 12,
+      paddingHorizontal: 8,
+      paddingVertical: 12,
       backgroundColor: theme.backgroundSecondary,
       borderBottomWidth: 1,
       borderBottomColor: theme.borderLight,
     },
+    headerIconButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      backgroundColor: theme.borderLight,
+    },
     title: {
-      fontSize: 18,
-      fontWeight: "600",
+      fontSize: 17,
+      fontWeight: "700" as const,
       color: theme.text,
     },
     headerCenter: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
+      flex: 1,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      gap: 6,
     },
     unsavedDot: {
       width: 8,
@@ -49,58 +60,74 @@ export const createStyles = (theme: any) =>
     saveTextDisabled: {
       color: theme.textTertiary,
     },
+    cancelButton: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+    },
+    cancelButtonText: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: theme.textSecondary,
+    },
     content: {
       flex: 1,
-      padding: 16,
+      paddingHorizontal: 16,
+      paddingTop: 10,
     },
     scrollContent: {
       paddingBottom: 100,
     },
-    modeToggleContainer: {
-      flexDirection: "row",
+    segmentedRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      gap: 10,
+      marginBottom: 12,
+    },
+    segmentedControl: {
+      flexDirection: "row" as const,
+      alignSelf: "center" as const,
       backgroundColor: theme.backgroundSecondary,
-      borderRadius: 12,
-      padding: 4,
-      marginBottom: 8,
+      borderRadius: 20,
       borderWidth: 1,
-      borderColor: theme.border,
+      borderColor: theme.borderLight,
+      padding: 3,
     },
-    modeToggleButton: {
-      flex: 1,
-      borderRadius: 10,
-      paddingVertical: 10,
-      alignItems: "center",
-      justifyContent: "center",
+    segmentedItem: {
+      paddingHorizontal: 20,
+      paddingVertical: 7,
+      borderRadius: 17,
     },
-    modeToggleButtonActive: {
-      backgroundColor: theme.primaryLight,
+    segmentedItemActive: {
+      backgroundColor: theme.primary,
     },
-    modeToggleText: {
-      fontSize: 14,
-      fontWeight: "600",
+    segmentedLabel: {
+      fontSize: 13,
+      fontWeight: "600" as const,
       color: theme.textSecondary,
     },
-    modeToggleTextActive: {
-      color: theme.primary,
+    segmentedLabelActive: {
+      color: "#fff",
     },
-    progressContainer: {
-      marginBottom: 16,
-      gap: 4,
+    progressPill: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 12,
+      backgroundColor: theme.backgroundSecondary,
+      borderWidth: 1,
+      borderColor: theme.borderLight,
     },
-    progressBarTrack: {
-      height: 4,
-      backgroundColor: theme.borderLight,
-      borderRadius: 2,
-      overflow: "hidden" as const,
+    progressPillComplete: {
+      backgroundColor: "#e8f5e9",
+      borderColor: "#4CAF50",
     },
-    progressBarFill: {
-      height: "100%",
-      borderRadius: 2,
-    },
-    progressText: {
+    progressPillText: {
       fontSize: 12,
-      color: theme.textTertiary,
-      textAlign: "right" as const,
+      fontWeight: "700" as const,
+      color: theme.textSecondary,
+    },
+    progressPillTextComplete: {
+      color: "#4CAF50",
     },
     photoButton: {
       alignSelf: "center",
@@ -463,11 +490,30 @@ export const createStyles = (theme: any) =>
       marginTop: 2,
     },
     // --- Direction/Section chips ---
+    directionChipsWrapper: {
+      borderWidth: 1,
+      borderColor: theme.inputBorder,
+      borderRadius: 12,
+      backgroundColor: theme.inputBackground,
+      paddingHorizontal: 12,
+      paddingTop: 16,
+      paddingBottom: 12,
+      marginBottom: 12,
+    },
+    directionChipsFloatingLabel: {
+      position: "absolute" as const,
+      top: -9,
+      left: 12,
+      paddingHorizontal: 4,
+      fontSize: 12,
+      fontWeight: "500" as const,
+      color: theme.textSecondary,
+      backgroundColor: theme.inputBackground,
+    },
     directionChipsContainer: {
       flexDirection: "row",
       flexWrap: "wrap",
       gap: 8,
-      marginBottom: 12,
     },
     directionChip: {
       flexDirection: "row",
@@ -570,7 +616,6 @@ export const createStyles = (theme: any) =>
       fontSize: 12,
       fontWeight: "600",
       color: theme.textTertiary,
-      textTransform: "uppercase",
       letterSpacing: 0.5,
       marginBottom: 2,
     },
@@ -620,7 +665,7 @@ export const createStyles = (theme: any) =>
       borderRadius: 8,
       borderWidth: 1,
       borderColor: theme.inputBorder,
-      width: "100%" as any,
+      width: "100%",
       alignItems: "center",
       marginBottom: 4,
     },
@@ -674,7 +719,7 @@ export const createStyles = (theme: any) =>
       borderRadius: 8,
       borderWidth: 1,
       borderColor: theme.inputBorder,
-      width: "100%" as any,
+      width: "100%",
       alignItems: "center",
     },
     statCardInput: {
@@ -1206,5 +1251,507 @@ export const createStyles = (theme: any) =>
       color: theme.textTertiary,
       textAlign: "right" as const,
       marginTop: -6,
+    },
+
+    // --- #2 Photo Hero ---
+    photoHeroContainer: {
+      width: "100%",
+      height: 180,
+      borderRadius: 14,
+      overflow: "hidden" as const,
+      marginBottom: 12,
+      backgroundColor: theme.primaryLight,
+      borderWidth: 1,
+      borderColor: theme.borderLight,
+    },
+    photoHeroImage: {
+      width: "100%",
+      height: "100%",
+    },
+    photoHeroPlaceholder: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+    },
+    photoHeroPlaceholderText: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: theme.primary,
+    },
+    photoHeroEditBadge: {
+      position: "absolute" as const,
+      bottom: 10,
+      right: 10,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      flexDirection: "row" as const,
+      alignItems: "center",
+      gap: 5,
+    },
+    photoHeroEditBadgeText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: "#fff",
+    },
+
+    // --- #3 Frequency Presets ---
+    frequencyPresetsRow: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      gap: 6,
+      marginBottom: 8,
+    },
+    frequencyPresetChip: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.backgroundSecondary,
+    },
+    frequencyPresetChipActive: {
+      borderColor: theme.primary,
+      backgroundColor: theme.primaryLight,
+    },
+    frequencyPresetChipText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: theme.textTertiary,
+    },
+    frequencyPresetChipTextActive: {
+      color: theme.primary,
+    },
+
+    // --- #7 Sticky Save Button ---
+    stickySaveContainer: {
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      backgroundColor: theme.background,
+      borderTopWidth: 1,
+      borderTopColor: theme.borderLight,
+    },
+    stickySaveButton: {
+      backgroundColor: theme.primary,
+      borderRadius: 14,
+      paddingVertical: 14,
+      alignItems: "center" as const,
+      flexDirection: "row" as const,
+      justifyContent: "center" as const,
+      gap: 8,
+    },
+    stickySaveButtonDisabled: {
+      backgroundColor: theme.borderDark,
+    },
+    stickySaveButtonText: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: "#fff",
+    },
+    stickySaveErrorBadge: {
+      backgroundColor: "#f44336",
+      borderRadius: 10,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+    },
+    stickySaveErrorBadgeText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: "#fff",
+    },
+
+    // --- #9 Auto-Name Preview Inline ---
+    namePreviewRow: {
+      flexDirection: "row" as const,
+      alignItems: "center",
+      backgroundColor: theme.inputBackground,
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      minHeight: 52,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: theme.inputBorder,
+      gap: 8,
+    },
+    namePreviewFloatingLabel: {
+      position: "absolute" as const,
+      top: -9,
+      left: 12,
+      paddingHorizontal: 4,
+      fontSize: 12,
+      fontWeight: "500" as const,
+      color: theme.textSecondary,
+      backgroundColor: theme.inputBackground,
+    },
+    namePreviewLabel: {
+      fontSize: 12,
+      color: theme.textTertiary,
+      fontWeight: "600" as const,
+    },
+    namePreviewValue: {
+      fontSize: 14,
+      color: theme.text,
+      fontWeight: "600" as const,
+      flex: 1,
+    },
+    namePreviewValuePending: {
+      fontSize: 13,
+      color: theme.textTertiary,
+      fontStyle: "italic",
+      flex: 1,
+    },
+    nameCustomRow: {
+      flexDirection: "row" as const,
+      alignItems: "center",
+      backgroundColor: theme.inputBackground,
+      borderRadius: 12,
+      paddingLeft: 16,
+      paddingRight: 10,
+      minHeight: 52,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: theme.inputBorder,
+    },
+    nameCustomInput: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "600" as const,
+      color: theme.inputText,
+      paddingVertical: 14,
+      paddingRight: 8,
+    },
+    nameCustomActions: {
+      flexDirection: "row" as const,
+      alignItems: "center",
+      gap: 6,
+      flexShrink: 0,
+    },
+    nameCustomClear: {
+      padding: 4,
+    },
+    namePreviewActionUse: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 12,
+      backgroundColor: theme.primaryLight,
+    },
+    namePreviewActionCustom: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 12,
+      backgroundColor: theme.backgroundSecondary,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    namePreviewActionText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: theme.primary,
+    },
+    namePreviewActionTextMuted: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: theme.textTertiary,
+    },
+
+    // --- #4 Care Profile Card ---
+    careProfileCard: {
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 12,
+      borderLeftWidth: 4,
+      borderLeftColor: "#4caf50",
+      borderWidth: 1,
+      borderColor: theme.borderLight,
+    },
+    careProfileCardHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 8,
+    },
+    careProfileCardTitleRow: {
+      flexDirection: "row" as const,
+      alignItems: "center",
+      gap: 6,
+    },
+    careProfileCardTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: "#2e7d32",
+    },
+    careProfileCardRow: {
+      flexDirection: "row" as const,
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 3,
+    },
+    careProfileCardText: {
+      fontSize: 13,
+      color: theme.textSecondary,
+    },
+    careProfileCardDismiss: {
+      padding: 4,
+    },
+
+    // --- #8 Space Type Visual Cards ---
+    spaceTypeCardsRow: {
+      flexDirection: "row" as const,
+      gap: 10,
+      marginBottom: 12,
+    },
+    spaceTypeCard: {
+      flex: 1,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      paddingVertical: 16,
+      paddingHorizontal: 6,
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 14,
+      borderWidth: 2,
+      borderColor: theme.border,
+    },
+    spaceTypeCardActive: {
+      borderColor: theme.primary,
+      backgroundColor: theme.primaryLight,
+    },
+    spaceTypeCardIcon: {
+      marginBottom: 6,
+    },
+    spaceTypeCardLabel: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: theme.textTertiary,
+      textAlign: "center" as const,
+    },
+    spaceTypeCardLabelActive: {
+      color: theme.primary,
+    },
+
+    // --- #1 Phase Gates ---
+    phaseLockedBanner: {
+      flexDirection: "row" as const,
+      alignItems: "center",
+      gap: 10,
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: theme.borderLight,
+      opacity: 0.75,
+    },
+    phaseLockedText: {
+      fontSize: 14,
+      color: theme.textTertiary,
+      fontStyle: "italic",
+      flex: 1,
+    },
+    moreDetailsTouchable: {
+      flexDirection: "row" as const,
+      alignItems: "center",
+      justifyContent: "center" as const,
+      gap: 8,
+      padding: 14,
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 12,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: theme.borderLight,
+    },
+    moreDetailsText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.primary,
+    },
+
+    // --- #10 Quick Add Fast Path ---
+    quickSaveWithDefaultsButton: {
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 18,
+      alignItems: "center" as const,
+      flexDirection: "row" as const,
+      justifyContent: "center" as const,
+      gap: 8,
+      marginBottom: 12,
+      borderWidth: 1.5,
+      borderColor: theme.primary,
+      borderStyle: "dashed" as const,
+    },
+    quickSaveWithDefaultsText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.primary,
+    },
+
+    // --- D: Chip Grid (replaces horizontal ScrollView) ---
+    chipGrid: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      gap: 8,
+      marginBottom: 12,
+    },
+    chipGridItem: {
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 20,
+      backgroundColor: theme.backgroundSecondary,
+      borderWidth: 1.5,
+      borderColor: theme.border,
+    },
+    chipGridItemActive: {
+      backgroundColor: theme.primaryLight,
+      borderColor: theme.primary,
+    },
+    chipGridItemText: {
+      fontSize: 13,
+      fontWeight: "600" as const,
+      color: theme.textTertiary,
+    },
+    chipGridItemTextActive: {
+      color: theme.primary,
+      fontWeight: "700" as const,
+    },
+
+    // --- E: Frequency Stepper ---
+    stepperCard: {
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: theme.borderLight,
+    },
+    stepperHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 12,
+    },
+    stepperIconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: theme.primaryLight,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    stepperLabel: {
+      fontSize: 14,
+      fontWeight: "700" as const,
+      color: theme.text,
+    },
+    stepperRow: {
+      flexDirection: "row" as const,
+      alignItems: "center",
+      justifyContent: "center" as const,
+      gap: 16,
+    },
+    stepperButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.background,
+      borderWidth: 2,
+      borderColor: theme.primary,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    stepperValueWrap: {
+      alignItems: "center" as const,
+      minWidth: 80,
+    },
+    stepperValueInput: {
+      fontSize: 28,
+      fontWeight: "800" as const,
+      color: theme.text,
+      textAlign: "center" as const,
+      paddingVertical: 2,
+      paddingHorizontal: 8,
+      minWidth: 60,
+    },
+    stepperUnit: {
+      fontSize: 12,
+      fontWeight: "600" as const,
+      color: theme.textTertiary,
+      marginTop: 2,
+    },
+    stepperHint: {
+      fontSize: 12,
+      fontWeight: "700" as const,
+      textAlign: "center" as const,
+      marginTop: 8,
+    },
+
+    // --- B: Grouped Field Card ---
+    groupedFieldCard: {
+      flexDirection: "row" as const,
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 14,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: theme.borderLight,
+      overflow: "hidden" as const,
+    },
+    groupedFieldCardAccent: {
+      width: 4,
+      backgroundColor: theme.primary,
+    },
+    groupedFieldCardContent: {
+      flex: 1,
+      padding: 14,
+    },
+    groupedFieldCardTitle: {
+      fontSize: 13,
+      fontWeight: "700" as const,
+      color: theme.primary,
+      textTransform: "uppercase" as const,
+      letterSpacing: 0.8,
+      marginBottom: 12,
+    },
+    waterDropsRow: {
+      flexDirection: "row" as const,
+      gap: 1,
+    },
+
+    // --- H: Smart Defaults Banner ---
+    smartDefaultsBanner: {
+      flexDirection: "row" as const,
+      alignItems: "center",
+      backgroundColor: theme.primaryLight,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: theme.primary,
+      gap: 10,
+    },
+    smartDefaultsBannerLeft: {
+      flexDirection: "row" as const,
+      alignItems: "center",
+      flex: 1,
+      gap: 8,
+    },
+    smartDefaultsBannerTextWrap: {
+      flex: 1,
+    },
+    smartDefaultsBannerTitle: {
+      fontSize: 13,
+      fontWeight: "700" as const,
+      color: theme.primary,
+      marginBottom: 2,
+    },
+    smartDefaultsBannerSummary: {
+      fontSize: 12,
+      fontWeight: "600" as const,
+      color: theme.textSecondary,
+    },
+    smartDefaultsBannerDismiss: {
+      padding: 4,
     },
   });

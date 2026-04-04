@@ -3,6 +3,7 @@ import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PestDiseaseRecord } from "../types/database.types";
 import { getPestDiseaseEmoji } from "../utils/plantHelpers";
+import { createStyles } from "../styles/plantDetailStyles";
 
 interface SeasonalPestAlert {
   type: "pest" | "disease";
@@ -13,7 +14,7 @@ interface SeasonalPestAlert {
 interface PestDiseaseHistorySectionProps {
   records: PestDiseaseRecord[];
   seasonalAlerts: SeasonalPestAlert[];
-  styles: any;
+  styles: ReturnType<typeof createStyles>;
 }
 
 export default function PestDiseaseHistorySection({

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -7,7 +7,16 @@ import {
   Alert,
   Modal,
   StatusBar,
+  Dimensions,
+  Animated,
 } from "react-native";
+import {
+  PinchGestureHandler,
+  PanGestureHandler,
+  TapGestureHandler,
+  GestureHandlerRootView,
+  State,
+} from "react-native-gesture-handler";
 import { Image } from 'expo-image';
 import { getPlant } from "../services/plants";
 import { getTaskTemplates, getSeasonalCareReminder } from "../services/tasks";
@@ -35,18 +44,108 @@ import {
 } from "../utils/plantHelpers";
 import PestDiseaseHistorySection from "../components/PestDiseaseHistorySection";
 import HarvestHistorySection from "../components/HarvestHistorySection";
+import { useNavigation, useRoute, NavigationProp, ParamListBase } from "@react-navigation/native";
+import { getErrorMessage } from "../utils/errorLogging";
 
-export default function PlantDetailScreen({ route, navigation }: any) {
+const SCREEN = Dimensions.get("window");
+
+export default function PlantDetailScreen() {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const route = useRoute();
+  const { plantId } = (route.params || {}) as { plantId?: string };
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
-  const { plantId } = route.params || {};
   const [plant, setPlant] = useState<Plant | null>(null);
   const [tasks, setTasks] = useState<TaskTemplate[]>([]);
   const [harvestEntries, setHarvestEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [zoomVisible, setZoomVisible] = useState(false);
-  const isMountedRef = React.useRef(true);
+  const isMountedRef = useRef(true);
+
+  // Zoom gesture animated values (Expo Go compatible — no reanimated)
+  const baseScale = useRef(new Animated.Value(1)).current;
+  const pinchScale = useRef(new Animated.Value(1)).current;
+  const composedScale = useRef(Animated.multiply(baseScale, pinchScale)).current;
+  const lastScale = useRef(1);
+  const translateX = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const lastOffset = useRef({ x: 0, y: 0 });
+  const pinchHandlerRef = useRef(null);
+  const panHandlerRef = useRef(null);
+
+  const resetZoomValues = useCallback(() => {
+    baseScale.setValue(1);
+    pinchScale.setValue(1);
+    translateX.setOffset(0);
+    translateX.setValue(0);
+    translateY.setOffset(0);
+    translateY.setValue(0);
+    lastScale.current = 1;
+    lastOffset.current = { x: 0, y: 0 };
+  }, [baseScale, pinchScale, translateX, translateY]);
+
+  // Reset zoom state when modal opens
+  useEffect(() => {
+    if (zoomVisible) resetZoomValues();
+  }, [zoomVisible, resetZoomValues]);
+
+  const onPinchEvent = useRef(
+    Animated.event([{ nativeEvent: { scale: pinchScale } }], { useNativeDriver: true })
+  ).current;
+
+  const onPinchStateChange = useCallback(({ nativeEvent }: any) => {
+    if (nativeEvent.oldState === State.ACTIVE) {
+      lastScale.current = Math.min(4, Math.max(1, lastScale.current * nativeEvent.scale));
+      baseScale.setValue(lastScale.current);
+      pinchScale.setValue(1);
+    }
+  }, [baseScale, pinchScale]);
+
+  const onPanEvent = useRef(
+    Animated.event(
+      [{ nativeEvent: { translationX: translateX, translationY: translateY } }],
+      { useNativeDriver: true }
+    )
+  ).current;
+
+  const onPanStateChange = useCallback(({ nativeEvent }: any) => {
+    if (nativeEvent.oldState === State.ACTIVE) {
+      lastOffset.current.x += nativeEvent.translationX;
+      lastOffset.current.y += nativeEvent.translationY;
+      translateX.setOffset(lastOffset.current.x);
+      translateX.setValue(0);
+      translateY.setOffset(lastOffset.current.y);
+      translateY.setValue(0);
+    }
+  }, [translateX, translateY]);
+
+  const onDoubleTap = useCallback(({ nativeEvent }: any) => {
+    if (nativeEvent.state === State.ACTIVE) {
+      if (lastScale.current > 1) {
+        // Collapse offset into value so spring animates to true 0
+        translateX.setOffset(0);
+        translateX.setValue(lastOffset.current.x);
+        translateY.setOffset(0);
+        translateY.setValue(lastOffset.current.y);
+        Animated.parallel([
+          Animated.spring(baseScale, { toValue: 1, useNativeDriver: true }),
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: true }),
+          Animated.spring(translateY, { toValue: 0, useNativeDriver: true }),
+        ]).start(() => {
+          lastScale.current = 1;
+          lastOffset.current = { x: 0, y: 0 };
+        });
+      } else {
+        Animated.spring(baseScale, { toValue: 2, useNativeDriver: true }).start();
+        lastScale.current = 2;
+      }
+    }
+  }, [baseScale, translateX, translateY]);
+
+  const closeZoom = useCallback(() => {
+    setZoomVisible(false);
+  }, []);
 
   const loadData = useCallback(async (options?: { silent?: boolean }) => {
     if (isMountedRef.current && !options?.silent) {
@@ -54,7 +153,7 @@ export default function PlantDetailScreen({ route, navigation }: any) {
     }
     try {
       const [plantData, allTasks, allJournalEntries] = await Promise.all([
-        getPlant(plantId),
+        getPlant(plantId ?? ""),
         getTaskTemplates(),
         getJournalEntries(),
       ]);
@@ -74,10 +173,10 @@ export default function PlantDetailScreen({ route, navigation }: any) {
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
       setHarvestEntries(plantHarvests);
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (!isMountedRef.current) return;
       if (!options?.silent) {
-        Alert.alert("Error", error.message);
+        Alert.alert("Error", getErrorMessage(error));
       }
     } finally {
       if (isMountedRef.current && !options?.silent) {
@@ -191,28 +290,66 @@ export default function PlantDetailScreen({ route, navigation }: any) {
       )}
 
       {/* Fullscreen Image Zoom Modal */}
-      <Modal visible={zoomVisible} transparent animationType="fade" onRequestClose={() => setZoomVisible(false)}>
-        <StatusBar barStyle="light-content" />
+      <Modal
+        visible={zoomVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeZoom}
+        statusBarTranslucent
+      >
+        <StatusBar barStyle="light-content" backgroundColor="#000" />
+        <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={styles.zoomOverlay}>
-          <TouchableOpacity style={[styles.zoomClose, { top: insets.top + 16 }]} onPress={() => setZoomVisible(false)}>
+          <TouchableOpacity
+            style={[styles.zoomClose, { top: insets.top + 16 }]}
+            onPress={closeZoom}
+          >
             <Ionicons name="close" size={28} color="#fff" />
           </TouchableOpacity>
-          <ScrollView
-            maximumZoomScale={4}
-            minimumZoomScale={1}
-            contentContainerStyle={{ flex: 1, justifyContent: "center", alignItems: "center" }}
-            showsVerticalScrollIndicator={false}
-            showsHorizontalScrollIndicator={false}
-            bouncesZoom
-          >
-            <Image
-              source={{ uri: plant.photo_url! }}
-              style={styles.zoomImage}
-              contentFit="contain"
-              cachePolicy="memory-disk"
-            />
-          </ScrollView>
+          <TapGestureHandler numberOfTaps={2} onHandlerStateChange={onDoubleTap}>
+            <Animated.View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+              <PanGestureHandler
+                ref={panHandlerRef}
+                onGestureEvent={onPanEvent}
+                onHandlerStateChange={onPanStateChange}
+                simultaneousHandlers={[pinchHandlerRef]}
+                minPointers={1}
+                maxPointers={2}
+              >
+                <Animated.View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+                  <PinchGestureHandler
+                    ref={pinchHandlerRef}
+                    onGestureEvent={onPinchEvent}
+                    onHandlerStateChange={onPinchStateChange}
+                    simultaneousHandlers={[panHandlerRef]}
+                  >
+                    <Animated.View
+                      style={{
+                        width: SCREEN.width,
+                        height: SCREEN.height * 0.8,
+                        justifyContent: "center",
+                        alignItems: "center",
+                        transform: [
+                          { translateX },
+                          { translateY },
+                          { scale: composedScale },
+                        ],
+                      }}
+                    >
+                      <Image
+                        source={{ uri: plant.photo_url! }}
+                        style={{ width: SCREEN.width, height: SCREEN.height * 0.8 }}
+                        contentFit="contain"
+                        cachePolicy="memory-disk"
+                      />
+                    </Animated.View>
+                  </PinchGestureHandler>
+                </Animated.View>
+              </PanGestureHandler>
+            </Animated.View>
+          </TapGestureHandler>
         </View>
+        </GestureHandlerRootView>
       </Modal>
 
       <View style={styles.content}>
@@ -668,7 +805,6 @@ export default function PlantDetailScreen({ route, navigation }: any) {
           plantType={plant.plant_type}
           harvestEntries={harvestEntries}
           styles={styles}
-          theme={theme}
           onRecordHarvest={openHarvestForm}
           onViewAll={() => navigation.navigate("Journal")}
         />

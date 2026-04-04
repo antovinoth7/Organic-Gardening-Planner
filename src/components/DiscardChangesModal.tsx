@@ -1,22 +1,23 @@
 import React from "react";
-import { View, Text, TouchableOpacity, Modal } from "react-native";
+import { View, Text, TouchableOpacity, Modal, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../theme";
+import type { Theme } from "../theme/colors";
 
 interface DiscardChangesModalProps {
   visible: boolean;
-  theme: any;
-  styles: any;
+  styles: StyleSheet.NamedStyles<Record<string, unknown>>;
   onKeepEditing: () => void;
   onDiscard: () => void;
 }
 
 export default function DiscardChangesModal({
   visible,
-  theme,
   styles,
   onKeepEditing,
   onDiscard,
 }: DiscardChangesModalProps) {
+  const theme = useTheme() as Theme;
   return (
     <Modal
       visible={visible}
@@ -52,7 +53,7 @@ export default function DiscardChangesModal({
               onPress={onDiscard}
               activeOpacity={0.7}
             >
-              <Ionicons name="trash-outline" size={18} color="#fff" />
+              <Ionicons name="trash-outline" size={18} color={theme.textInverse} />
               <Text style={styles.discardButtonText}>Discard</Text>
             </TouchableOpacity>
           </View>

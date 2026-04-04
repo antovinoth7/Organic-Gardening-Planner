@@ -2,12 +2,13 @@ import { StyleSheet } from 'react-native';
 import { useTheme } from '../theme';
 
 export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
-  // ── Standard Card ──
+  // ── Standard List Card ──
   card: {
     flexDirection: 'row',
     backgroundColor: theme.backgroundSecondary,
     borderRadius: 12,
     padding: 10,
+    paddingLeft: 14,
     marginBottom: 8,
     alignItems: 'center',
     shadowColor: theme.shadow,
@@ -15,6 +16,15 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
     shadowOpacity: 0.08,
     shadowRadius: 3,
     elevation: 2,
+  },
+  healthStripe: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
   },
   imageContainer: {
     position: 'relative',
@@ -42,16 +52,6 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
     backgroundColor: 'rgba(255,255,255,0.85)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  healthIndicator: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 2,
-    borderColor: theme.backgroundSecondary,
   },
   content: {
     flex: 1,
@@ -157,22 +157,17 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
     fontWeight: '600',
     color: '#f44336',
   },
-  cardActions: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-    paddingLeft: 6,
+  highlight: {
+    fontWeight: '700',
+    color: theme.primary,
+    backgroundColor: theme.primaryLight,
   },
-  cardActionBtn: {
+  moreBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: theme.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  cardDeleteBtn: {
-    backgroundColor: theme.errorLight,
+    paddingLeft: 4,
   },
 
   // ── Compact Grid Card ──
@@ -202,7 +197,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
   },
   compactImage: {
     width: '100%',
-    aspectRatio: 1.3,
+    aspectRatio: 1,
   },
   compactPlaceholder: {
     alignItems: 'center',
@@ -237,8 +232,8 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
   },
   pestBadgeCompact: {
     position: 'absolute',
-    top: 4,
-    left: 4,
+    top: 28,
+    left: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
@@ -256,11 +251,20 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
   compactInfo: {
     padding: 8,
     paddingTop: 6,
+    paddingBottom: 10,
+  },
+  compactNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+    marginBottom: 2,
   },
   compactName: {
     fontSize: 13,
     fontWeight: '600',
     color: theme.text,
+    flex: 1,
   },
   compactMeta: {
     fontSize: 11,
@@ -272,22 +276,101 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
     color: theme.textSecondary,
     marginTop: 2,
   },
-  compactActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingBottom: 8,
+
+  // ── Plant action menu modal ──
+  menuOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
   },
-  compactActionBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  menuBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  menuSheet: {
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: theme.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  menuHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+  },
+  menuPlantAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuPlantEmoji: {
+    fontSize: 26,
+  },
+  menuPlantInfo: {
+    flex: 1,
+  },
+  menuPlantName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.text,
+  },
+  menuPlantMeta: {
+    fontSize: 13,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: theme.border,
+    marginHorizontal: 0,
+  },
+  menuAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  menuActionDestructive: {
+    // no extra background; icon color signals destructive intent
+  },
+  menuActionIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     backgroundColor: theme.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  compactDeleteBtn: {
-    backgroundColor: theme.errorLight,
+  menuActionIconDestructive: {
+    backgroundColor: '#FFEBEE',
+  },
+  menuActionText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    color: theme.text,
+  },
+  menuActionTextDestructive: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#f44336',
+  },
+  menuCancelBtn: {
+    alignItems: 'center',
+    paddingVertical: 14,
+  },
+  menuCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.textSecondary,
   },
 });

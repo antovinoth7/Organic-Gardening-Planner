@@ -1,13 +1,13 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { TaskTemplate, TaskType } from "../types/database.types";
+import { useTheme } from "../theme";
+import { createStyles } from "../styles/calendarStyles";
 
 interface WeekCalendarViewProps {
   currentWeekStart: Date;
   selectedDate: Date | null;
-  styles: any;
-  theme: any;
   taskColors: Record<TaskType, string>;
   getTasksForDate: (date: Date) => TaskTemplate[];
   onSelectDate: (date: Date) => void;
@@ -17,13 +17,14 @@ interface WeekCalendarViewProps {
 export default function WeekCalendarView({
   currentWeekStart,
   selectedDate,
-  styles,
-  theme,
   taskColors,
   getTasksForDate,
   onSelectDate,
   onNavigateWeek,
 }: WeekCalendarViewProps) {
+  const theme = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   const weekDays = Array.from({ length: 7 }).map((_, i) => {
     const date = new Date(currentWeekStart);
     date.setDate(date.getDate() + i);

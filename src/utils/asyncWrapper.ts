@@ -5,6 +5,7 @@
 
 import { logError } from './errorLogging';
 import * as Sentry from '@sentry/react-native';
+import { logger } from './logger';
 
 /**
  * Wraps an async function to catch and handle errors gracefully
@@ -33,7 +34,7 @@ const _safeAsync = async <T>(
     
     // Log to console in dev
     if (__DEV__ && !options?.silent) {
-      console.error(`🔴 Async error in ${context}:`, err);
+      logger.error(`Async error in ${context}`, err);
     }
     
     // Log to error tracking
@@ -49,7 +50,7 @@ const _safeAsync = async <T>(
       try {
         options.onError(err);
       } catch (handlerError) {
-        console.error('Error in custom error handler:', handlerError);
+        logger.error('Error in custom error handler', handlerError as Error);
       }
     }
     
@@ -79,7 +80,7 @@ const _safePromiseAll = async <T>(
       return result.value;
     } else {
       const error = result.reason as Error;
-      console.warn(`Promise ${index} failed in ${context}:`, error);
+      logger.warn(`Promise ${index} failed in ${context}`, error);
       
       logError('error', `Promise ${index} failed in ${context}`, error);
       
@@ -109,7 +110,7 @@ const _createDebouncedAsync = <Args extends any[]>(
   fn: (...args: Args) => Promise<void>,
   delayMs: number
 ): ((...args: Args) => void) => {
-  let timeoutId: NodeJS.Timeout | null = null;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
   let isExecuting = false;
   
   return (...args: Args) => {
@@ -128,7 +129,7 @@ const _createDebouncedAsync = <Args extends any[]>(
       try {
         await fn(...args);
       } catch (error) {
-        console.error('Debounced async error:', error);
+        logger.error('Debounced async error', error as Error);
         Sentry.captureException(error);
       } finally {
         isExecuting = false;
@@ -161,7 +162,7 @@ const _withTimeout = async <T>(
     return await Promise.race([promise, timeout]);
   } catch (error) {
     const err = error as Error;
-    console.warn(`Timeout in ${context}:`, err);
+    logger.warn(`Timeout in ${context}`, err);
     
     logError('error', `Timeout in ${context}`, err);
     

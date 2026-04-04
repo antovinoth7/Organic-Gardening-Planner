@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"function.*{$\" /c/Users/ccev3125/source/repos/Organic-Gardening-Planner/src/hooks/*.ts)",
+      "Bash(grep -n \"isMountedRef\" /c/Users/ccev3125/source/repos/Organic-Gardening-Planner/src/screens/*.tsx)"
+    ]
+  }
+}

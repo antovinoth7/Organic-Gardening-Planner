@@ -465,7 +465,7 @@ const findProfileByVariety = (
 
 const applyOverrides = (
   base: PlantCareProfile,
-  overrides?: PlantCareProfiles,
+  overrides?: Partial<PlantCareProfiles>,
   plantType?: PlantType,
   plantVariety?: string,
 ): PlantCareProfile => {
@@ -488,7 +488,7 @@ const applyOverrides = (
 export function getPlantCareProfile(
   plantVariety: string,
   plantType?: PlantType,
-  overrides?: PlantCareProfiles,
+  overrides?: Partial<PlantCareProfiles>,
 ): PlantCareProfile | null {
   if (plantType) {
     const key = buildProfileKey(plantType, plantVariety);
@@ -508,7 +508,7 @@ export function getPlantCareProfile(
 export function hasPlantCareProfile(
   plantVariety: string,
   plantType?: PlantType,
-  overrides?: PlantCareProfiles,
+  overrides?: Partial<PlantCareProfiles>,
 ): boolean {
   if (plantType) {
     const key = buildProfileKey(plantType, plantVariety);

@@ -16,6 +16,7 @@
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
+import { logger } from './logger';
 
 export interface ZipImageFile {
   uri: string;
@@ -75,7 +76,7 @@ export const createZipWithImages = async (
         if (Platform.OS !== 'web' && imageUri.startsWith('file://')) {
           const fileInfo = await FileSystem.getInfoAsync(imageUri);
           if (!fileInfo.exists) {
-            console.warn(`Image not found, skipping: ${imageUri}`);
+            logger.warn(`Image not found, skipping: ${imageUri}`);
             continue;
           }
         }
@@ -101,9 +102,9 @@ export const createZipWithImages = async (
         
         // Add image to files map with images/ prefix
         files[`images/${filename}`] = imageData;
-        console.log(`Added image to ZIP: ${filename}`);
+        logger.debug(`Added image to ZIP: ${filename}`);
       } catch (error) {
-        console.error(`Error adding image ${imageUri}:`, error);
+        logger.error(`Error adding image ${imageUri}`, error as Error);
         // Continue with other images even if one fails
       }
     }
@@ -134,11 +135,11 @@ export const createZipWithImages = async (
       await FileSystem.writeAsStringAsync(fileUri, base64Data, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      console.log(`ZIP file created: ${fileUri}`);
+      logger.debug(`ZIP file created: ${fileUri}`);
       return fileUri;
     }
   } catch (error) {
-    console.error('Error creating ZIP:', error);
+    logger.error('Error creating ZIP', error as Error);
     throw new Error('Failed to create backup ZIP: ' + (error as Error).message);
   }
 };
@@ -218,19 +219,19 @@ export const extractZipWithImages = async (
               encoding: FileSystem.EncodingType.Base64,
             });
             imageUris.set(filename, localUri);
-            console.log(`Extracted image: ${filename}`);
+            logger.debug(`Extracted image: ${filename}`);
           }
         } catch (error) {
-          console.error(`Error extracting image ${filePath}:`, error);
+          logger.error(`Error extracting image ${filePath}`, error as Error);
           // Continue with other images
         }
       }
     }
     
-    console.log(`Extracted ${imageUris.size} images from backup`);
+    logger.info(`Extracted ${imageUris.size} images from backup`);
     return { jsonData, imageUris };
   } catch (error) {
-    console.error('Error extracting ZIP:', error);
+    logger.error('Error extracting ZIP', error as Error);
     throw new Error('Failed to extract backup ZIP: ' + (error as Error).message);
   }
 };

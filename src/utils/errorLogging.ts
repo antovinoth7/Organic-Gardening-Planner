@@ -3,13 +3,14 @@
  * Centralized error tracking for better debugging
  * Can be extended with Firebase Crashlytics, Sentry, etc.
  */
+import { logger } from './logger';
 
 interface ErrorLog {
   timestamp: string;
   type: 'error' | 'warning' | 'crash' | 'network' | 'auth' | 'storage';
   message: string;
   stack?: string;
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
   userId?: string;
 }
 
@@ -22,8 +23,8 @@ const errorLogs: ErrorLog[] = [];
 export const logError = (
   type: ErrorLog['type'],
   message: string,
-  error?: Error | any,
-  context?: Record<string, any>
+  error?: Error | unknown,
+  context?: Record<string, unknown>
 ) => {
   const userId = currentUserId;
   const enrichedContext = { ...context, type, userId };
@@ -31,7 +32,7 @@ export const logError = (
     timestamp: new Date().toISOString(),
     type,
     message,
-    stack: error?.stack || new Error().stack,
+    stack: (error instanceof Error ? error.stack : undefined) || new Error().stack,
     context: enrichedContext,
     userId,
   };
@@ -43,28 +44,26 @@ export const logError = (
     errorLogs.shift();
   }
 
-  // Console log for development
-  if (__DEV__) {
-    console.error(`[${type.toUpperCase()}]`, message, error, context);
-  }
+  logger.error(`[${type.toUpperCase()}] ${message}`, error instanceof Error ? error : undefined);
+
 
   // Send to error tracker (can forward to Sentry)
   import('../utils/errorTracker').then(({ errorTracker }) => {
-    errorTracker.trackError(message, error, enrichedContext);
+    errorTracker.trackError(message, error instanceof Error ? error : undefined, enrichedContext);
   });
 };
 
 /**
  * Log authentication errors
  */
-export const logAuthError = (message: string, error?: Error, context?: Record<string, any>) => {
+export const logAuthError = (message: string, error?: Error, context?: Record<string, unknown>) => {
   logError('auth', message, error, context);
 };
 
 /**
  * Log storage errors
  */
-export const logStorageError = (message: string, error?: Error, context?: Record<string, any>) => {
+export const logStorageError = (message: string, error?: Error, context?: Record<string, unknown>) => {
   logError('storage', message, error, context);
 };
 
@@ -76,3 +75,15 @@ let currentUserId: string | undefined;
 export const setErrorLogUserId = (userId: string | undefined) => {
   currentUserId = userId;
 };
+
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+export function getErrorCode(error: unknown): string | undefined {
+  if (error != null && typeof error === 'object' && 'code' in error) {
+    return String((error as { code: unknown }).code);
+  }
+  return undefined;
+}

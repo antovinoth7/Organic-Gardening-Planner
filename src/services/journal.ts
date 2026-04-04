@@ -22,8 +22,9 @@ import {
   SavedImage,
 } from '../lib/imageStorage';
 import { getData, setData, KEYS } from '../lib/storage';
-import { withTimeoutAndRetry } from '../utils/firestoreTimeout';
+import { withTimeoutAndRetry, FIRESTORE_WRITE_TIMEOUT_MS, FIRESTORE_READ_TIMEOUT_MS } from '../utils/firestoreTimeout';
 import { logError } from '../utils/errorLogging';
+import { logger } from '../utils/logger';
 import {
   getCached,
   setCached,
@@ -55,7 +56,7 @@ export const getJournalEntries = async (): Promise<JournalEntry[]> => {
     
     const snapshot = await withTimeoutAndRetry(
       () => getDocs(q),
-      { timeoutMs: 15000, maxRetries: 2 }
+      { timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS }
     );
     
     const entries = (await Promise.all(
@@ -84,7 +85,7 @@ export const getJournalEntries = async (): Promise<JournalEntry[]> => {
             created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at
           };
         } catch (error) {
-          console.warn(`Failed to resolve images for journal ${doc.id}:`, error);
+          logger.warn(`Failed to resolve images for journal ${doc.id}`, error as Error);
           const data = doc.data();
           // Return entry without photos on error
           return {
@@ -105,7 +106,7 @@ export const getJournalEntries = async (): Promise<JournalEntry[]> => {
     
     return entries;
   } catch (error) {
-    console.warn('Failed to fetch from Firestore, using cached data:', error);
+    logger.warn('Failed to fetch journal entries, using cached data', error as Error);
     logError('network', 'Failed to fetch journal entries', error as Error);
     const cachedEntries = await getData<JournalEntry>(KEYS.JOURNAL);
     const resolvedCached = await Promise.all(
@@ -126,7 +127,7 @@ export const getJournalEntries = async (): Promise<JournalEntry[]> => {
             photo_urls: resolvedPhotoUrls,
           };
         } catch (error) {
-          console.warn(`Failed to resolve cached images for journal ${entry.id}:`, error);
+          logger.warn(`Failed to resolve cached images for journal ${entry.id}`, error as Error);
           return {
             ...entry,
             photo_filenames: [],
@@ -166,7 +167,7 @@ export const createJournalEntry = async (
   
   const docRef = await withTimeoutAndRetry(
     () => addDoc(collection(db, JOURNAL_COLLECTION), firestoreEntry),
-    { timeoutMs: 15000, maxRetries: 2 }
+    { timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS }
   );
   
   const result = {
@@ -192,6 +193,8 @@ export const updateJournalEntry = async (
   id: string,
   updates: Partial<JournalEntry>
 ): Promise<JournalEntry> => {
+  await refreshAuthToken();
+
   const docRef = doc(db, JOURNAL_COLLECTION, id);
   
   // CRITICAL: photo_filenames should already be set for local images
@@ -214,13 +217,13 @@ export const updateJournalEntry = async (
   }
   await withTimeoutAndRetry(
     () => updateDoc(docRef, firestoreUpdates as any),
-    { timeoutMs: 15000, maxRetries: 2 }
+    { timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS }
   );
   
   // Use direct document read instead of query for better performance
   const docSnap = await withTimeoutAndRetry(
     () => getDoc(docRef),
-    { timeoutMs: 10000, maxRetries: 2 }
+    { timeoutMs: FIRESTORE_READ_TIMEOUT_MS }
   );
   
   if (!docSnap.exists()) throw new Error('Journal entry not found');
@@ -259,16 +262,18 @@ export const updateJournalEntry = async (
 export const deleteJournalEntry = async (id: string): Promise<void> => {
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
-  
+
+  await refreshAuthToken();
+
   // Verify ownership before deleting
   const docRef = doc(db, JOURNAL_COLLECTION, id);
   const docSnap = await withTimeoutAndRetry(
     () => getDoc(docRef),
-    { timeoutMs: 10000, maxRetries: 2 }
+    { timeoutMs: FIRESTORE_READ_TIMEOUT_MS }
   );
   
   if (!docSnap.exists()) {
-    console.warn('Journal entry not found:', id);
+    logger.warn('Journal entry not found: ' + id);
     return;
   }
   
@@ -350,7 +355,7 @@ export const getJournalMetadata = async (): Promise<JournalEntry[]> => {
 
     const snapshot = await withTimeoutAndRetry(
       () => getDocs(q),
-      { timeoutMs: 15000, maxRetries: 2 }
+      { timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS }
     );
 
     const entries = snapshot.docs.map(d => {
@@ -369,7 +374,7 @@ export const getJournalMetadata = async (): Promise<JournalEntry[]> => {
     setCached(CACHE_KEYS.JOURNAL_METADATA, entries);
     return entries;
   } catch (error) {
-    console.warn('Failed to fetch journal metadata, using cache:', error);
+    logger.warn('Failed to fetch journal metadata, using cache', error as Error);
     const cachedEntries = await getData<JournalEntry>(KEYS.JOURNAL);
     return cachedEntries;
   }

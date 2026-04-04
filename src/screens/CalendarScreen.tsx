@@ -20,13 +20,6 @@ import {
   UIManager,
   Modal,
 } from "react-native";
-
-if (
-  Platform.OS === "android" &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 import {
   GestureHandlerRootView,
   Swipeable,
@@ -34,13 +27,15 @@ import {
 import {
   markTaskDone,
   updateTaskTemplate,
+  calculateTaskPriority,
 } from "../services/tasks";
 import {
   TaskTemplate,
+  TaskType,
 } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
-import { TASK_EMOJIS, TASK_COLORS } from "../utils/taskConstants";
-import { useFocusEffect } from "@react-navigation/native";
+import { TASK_EMOJIS, TASK_COLORS, TASK_LABELS } from "../utils/taskConstants";
+import { useFocusEffect, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import { createStyles, getStartOfWeek } from "../styles/calendarStyles";
@@ -49,22 +44,31 @@ import { safeGetItem, safeSetItem } from "../utils/safeStorage";
 import { useCalendarData } from "../hooks/useCalendarData";
 import { useTabBarScroll, TAB_BAR_HEIGHT, AnimatedFAB } from "../components/FloatingTabBar";
 import CreateTaskModal from "../components/CreateTaskModal";
-import CompleteAllModal from "../components/CompleteAllModal";
 import TaskCompletionModal from "../components/TaskCompletionModal";
 import WeekCalendarView from "../components/WeekCalendarView";
 import MonthCalendarView from "../components/MonthCalendarView";
+import { getErrorMessage } from "../utils/errorLogging";
+
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const GROUP_OPTIONS: {
-  value: "none" | "location" | "type";
+  value: "none" | "location" | "type" | "plant";
   label: string;
   icon: string;
 }[] = [
-  { value: "none", label: "All Tasks", icon: "list" },
+  { value: "none", label: "No Grouping", icon: "list" },
   { value: "location", label: "Location", icon: "location" },
   { value: "type", label: "Type", icon: "apps" },
+  { value: "plant", label: "Plant", icon: "leaf-outline" },
 ];
 
 export default function CalendarScreen() {
+  const route = useRoute();
   const theme = useTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -85,11 +89,11 @@ export default function CalendarScreen() {
   const [isCompletingTask, setIsCompletingTask] = useState(false);
   const [isCompletingAll, setIsCompletingAll] = useState(false);
   const [completedCount, setCompletedCount] = useState(0);
-  const [showCompleteAllModal, setShowCompleteAllModal] = useState(false);
-  const [completeAllTasks, setCompleteAllTasks] = useState<TaskTemplate[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [groupBy, setGroupBy] = useState<"none" | "location" | "type">("none");
+  const [groupBy, setGroupBy] = useState<"none" | "location" | "type" | "plant">("none");
   const [showGroupMenu, setShowGroupMenu] = useState(false);
+  const [filterTaskTypes, setFilterTaskTypes] = useState<Set<string>>(new Set());
+  const [filterOverdueOnly, setFilterOverdueOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchActive, setSearchActive] = useState(false);
   const [showSkipModal, setShowSkipModal] = useState(false);
@@ -97,7 +101,12 @@ export default function CalendarScreen() {
   const [skipReason, setSkipReason] = useState("");
   const [skippingTask, setSkippingTask] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [completingTotal, setCompletingTotal] = useState(0);
   const [showSwipeHint, setShowSwipeHint] = useState(false);
+  const [sessionCompletedCount, setSessionCompletedCount] = useState(0);
+  const [skipDays, setSkipDays] = useState(1);
+  const [showTaskDetail, setShowTaskDetail] = useState(false);
+  const [detailTask, setDetailTask] = useState<TaskTemplate | null>(null);
   const calendarHeight = useRef(new Animated.Value(1)).current; // 1 = expanded, 0 = collapsed
   const calendarCollapsed = useRef(false);
   const lastScrollY = useRef(0);
@@ -114,14 +123,17 @@ export default function CalendarScreen() {
     isMountedRef,
     loadData,
     handleRefresh,
+    plantMap,
     filteredTasks,
     filteredHarvestsReady,
     todayTasks,
     weekTasks,
     tasksForDisplay,
     groupedTasks,
+    overdueTasks,
     isSearching,
     getTasksForDate,
+    getRawTasksForDate,
     getPlantDetails,
   } = useCalendarData({
     normalizedSearchQuery,
@@ -131,7 +143,52 @@ export default function CalendarScreen() {
     currentMonth,
     selectedDate,
     groupBy,
+    filterTaskTypes,
+    filterOverdueOnly,
   });
+
+  const isFilterActive = filterTaskTypes.size > 0 || filterOverdueOnly;
+
+  const clearFilters = useCallback(() => {
+    setFilterTaskTypes(new Set());
+    setFilterOverdueOnly(false);
+  }, []);
+
+  const overdueIdSet = React.useMemo(
+    () => new Set(overdueTasks.map((t) => t.id)),
+    [overdueTasks],
+  );
+
+  const dayGroupedTasks = React.useMemo(() => {
+    if (groupBy !== "none" || isSearching || selectedView !== "week") return null;
+    const todayStr = new Date().toDateString();
+    const grouped: Record<string, TaskTemplate[]> = {};
+    for (const task of tasksForDisplay) {
+      if (!task.next_due_at || overdueIdSet.has(task.id)) continue;
+      const key = new Date(task.next_due_at).toDateString();
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(task);
+    }
+    const sortedKeys = Object.keys(grouped).sort(
+      (a, b) => new Date(a).getTime() - new Date(b).getTime(),
+    );
+    return sortedKeys.map((key) => {
+      const date = new Date(key);
+      const isToday = key === todayStr;
+      return {
+        dateKey: key,
+        label: isToday
+          ? "Today"
+          : date.toLocaleDateString("en-US", {
+              weekday: "long",
+              month: "short",
+              day: "numeric",
+            }),
+        tasks: grouped[key],
+        isToday,
+      };
+    });
+  }, [groupBy, isSearching, selectedView, tasksForDisplay, overdueIdSet]);
 
   const setTodayView = React.useCallback(() => {
     const today = new Date();
@@ -147,7 +204,7 @@ export default function CalendarScreen() {
     return () => {
       isMountedRef.current = false;
     };
-  }, [setTodayView, loadData]);
+  }, [setTodayView, loadData, isMountedRef]);
 
   // Show swipe hint banner for the first 3 visits, then auto-hide
   useEffect(() => {
@@ -213,11 +270,22 @@ export default function CalendarScreen() {
       setSelectedDate(today);
       setCurrentWeekStart(getStartOfWeek(today));
       setCurrentMonth(today);
+      setSessionCompletedCount(0);
+      const params = route.params as Record<string, unknown> | undefined;
+      if (params?.resetFilters) {
+        setFilterTaskTypes(new Set());
+        setFilterOverdueOnly(false);
+        setGroupBy("none");
+        params.resetFilters = undefined;
+      } else if (params?.filterOverdue) {
+        setFilterOverdueOnly(true);
+        params.filterOverdue = undefined;
+      }
       void loadData(); // debounced — skips if loaded recently
-    }, [loadData, resetTabBar]),
+    }, [loadData, resetTabBar, route, calendarHeight]),
   );
 
-  const handleTaskComplete = async (task: TaskTemplate) => {
+  const handleTaskComplete = useCallback(async (task: TaskTemplate) => {
     // Close the swipeable drawer before opening the modal
     const swipeable = swipeableRefs.current.get(task.id);
     swipeable?.close();
@@ -225,7 +293,7 @@ export default function CalendarScreen() {
     setTaskNotes("");
     setProductUsed("");
     setShowNotesModal(true);
-  };
+  }, []);
 
   const confirmTaskComplete = async () => {
     if (!selectedTask || isCompletingTask) return;
@@ -253,9 +321,10 @@ export default function CalendarScreen() {
       setSelectedTask(null);
       setTaskNotes("");
       setProductUsed("");
+      setSessionCompletedCount((prev) => prev + 1);
       loadData({ force: true });
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
+    } catch (error: unknown) {
+      Alert.alert("Error", getErrorMessage(error));
     } finally {
       setIsCompletingTask(false);
     }
@@ -275,22 +344,16 @@ export default function CalendarScreen() {
     });
   }, []);
 
-  const handleCompleteSelected = useCallback(() => {
+  const handleCompleteSelected = useCallback(async () => {
     const selected = tasks.filter((t) => selectedTaskIds.has(t.id));
-    if (selected.length === 0) return;
-    setCompleteAllTasks(selected);
-    setShowCompleteAllModal(true);
-  }, [tasks, selectedTaskIds]);
-
-  const confirmCompleteAll = async (selectedTasks: TaskTemplate[]) => {
-    if (isCompletingAll || selectedTasks.length === 0) return;
+    if (selected.length === 0 || isCompletingAll) return;
     setIsCompletingAll(true);
     setCompletedCount(0);
-    setCompleteAllTasks(selectedTasks);
+    setCompletingTotal(selected.length);
 
     // Fire all in parallel for speed; track completions via allSettled
     const results = await Promise.allSettled(
-      selectedTasks.map(async (task) => {
+      selected.map(async (task) => {
         const result = await markTaskDone(task, undefined, undefined, {
           skipAlreadyDoneCheck: true,
         });
@@ -300,18 +363,105 @@ export default function CalendarScreen() {
     );
 
     const failed = results.filter((r) => r.status === "rejected").length;
+    const succeeded = results.filter((r) => r.status === "fulfilled").length;
     setIsCompletingAll(false);
     setCompletedCount(0);
-    setShowCompleteAllModal(false);
-    setCompleteAllTasks([]);
     setSelectedTaskIds(new Set());
+    setSessionCompletedCount((prev) => prev + succeeded);
     loadData({ force: true });
     if (failed > 0) {
       Alert.alert("Partial Completion", `${failed} task(s) failed. You can retry them individually.`);
     }
-  };
+  }, [tasks, selectedTaskIds, isCompletingAll, loadData]);
 
-  const handleSnooze = async (task: TaskTemplate, hours: number) => {
+  const handleBulkSnooze = useCallback(async () => {
+    const selected = tasks.filter((t) => selectedTaskIds.has(t.id));
+    if (selected.length === 0) return;
+    const snoozeTime = new Date();
+    snoozeTime.setHours(snoozeTime.getHours() + 4);
+    try {
+      await Promise.allSettled(
+        selected.map((task) =>
+          updateTaskTemplate(task.id, { next_due_at: snoozeTime.toISOString() }),
+        ),
+      );
+      setSelectedTaskIds(new Set());
+      loadData({ force: true });
+    } catch (error: unknown) {
+      Alert.alert("Error", getErrorMessage(error));
+    }
+  }, [tasks, selectedTaskIds, loadData]);
+
+  const handleBulkSkip = useCallback(async () => {
+    const selected = tasks.filter((t) => selectedTaskIds.has(t.id));
+    if (selected.length === 0) return;
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    try {
+      await Promise.allSettled(
+        selected.map((task) =>
+          updateTaskTemplate(task.id, { next_due_at: tomorrow.toISOString() }),
+        ),
+      );
+      setSelectedTaskIds(new Set());
+      loadData({ force: true });
+    } catch (error: unknown) {
+      Alert.alert("Error", getErrorMessage(error));
+    }
+  }, [tasks, selectedTaskIds, loadData]);
+
+  const getSectionState = useCallback(
+    (sectionTasks: TaskTemplate[]): "none" | "partial" | "all" => {
+      if (sectionTasks.length === 0) return "none";
+      const selectedCount = sectionTasks.filter((t) => selectedTaskIds.has(t.id)).length;
+      if (selectedCount === 0) return "none";
+      if (selectedCount === sectionTasks.length) return "all";
+      return "partial";
+    },
+    [selectedTaskIds],
+  );
+
+  const toggleSectionSelection = useCallback((sectionTasks: TaskTemplate[]) => {
+    const ids = sectionTasks.map((t) => t.id);
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = ids.every((id) => next.has(id));
+      if (allSelected) {
+        ids.forEach((id) => next.delete(id));
+      } else {
+        ids.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }, []);
+
+  const renderSectionCheckbox = useCallback(
+    (sectionTasks: TaskTemplate[]) => {
+      const state = getSectionState(sectionTasks);
+      return (
+        <TouchableOpacity
+          onPress={() => toggleSectionSelection(sectionTasks)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={
+              state === "all"
+                ? "checkmark-circle"
+                : state === "partial"
+                  ? "remove-circle"
+                  : "ellipse-outline"
+            }
+            size={20}
+            color={state === "none" ? theme.border : theme.primary}
+          />
+        </TouchableOpacity>
+      );
+    },
+    [getSectionState, toggleSectionSelection, theme],
+  );
+
+  const handleSnooze = useCallback(async (task: TaskTemplate, hours: number) => {
     const swipeable = swipeableRefs.current.get(task.id);
     swipeable?.close();
     try {
@@ -322,42 +472,65 @@ export default function CalendarScreen() {
       });
       Alert.alert("Task Snoozed", `Task snoozed for ${hours} hour${hours > 1 ? "s" : ""}`);
       loadData({ force: true });
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
+    } catch (error: unknown) {
+      Alert.alert("Error", getErrorMessage(error));
     }
-  };
+  }, [loadData]);
 
-  const handleOpenSkipModal = (task: TaskTemplate) => {
+  const handleOpenSkipModal = useCallback((task: TaskTemplate) => {
     const swipeable = swipeableRefs.current.get(task.id);
     swipeable?.close();
     setSkipTask(task);
     setSkipReason("");
     setShowSkipModal(true);
-  };
+  }, []);
 
   const handleConfirmSkip = async () => {
     if (!skipTask || skippingTask) return;
     setSkippingTask(true);
     try {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      const rescheduleDate = new Date();
+      rescheduleDate.setDate(rescheduleDate.getDate() + skipDays);
       await updateTaskTemplate(skipTask.id, {
-        next_due_at: tomorrow.toISOString(),
+        next_due_at: rescheduleDate.toISOString(),
       });
+      const dayLabel = skipDays === 1 ? "tomorrow" : `in ${skipDays} days`;
       Alert.alert(
         "Task Skipped",
-        `Task postponed to tomorrow${skipReason ? `: ${skipReason}` : ""}`,
+        `Task postponed ${dayLabel}${skipReason ? `: ${skipReason}` : ""}`,
       );
       setShowSkipModal(false);
       setSkipReason("");
+      setSkipDays(1);
       setSkipTask(null);
       loadData({ force: true });
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
+    } catch (error: unknown) {
+      Alert.alert("Error", getErrorMessage(error));
     } finally {
       setSkippingTask(false);
     }
   };
+
+  const handleDetailComplete = useCallback(() => {
+    if (!detailTask) return;
+    setShowTaskDetail(false);
+    setDetailTask(null);
+    handleTaskComplete(detailTask);
+  }, [detailTask, handleTaskComplete]);
+
+  const handleDetailSnooze = useCallback(() => {
+    if (!detailTask) return;
+    setShowTaskDetail(false);
+    setDetailTask(null);
+    handleSnooze(detailTask, 4);
+  }, [detailTask, handleSnooze]);
+
+  const handleDetailSkip = useCallback(() => {
+    if (!detailTask) return;
+    setShowTaskDetail(false);
+    setDetailTask(null);
+    handleOpenSkipModal(detailTask);
+  }, [detailTask, handleOpenSkipModal]);
 
   const renderSwipeableTask = (task: TaskTemplate) => {
     if (!task || !task.next_due_at) return null;
@@ -366,6 +539,17 @@ export default function CalendarScreen() {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const isOverdue = dueDate < todayStart;
+
+    const plantObj = task.plant_id ? plantMap.get(task.plant_id) : undefined;
+    const effectivePriority =
+      task.priority_level || calculateTaskPriority(task, plantObj || null);
+
+    const priorityColor =
+      effectivePriority === "critical"
+        ? theme.error
+        : effectivePriority === "high"
+          ? theme.warning
+          : null;
 
     const renderRightActions = (
       progress: Animated.AnimatedInterpolation<number>,
@@ -393,7 +577,7 @@ export default function CalendarScreen() {
               { opacity, transform: [{ scale }] },
             ]}
           >
-            <Ionicons name="checkmark-circle" size={28} color="#fff" />
+            <Ionicons name="checkmark-circle" size={28} color={theme.textInverse} />
             <Text style={styles.swipeActionText}>Done</Text>
           </Animated.View>
         </TouchableOpacity>
@@ -427,7 +611,7 @@ export default function CalendarScreen() {
                 { opacity, transform: [{ scale }] },
               ]}
             >
-              <Ionicons name="time-outline" size={24} color="#fff" />
+              <Ionicons name="time-outline" size={24} color={theme.textInverse} />
               <Text style={styles.swipeActionText}>
                 {isOverdue ? "+2h" : "+4h"}
               </Text>
@@ -443,7 +627,7 @@ export default function CalendarScreen() {
                 { opacity, transform: [{ scale }] },
               ]}
             >
-              <Ionicons name="play-skip-forward" size={24} color="#fff" />
+              <Ionicons name="play-skip-forward" size={24} color={theme.textInverse} />
               <Text style={styles.swipeActionText}>Skip</Text>
             </Animated.View>
           </TouchableOpacity>
@@ -481,56 +665,92 @@ export default function CalendarScreen() {
               { backgroundColor: TASK_COLORS[task.task_type] },
             ]}
           />
-          <View style={styles.taskContent}>
-            <View style={styles.taskHeader}>
-              <View
-                style={[
-                  styles.taskIconContainer,
-                  { backgroundColor: TASK_COLORS[task.task_type] + "18" },
-                ]}
-              >
-                <Text style={styles.taskIconEmoji}>
-                  {TASK_EMOJIS[task.task_type] || "📌"}
-                </Text>
-              </View>
-              <View style={styles.taskInfo}>
-                <Text style={styles.taskTitle}>
-                  {task.task_type.charAt(0).toUpperCase() +
-                    task.task_type.slice(1)}
-                </Text>
-                <Text style={styles.taskPlant}>{plantDetails.name}</Text>
-                {plantDetails.location && (
-                  <Text style={styles.taskLocation}>
-                    📍 {plantDetails.location}
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            onPress={() => {
+              setDetailTask(task);
+              setShowTaskDetail(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.taskContent}>
+              <View style={styles.taskHeader}>
+                <View
+                  style={[
+                    styles.taskIconContainer,
+                    { backgroundColor: TASK_COLORS[task.task_type] + "18" },
+                  ]}
+                >
+                  <Text style={styles.taskIconEmoji}>
+                    {TASK_EMOJIS[task.task_type] || "📌"}
                   </Text>
-                )}
-              </View>
-              <View style={styles.taskRight}>
-                <Text
-                  style={[styles.taskTime, isOverdue && styles.taskTimeOverdue]}
-                >
-                  {isOverdue
-                    ? "Overdue"
-                    : dueDate.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                </Text>
-                <TouchableOpacity
-                  style={[styles.taskCheckbox, isSelected && styles.taskCheckboxSelected]}
-                  onPress={() => toggleTaskSelection(task.id)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  activeOpacity={0.6}
-                >
-                  <Ionicons
-                    name={isSelected ? "checkmark-circle" : "ellipse-outline"}
-                    size={22}
-                    color={isSelected ? theme.primary : theme.border}
-                  />
-                </TouchableOpacity>
+                </View>
+                <View style={styles.taskInfo}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <Text style={styles.taskTitle}>
+                      {TASK_LABELS[task.task_type]}
+                    </Text>
+                    {priorityColor && (
+                      <View
+                        style={[
+                          styles.taskPriorityBadge,
+                          { backgroundColor: priorityColor + "22" },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.taskPriorityBadgeText,
+                            { color: priorityColor },
+                          ]}
+                        >
+                          {effectivePriority === "critical" ? "⚠ Critical" : "↑ High"}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.taskPlant}>{plantDetails.name}</Text>
+                  {plantDetails.location && (
+                    <Text style={styles.taskLocation}>
+                      📍 {plantDetails.location}
+                    </Text>
+                  )}
+                  {task.preferred_time && (
+                    <Text style={styles.taskPreferredTime}>
+                      {task.preferred_time === "morning"
+                        ? "🌅 Morning"
+                        : task.preferred_time === "afternoon"
+                          ? "☀️ Afternoon"
+                          : "🌙 Evening"}
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.taskRight}>
+                  <Text
+                    style={[styles.taskTime, isOverdue && styles.taskTimeOverdue]}
+                  >
+                    {isOverdue
+                      ? "Overdue"
+                      : dueDate.toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.taskCheckbox, isSelected && styles.taskCheckboxSelected]}
+                    onPress={() => toggleTaskSelection(task.id)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    activeOpacity={0.6}
+                  >
+                    <Ionicons
+                      name={isSelected ? "checkmark-circle" : "ellipse-outline"}
+                      size={22}
+                      color={isSelected ? theme.primary : theme.border}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
       </Swipeable>
     );
@@ -625,15 +845,22 @@ export default function CalendarScreen() {
                   <TouchableOpacity
                     style={[
                       styles.groupMenuButton,
-                      groupBy !== "none" && styles.groupMenuButtonActive,
+                      (showGroupMenu || (groupBy !== "none" && filterTaskTypes.size === 0 && !filterOverdueOnly)) && styles.groupMenuButtonActive,
                     ]}
                     onPress={() => setShowGroupMenu(!showGroupMenu)}
                   >
                     <Ionicons
-                      name="funnel"
+                      name="options-outline"
                       size={20}
-                      color={groupBy !== "none" ? "#fff" : theme.primary}
+                      color={(showGroupMenu || (groupBy !== "none" && filterTaskTypes.size === 0 && !filterOverdueOnly)) ? theme.textInverse : theme.primary}
                     />
+                    {(filterTaskTypes.size > 0 || filterOverdueOnly) && !showGroupMenu && (
+                      <View style={styles.filterBadge}>
+                        <Text style={styles.filterBadgeText}>
+                          {filterTaskTypes.size + (filterOverdueOnly ? 1 : 0)}
+                        </Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 </View>
               </>
@@ -659,8 +886,6 @@ export default function CalendarScreen() {
             <WeekCalendarView
               currentWeekStart={currentWeekStart}
               selectedDate={selectedDate}
-              styles={styles}
-              theme={theme}
               taskColors={TASK_COLORS}
               getTasksForDate={getTasksForDate}
               onSelectDate={setSelectedDate}
@@ -673,8 +898,6 @@ export default function CalendarScreen() {
             <MonthCalendarView
               currentMonth={currentMonth}
               selectedDate={selectedDate}
-              styles={styles}
-              theme={theme}
               taskColors={TASK_COLORS}
               getTasksForDate={getTasksForDate}
               onSelectDate={setSelectedDate}
@@ -732,6 +955,7 @@ export default function CalendarScreen() {
           scrollEventThrottle={16}
           nestedScrollEnabled
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={initialLoading || refreshing} onRefresh={handleRefresh} />
           }
@@ -756,17 +980,31 @@ export default function CalendarScreen() {
             <View style={styles.section}>
               {(() => {
                 const selectedDateTasks = getTasksForDate(selectedDate);
+                const rawSelectedDateTasks = getRawTasksForDate(selectedDate);
                 const isToday = selectedDate.toDateString() === new Date().toDateString();
+                const hiddenByFilter = selectedDateTasks.length === 0 && rawSelectedDateTasks.length > 0 && isFilterActive;
                 return selectedDateTasks.length > 0 ? (
                   <>
                     <View style={styles.sectionHeaderRow}>
-                      <Text style={styles.sectionTitle}>
+                      {renderSectionCheckbox(selectedDateTasks)}
+                      <Text style={[styles.sectionTitle, { flex: 1 }]}>
                         {isToday ? "Today" : selectedDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
                       </Text>
                       <Text style={styles.sectionCount}>{selectedDateTasks.length}</Text>
                     </View>
                     {selectedDateTasks.map(renderSwipeableTask)}
                   </>
+                ) : hiddenByFilter && !initialLoading ? (
+                  <View style={styles.emptyState}>
+                    <Ionicons name="options-outline" size={48} color={theme.border} />
+                    <Text style={styles.emptyStateText}>No matching tasks for this date</Text>
+                    <Text style={styles.emptyStateSubtext}>
+                      {rawSelectedDateTasks.length} task{rawSelectedDateTasks.length !== 1 ? "s" : ""} exist but are hidden by your filters
+                    </Text>
+                    <TouchableOpacity style={styles.clearSearchButton} onPress={clearFilters}>
+                      <Text style={styles.clearSearchText}>Clear Filters</Text>
+                    </TouchableOpacity>
+                  </View>
                 ) : !initialLoading ? (
                   <View style={styles.emptyState}>
                     <Ionicons
@@ -778,7 +1016,7 @@ export default function CalendarScreen() {
                       No tasks scheduled
                     </Text>
                     <Text style={styles.emptyStateSubtext}>
-                      {selectedDate.toDateString() === new Date().toDateString()
+                      {isToday
                         ? "You're all caught up for today!"
                         : "No tasks planned for this date"}
                     </Text>
@@ -862,79 +1100,163 @@ export default function CalendarScreen() {
             </View>
           )}
 
+          {/* Overdue — pinned above Today */}
+          {!isSearching && overdueTasks.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeaderRow}>
+                {renderSectionCheckbox(overdueTasks)}
+                <Text style={[styles.sectionTitle, { color: theme.error, flex: 1 }]}>⚠️ Overdue</Text>
+                <Text style={[styles.sectionCount, { backgroundColor: theme.errorLight, color: theme.error }]}>
+                  {overdueTasks.length}
+                </Text>
+              </View>
+              {overdueTasks.map(renderSwipeableTask)}
+            </View>
+          )}
+
           {/* Today's Tasks — hidden when today is already the selected date */}
           {todayTasks.length > 0 &&
             !(selectedDate && selectedDate.toDateString() === new Date().toDateString()) && (
             <View style={styles.section}>
               <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionTitle}>
-                  Today
-                </Text>
-                <Text style={styles.sectionCount}>{todayTasks.length}</Text>
+                {renderSectionCheckbox(todayTasks)}
+                <Text style={[styles.sectionTitle, { flex: 1 }]}>Today</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  {sessionCompletedCount > 0 && (
+                    <View style={styles.weekDoneChip}>
+                      <Text style={styles.weekDoneChipText}>✓ {sessionCompletedCount} done</Text>
+                    </View>
+                  )}
+                  <Text style={styles.sectionCount}>{todayTasks.length}</Text>
+                </View>
               </View>
               {todayTasks.map(renderSwipeableTask)}
             </View>
           )}
 
-          {/* Grouped Tasks */}
-          {Object.keys(groupedTasks).length > 0 &&
-          Object.values(groupedTasks).some((arr) => arr.length > 0)
-            ? Object.keys(groupedTasks).map((groupName) => (
-                <View key={groupName} style={styles.section}>
-                  {groupName && (
-                    <View style={styles.sectionHeaderRow}>
-                      <Text style={styles.sectionTitle}>
-                        {groupBy === "location"
-                          ? `📍 ${groupName}`
-                          : groupBy === "type"
-                            ? `${groupName.charAt(0).toUpperCase() + groupName.slice(1)}`
-                            : "This Week"}
-                      </Text>
-                      <Text style={styles.sectionCount}>{groupedTasks[groupName].length}</Text>
+          {/* Day-by-day week view OR grouped tasks */}
+          {dayGroupedTasks
+            ? dayGroupedTasks.length > 0
+              ? dayGroupedTasks.map(({ dateKey, label, tasks: dayTasks }) => {
+                  const isToday = dateKey === new Date().toDateString();
+                  if (
+                    isToday &&
+                    todayTasks.length > 0 &&
+                    !(selectedDate && selectedDate.toDateString() === new Date().toDateString())
+                  ) {
+                    return null;
+                  }
+                  return (
+                    <View key={dateKey} style={styles.section}>
+                      <View style={styles.sectionHeaderRow}>
+                        {renderSectionCheckbox(dayTasks)}
+                        <Text style={[styles.sectionTitle, { flex: 1 }]}>{label}</Text>
+                        <Text style={styles.sectionCount}>{dayTasks.length}</Text>
+                      </View>
+                      {dayTasks.map(renderSwipeableTask)}
                     </View>
-                  )}
-                  {!groupName && (
-                    <View style={styles.sectionHeaderRow}>
-                      <Text style={styles.sectionTitle}>
-                        {isSearching
-                          ? "Search Results"
-                          : "This Week"}
+                  );
+                })
+              : !isSearching && todayTasks.length === 0 && overdueTasks.length === 0 && !initialLoading && (
+                  isFilterActive ? (
+                    <View style={styles.emptyState}>
+                      <Ionicons name="options-outline" size={48} color={theme.border} />
+                      <Text style={styles.emptyStateText}>No tasks match your filters</Text>
+                      <Text style={styles.emptyStateSubtext}>
+                        Try adjusting your filters or clear them to see all tasks
                       </Text>
-                      <Text style={styles.sectionCount}>
-                        {isSearching ? tasksForDisplay.length : weekTasks.length}
-                      </Text>
+                      <TouchableOpacity style={styles.clearSearchButton} onPress={clearFilters}>
+                        <Text style={styles.clearSearchText}>Clear Filters</Text>
+                      </TouchableOpacity>
                     </View>
-                  )}
-                  {groupedTasks[groupName].map(renderSwipeableTask)}
-                </View>
-              ))
-            : !isSearching &&
-              todayTasks.length === 0 &&
-              !selectedDate &&
-              !initialLoading && (
-                <View style={styles.emptyState}>
-                  <Ionicons
-                    name="checkbox-outline"
-                    size={48}
-                    color={theme.border}
-                  />
-                  <Text style={styles.emptyStateText}>No upcoming tasks</Text>
-                  <Text style={styles.emptyStateSubtext}>
-                    Create a care plan to stay on top of your garden
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.addTaskButton}
-                    onPress={() => setShowModal(true)}
-                  >
-                    <Ionicons
-                      name="add-circle-outline"
-                      size={20}
-                      color={theme.primary}
-                    />
-                    <Text style={styles.addTaskButtonText}>Create Task</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+                  ) : (
+                    <View style={styles.emptyState}>
+                      <Ionicons name="checkbox-outline" size={48} color={theme.border} />
+                      <Text style={styles.emptyStateText}>No upcoming tasks</Text>
+                      <Text style={styles.emptyStateSubtext}>
+                        Create a care plan to stay on top of your garden
+                      </Text>
+                      <TouchableOpacity style={styles.addTaskButton} onPress={() => setShowModal(true)}>
+                        <Ionicons name="add-circle-outline" size={20} color={theme.primary} />
+                        <Text style={styles.addTaskButtonText}>Create Task</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )
+                )
+            : Object.keys(groupedTasks).length > 0 &&
+              Object.values(groupedTasks).some((arr) => arr.length > 0)
+              ? Object.keys(groupedTasks).map((groupName) => {
+                  const nonOverdue = groupedTasks[groupName].filter((t) => !overdueIdSet.has(t.id));
+                  if (nonOverdue.length === 0) return null;
+                  return (
+                    <View key={groupName} style={styles.section}>
+                      {groupName ? (
+                        <View style={styles.sectionHeaderRow}>
+                          {renderSectionCheckbox(nonOverdue)}
+                          <Text style={[styles.sectionTitle, { flex: 1 }]}>
+                            {groupBy === "location"
+                              ? `📍 ${groupName}`
+                              : groupBy === "type"
+                                ? `${TASK_LABELS[groupName as TaskType] || groupName.charAt(0).toUpperCase() + groupName.slice(1)}`
+                                : groupBy === "plant"
+                                  ? `🌿 ${groupName}`
+                                  : selectedView === "month" ? "This Month" : "This Week"}
+                          </Text>
+                          <Text style={styles.sectionCount}>{nonOverdue.length}</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.sectionHeaderRow}>
+                          {renderSectionCheckbox(nonOverdue)}
+                          <Text style={[styles.sectionTitle, { flex: 1 }]}>
+                            {isSearching
+                              ? "Search Results"
+                              : selectedView === "month" ? "This Month" : "This Week"}
+                          </Text>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            {sessionCompletedCount > 0 && !isSearching && (
+                              <View style={styles.weekDoneChip}>
+                                <Text style={styles.weekDoneChipText}>✓ {sessionCompletedCount} done</Text>
+                              </View>
+                            )}
+                            <Text style={styles.sectionCount}>
+                              {isSearching ? tasksForDisplay.length : weekTasks.length}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                      {nonOverdue.map(renderSwipeableTask)}
+                    </View>
+                  );
+                })
+              : !isSearching &&
+                todayTasks.length === 0 &&
+                overdueTasks.length === 0 &&
+                !initialLoading && (
+                  isFilterActive ? (
+                    <View style={styles.emptyState}>
+                      <Ionicons name="options-outline" size={48} color={theme.border} />
+                      <Text style={styles.emptyStateText}>No tasks match your filters</Text>
+                      <Text style={styles.emptyStateSubtext}>
+                        Try adjusting your filters or clear them to see all tasks
+                      </Text>
+                      <TouchableOpacity style={styles.clearSearchButton} onPress={clearFilters}>
+                        <Text style={styles.clearSearchText}>Clear Filters</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.emptyState}>
+                      <Ionicons name="checkbox-outline" size={48} color={theme.border} />
+                      <Text style={styles.emptyStateText}>No upcoming tasks</Text>
+                      <Text style={styles.emptyStateSubtext}>
+                        Create a care plan to stay on top of your garden
+                      </Text>
+                      <TouchableOpacity style={styles.addTaskButton} onPress={() => setShowModal(true)}>
+                        <Ionicons name="add-circle-outline" size={20} color={theme.primary} />
+                        <Text style={styles.addTaskButtonText}>Create Task</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )
+                )}
         </ScrollView>
 
         {/* Floating Selection Bar */}
@@ -947,9 +1269,24 @@ export default function CalendarScreen() {
             >
               <Ionicons name="close" size={18} color={theme.textSecondary} />
             </TouchableOpacity>
-            <Text style={styles.selectionBarText}>
-              {selectedTaskIds.size} selected
-            </Text>
+            <TouchableOpacity
+              style={[styles.selectionBarSecondaryBtn, { backgroundColor: `${theme.info}20`, borderColor: theme.info }]}
+              onPress={handleBulkSnooze}
+              disabled={isCompletingAll}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="time-outline" size={15} color={theme.info} />
+              <Text style={[styles.selectionBarSecondaryBtnText, { color: theme.info }]}>+4h</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.selectionBarSecondaryBtn, { backgroundColor: `${theme.warning}20`, borderColor: theme.warning }]}
+              onPress={handleBulkSkip}
+              disabled={isCompletingAll}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="play-skip-forward" size={15} color={theme.warning} />
+              <Text style={[styles.selectionBarSecondaryBtnText, { color: theme.warning }]}>Skip</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.selectionBarBtn,
@@ -965,9 +1302,9 @@ export default function CalendarScreen() {
                 </Text>
               ) : (
                 <>
-                  <Ionicons name="checkmark-done" size={18} color="#fff" />
+                  <Ionicons name="checkmark-done" size={18} color={theme.textInverse} />
                   <Text style={styles.selectionBarBtnText}>
-                    Complete ({selectedTaskIds.size})
+                    Done ({selectedTaskIds.size})
                   </Text>
                 </>
               )}
@@ -978,7 +1315,7 @@ export default function CalendarScreen() {
         {/* Floating Action Button */}
         <AnimatedFAB onPress={() => setShowModal(true)} />
 
-        {/* Filter Bottom Sheet */}
+        {/* View Options Bottom Sheet */}
         {showGroupMenu && (
           <View style={[StyleSheet.absoluteFill, styles.sheetOverlay]}>
             <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowGroupMenu(false)} />
@@ -988,9 +1325,16 @@ export default function CalendarScreen() {
               </TouchableOpacity>
 
               <View style={styles.sheetHeader}>
-                <Text style={styles.sheetTitle}>Filter Tasks</Text>
-                {groupBy !== "none" && (
-                  <TouchableOpacity onPress={() => { setGroupBy("none"); setShowGroupMenu(false); }} style={styles.sheetClearBtn}>
+                <Text style={styles.sheetTitle}>View Options</Text>
+                {(groupBy !== "none" || filterTaskTypes.size > 0 || filterOverdueOnly) && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setGroupBy("none");
+                      setFilterTaskTypes(new Set());
+                      setFilterOverdueOnly(false);
+                    }}
+                    style={styles.sheetClearBtn}
+                  >
                     <Text style={styles.sheetClearText}>Clear All</Text>
                   </TouchableOpacity>
                 )}
@@ -1003,9 +1347,49 @@ export default function CalendarScreen() {
                 bounces={false}
                 nestedScrollEnabled
               >
-                <Text style={styles.sheetSectionTitle}>
-                  <Ionicons name="funnel" size={14} color={theme.textSecondary} /> Group By
-                </Text>
+                {/* Filter Section */}
+                <Text style={styles.sheetSectionTitle}>Filter</Text>
+                <View style={styles.sheetChipWrap}>
+                  <TouchableOpacity
+                    style={[styles.sheetChip, filterOverdueOnly && styles.sheetChipActive]}
+                    onPress={() => setFilterOverdueOnly((prev) => !prev)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.sheetChipText, filterOverdueOnly && styles.sheetChipTextActive]}>
+                      ⚠️ Overdue only
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={[styles.sheetChipWrap, { marginTop: 8 }]}>
+                  {(Object.keys(TASK_LABELS) as TaskType[]).map((type) => {
+                    const isActive = filterTaskTypes.has(type);
+                    return (
+                      <TouchableOpacity
+                        key={type}
+                        style={[styles.sheetChip, isActive && styles.sheetChipActive]}
+                        onPress={() => {
+                          setFilterTaskTypes((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(type)) {
+                              next.delete(type);
+                            } else {
+                              next.add(type);
+                            }
+                            return next;
+                          });
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.sheetChipText, isActive && styles.sheetChipTextActive]}>
+                          {TASK_EMOJIS[type]} {TASK_LABELS[type]}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Group By Section */}
+                <Text style={[styles.sheetSectionTitle, { marginTop: 20 }]}>Group By</Text>
                 <View style={styles.sheetChipWrap}>
                   {GROUP_OPTIONS.map((option) => {
                     const isActive = groupBy === option.value;
@@ -1044,20 +1428,36 @@ export default function CalendarScreen() {
           }}
         />
 
-        {/* Complete All Modal */}
-        <CompleteAllModal
-          visible={showCompleteAllModal}
-          tasks={completeAllTasks}
-          isCompleting={isCompletingAll}
-          completedCount={completedCount}
-          styles={styles}
-          getPlantName={(plantId) => getPlantDetails(plantId).name}
-          onCancel={() => {
-            setShowCompleteAllModal(false);
-            setCompleteAllTasks([]);
-          }}
-          onConfirm={confirmCompleteAll}
-        />
+        {/* Completion Progress Modal */}
+        <Modal
+          visible={isCompletingAll}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => {}}
+        >
+          <View style={styles.completeAllOverlay}>
+            <View style={styles.completeAllCard}>
+              <View style={styles.completeAllIconRow}>
+                <View style={styles.completeAllIconCircle}>
+                  <Ionicons name="hourglass" size={28} color={theme.textInverse} />
+                </View>
+              </View>
+              <Text style={styles.completeAllTitle}>
+                {`Completing... ${completedCount}/${completingTotal}`}
+              </Text>
+              <View style={styles.progressBarOuter}>
+                <View
+                  style={[
+                    styles.progressBarInner,
+                    {
+                      width: `${completingTotal > 0 ? (completedCount / completingTotal) * 100 : 0}%`,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Task Notes Modal */}
         <TaskCompletionModal
@@ -1075,6 +1475,92 @@ export default function CalendarScreen() {
           onConfirm={confirmTaskComplete}
         />
 
+        {/* Task Detail Bottom Sheet */}
+        {showTaskDetail && detailTask && (() => {
+          const dp = getPlantDetails(detailTask.plant_id);
+          const dueDateObj = new Date(detailTask.next_due_at);
+          const todayS = new Date();
+          todayS.setHours(0, 0, 0, 0);
+          const isOverdueDetail = dueDateObj < todayS;
+          const daysOverdue = isOverdueDetail
+            ? Math.floor((todayS.getTime() - dueDateObj.getTime()) / 86400000)
+            : null;
+          const plantObj = detailTask.plant_id ? plantMap.get(detailTask.plant_id) : undefined;
+          const effPriority = detailTask.priority_level || calculateTaskPriority(detailTask, plantObj || null);
+          const priorityLabels: Record<string, string> = { critical: "⚠ Critical", high: "↑ High", medium: "• Medium", low: "↓ Low" };
+          const priorityColorMap: Record<string, string> = { critical: theme.error, high: theme.warning, medium: theme.info, low: theme.border };
+          const closeDetail = () => { setShowTaskDetail(false); setDetailTask(null); };
+          return (
+            <View style={[StyleSheet.absoluteFill, styles.sheetOverlay]}>
+              <Pressable style={StyleSheet.absoluteFill} onPress={closeDetail} />
+              <View style={[styles.taskDetailSheet, { paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 16) }]}>
+                <TouchableOpacity
+                  style={styles.sheetHandleArea}
+                  onPress={closeDetail}
+                  activeOpacity={0.6}
+                >
+                  <View style={styles.sheetHandle} />
+                </TouchableOpacity>
+                <View style={styles.taskDetailHeader}>
+                  <Text style={[styles.taskDetailEmoji, { backgroundColor: TASK_COLORS[detailTask.task_type] + "18" }]}>
+                    {TASK_EMOJIS[detailTask.task_type]}
+                  </Text>
+                  <View style={styles.taskDetailTitleBlock}>
+                    <Text style={styles.taskDetailTitle}>{TASK_LABELS[detailTask.task_type]}</Text>
+                    <Text style={styles.taskDetailSubtitle}>
+                      {dp.name}{dp.location ? ` · ${dp.location}` : ""}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.taskDetailBody}>
+                  <View style={styles.taskDetailRow}>
+                    <Text style={styles.taskDetailLabel}>Frequency</Text>
+                    <Text style={styles.taskDetailValue}>
+                      Every {detailTask.frequency_days} day{detailTask.frequency_days !== 1 ? "s" : ""}
+                    </Text>
+                  </View>
+                  {detailTask.preferred_time && (
+                    <View style={styles.taskDetailRow}>
+                      <Text style={styles.taskDetailLabel}>Preferred Time</Text>
+                      <Text style={styles.taskDetailValue}>
+                        {detailTask.preferred_time === "morning" ? "🌅 Morning" : detailTask.preferred_time === "afternoon" ? "☀️ Afternoon" : "🌙 Evening"}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.taskDetailRow}>
+                    <Text style={styles.taskDetailLabel}>Due</Text>
+                    <Text style={[styles.taskDetailValue, isOverdueDetail && { color: theme.error }]}>
+                      {isOverdueDetail
+                        ? daysOverdue === 0 ? "Today" : `${daysOverdue}d overdue`
+                        : dueDateObj.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                    </Text>
+                  </View>
+                  <View style={styles.taskDetailRow}>
+                    <Text style={styles.taskDetailLabel}>Priority</Text>
+                    <Text style={[styles.taskDetailValue, { color: priorityColorMap[effPriority] }]}>
+                      {priorityLabels[effPriority]}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.taskDetailActions}>
+                  <TouchableOpacity style={[styles.taskDetailActionBtn, { backgroundColor: theme.success }]} onPress={handleDetailComplete}>
+                    <Ionicons name="checkmark" size={16} color={theme.textInverse} />
+                    <Text style={styles.taskDetailActionBtnText}>Done</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.taskDetailActionBtn, { backgroundColor: theme.info }]} onPress={handleDetailSnooze}>
+                    <Ionicons name="time-outline" size={16} color={theme.textInverse} />
+                    <Text style={styles.taskDetailActionBtnText}>Snooze</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.taskDetailActionBtn, { backgroundColor: theme.warning }]} onPress={handleDetailSkip}>
+                    <Ionicons name="play-skip-forward" size={16} color={theme.textInverse} />
+                    <Text style={styles.taskDetailActionBtnText}>Skip</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          );
+        })()}
+
         {/* Skip Task Modal */}
         <Modal
           visible={showSkipModal}
@@ -1085,9 +1571,24 @@ export default function CalendarScreen() {
           <View style={styles.skipModalOverlay}>
             <View style={styles.skipModalContent}>
               <Text style={styles.skipModalTitle}>Skip Task</Text>
-              <Text style={styles.skipModalSubtext}>
-                This task will be postponed to tomorrow
-              </Text>
+              <Text style={styles.skipModalSubtext}>Reschedule to:</Text>
+              <View style={styles.skipDaysRow}>
+                {[
+                  { days: 1, label: "Tomorrow" },
+                  { days: 3, label: "3 Days" },
+                  { days: 7, label: "7 Days" },
+                ].map(({ days, label }) => (
+                  <TouchableOpacity
+                    key={days}
+                    style={[styles.skipDayChip, skipDays === days && styles.skipDayChipActive]}
+                    onPress={() => setSkipDays(days)}
+                  >
+                    <Text style={[styles.skipDayChipText, skipDays === days && styles.skipDayChipTextActive]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
               <TextInput
                 style={styles.skipModalInput}
@@ -1120,6 +1621,7 @@ export default function CalendarScreen() {
                   onPress={() => {
                     setShowSkipModal(false);
                     setSkipReason("");
+                    setSkipDays(1);
                     setSkipTask(null);
                   }}
                 >
@@ -1131,7 +1633,7 @@ export default function CalendarScreen() {
                   disabled={skippingTask}
                 >
                   <Text style={styles.skipModalBtnText}>
-                    {skippingTask ? "Skipping..." : "Skip to Tomorrow"}
+                    {skippingTask ? "Skipping..." : skipDays === 1 ? "Skip to Tomorrow" : `Skip (+${skipDays} days)`}
                   </Text>
                 </TouchableOpacity>
               </View>

@@ -15,6 +15,8 @@ import FloatingLabelInput from "./FloatingLabelInput";
 import type { DropdownItem } from "./ThemedDropdown";
 import { createTaskTemplate } from "../services/tasks";
 import { Plant, TaskType } from "../types/database.types";
+import { getErrorMessage } from "../utils/errorLogging";
+import { createStyles } from "../styles/calendarStyles";
 
 const TASK_TYPE_ITEMS: DropdownItem[] = [
   { label: "💧 Water", value: "water" },
@@ -28,7 +30,7 @@ const TASK_TYPE_ITEMS: DropdownItem[] = [
 interface CreateTaskModalProps {
   visible: boolean;
   plants: Plant[];
-  styles: any;
+  styles: ReturnType<typeof createStyles>;
   bottomInset: number;
   initialStartDate?: Date;
   onClose: () => void;
@@ -116,8 +118,8 @@ export default function CreateTaskModal({
       Alert.alert("Success", "Task created successfully!");
       resetForm();
       onCreated();
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
+    } catch (error: unknown) {
+      Alert.alert("Error", getErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -141,6 +143,7 @@ export default function CreateTaskModal({
 
           <ScrollView
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
             contentContainerStyle={{
               paddingBottom: Math.max(bottomInset, 12),
             }}

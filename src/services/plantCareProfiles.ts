@@ -11,7 +11,7 @@ import {
   WaterRequirement,
 } from "../types/database.types";
 import { logError } from "../utils/errorLogging";
-import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
+import { withTimeoutAndRetry, FIRESTORE_READ_TIMEOUT_MS } from "../utils/firestoreTimeout";
 import { PLANT_CATEGORIES } from "./plantCatalog";
 
 const SETTINGS_COLLECTION = "user_settings";
@@ -122,7 +122,7 @@ const normalizeOverride = (
 };
 
 const normalizeProfiles = (
-  profiles?: PlantCareProfiles | null,
+  profiles?: Partial<PlantCareProfiles> | null,
 ): PlantCareProfiles => {
   const normalized = createEmptyProfiles();
 
@@ -167,8 +167,7 @@ export const getPlantCareProfiles = async (): Promise<PlantCareProfiles> => {
   try {
     const docRef = doc(db, SETTINGS_COLLECTION, user.uid);
     const snapshot = await withTimeoutAndRetry(() => getDoc(docRef), {
-      timeoutMs: 10000,
-      maxRetries: 2,
+      timeoutMs: FIRESTORE_READ_TIMEOUT_MS,
     });
 
     if (!snapshot.exists()) {
@@ -179,7 +178,7 @@ export const getPlantCareProfiles = async (): Promise<PlantCareProfiles> => {
             { [CARE_FIELD]: cached, updated_at: serverTimestamp() },
             { merge: true },
           ),
-        { timeoutMs: 10000, maxRetries: 1, throwOnTimeout: false },
+        { timeoutMs: FIRESTORE_READ_TIMEOUT_MS, maxRetries: 1, throwOnTimeout: false },
       );
       return cached;
     }
@@ -199,7 +198,7 @@ export const getPlantCareProfiles = async (): Promise<PlantCareProfiles> => {
 };
 
 export const savePlantCareProfiles = async (
-  profiles: PlantCareProfiles,
+  profiles: Partial<PlantCareProfiles>,
 ): Promise<PlantCareProfiles> => {
   const normalized = normalizeProfiles(profiles);
   await setData(KEYS.PLANT_CARE_PROFILES, [normalized]);
@@ -216,7 +215,7 @@ export const savePlantCareProfiles = async (
           { [CARE_FIELD]: normalized, updated_at: serverTimestamp() },
           { merge: true },
         ),
-      { timeoutMs: 10000, maxRetries: 2, throwOnTimeout: false },
+      { timeoutMs: FIRESTORE_READ_TIMEOUT_MS, throwOnTimeout: false },
     );
   } catch (error) {
     logError("network", "Failed to save plant care profiles", error as Error, {

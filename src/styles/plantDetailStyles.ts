@@ -385,7 +385,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     // Image zoom modal
     zoomOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.95)",
+      backgroundColor: "#000",
       justifyContent: "center",
       alignItems: "center",
     },
@@ -393,17 +393,13 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       position: "absolute",
       top: 16,
       right: 16,
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       backgroundColor: "rgba(255,255,255,0.2)",
       alignItems: "center",
       justifyContent: "center",
       zIndex: 10,
-    },
-    zoomImage: {
-      width: "100%",
-      height: "80%",
     },
     // Coconut metrics
     metricsGrid: {

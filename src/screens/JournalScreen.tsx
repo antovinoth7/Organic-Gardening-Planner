@@ -20,13 +20,6 @@ import {
   UIManager,
   Pressable,
 } from "react-native";
-
-if (
-  Platform.OS === "android" &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 import { Image } from "expo-image";
 import { getJournalEntries, deleteJournalEntry } from "../services/journal";
 import { getAllPlants } from "../services/plants";
@@ -35,6 +28,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import { createStyles } from "../styles/journalStyles";
+import { useNavigation, useRoute, NavigationProp, ParamListBase } from "@react-navigation/native";
+import { getErrorMessage } from "../utils/errorLogging";
 import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 import {
   useTabBarScroll,
@@ -42,7 +37,16 @@ import {
   AnimatedFAB,
 } from "../components/FloatingTabBar";
 
-export default function JournalScreen({ navigation, route }: any) {
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+export default function JournalScreen() {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const route = useRoute();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -83,9 +87,9 @@ export default function JournalScreen({ navigation, route }: any) {
       ]);
       setEntries(entriesData);
       setPlants(plantsData);
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (!options?.silent) {
-        Alert.alert("Error", error.message);
+        Alert.alert("Error", getErrorMessage(error));
       }
     } finally {
       if (!options?.silent) {
@@ -117,12 +121,12 @@ export default function JournalScreen({ navigation, route }: any) {
 
   // Listen for refresh param from child screens (after add/edit/delete)
   useEffect(() => {
-    const refreshParam = route?.params?.refresh;
-    if (refreshParam) {
+    const params = route.params as Record<string, unknown> | undefined;
+    if (params?.refresh) {
       loadData();
       navigation.setParams({ refresh: undefined });
     }
-  }, [route?.params?.refresh, navigation]);
+  }, [route.params, navigation]);
 
   const getPlantName = useCallback(
     (plantId: string | null) => {
@@ -134,7 +138,7 @@ export default function JournalScreen({ navigation, route }: any) {
   );
 
   const getEntryTypeIcon = (type: JournalEntryType) => {
-    const iconMap: Record<JournalEntryType, string> = {
+    const iconMap: Record<JournalEntryType, React.ComponentProps<typeof Ionicons>['name']> = {
       [JournalEntryType.Observation]: "eye",
       [JournalEntryType.Harvest]: "basket",
       [JournalEntryType.Issue]: "alert-circle",
@@ -286,8 +290,8 @@ export default function JournalScreen({ navigation, route }: any) {
             try {
               await deleteJournalEntry(id);
               loadData();
-            } catch (error: any) {
-              Alert.alert("Error", error.message);
+            } catch (error: unknown) {
+              Alert.alert("Error", getErrorMessage(error));
             }
           },
         },
@@ -476,7 +480,7 @@ export default function JournalScreen({ navigation, route }: any) {
                         ]}
                       >
                         <Ionicons
-                          name={iconName as any}
+                          name={iconName}
                           size={16}
                           color={typeColor}
                         />

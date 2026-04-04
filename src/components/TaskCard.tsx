@@ -37,7 +37,7 @@ export default function TaskCard({
   priority,
 }: TaskCardProps) {
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
   const color = taskColors[task.task_type] || theme.textSecondary;
   const icon = taskIcons[task.task_type] || "ellipse";
   const priorityPalette = {

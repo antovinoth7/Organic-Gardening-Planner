@@ -1,16 +1,20 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
+  Pressable,
   Modal,
   FlatList,
   StyleSheet,
   Platform,
   Dimensions,
   Animated,
+  Keyboard,
 } from "react-native";
+// TouchableOpacity kept for search clear button only; trigger + overlay use Pressable
+// to avoid responder conflicts with parent ScrollView (fixes double-tap issue)
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
@@ -57,9 +61,25 @@ export default function ThemedDropdown({
   const styles = useMemo(() => createStyles(theme, compact), [theme, compact]);
   const [visible, setVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const searchInputRef = useRef<TextInput>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(getScreenHeight())).current;
+  const isClosing = useRef(false);
+
+  // Track keyboard height so the list shrinks to always stay above the keyboard
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, (e) =>
+      setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const selectedItem = useMemo(
     () => items.find((item) => item.value === selectedValue),
@@ -68,6 +88,12 @@ export default function ThemedDropdown({
 
   const open = useCallback(() => {
     if (!enabled) return;
+    // Cancel any in-flight close animation and its pending callback
+    isClosing.current = false;
+    fadeAnim.stopAnimation();
+    slideAnim.stopAnimation();
+    slideAnim.setValue(getScreenHeight());
+    fadeAnim.setValue(0);
     setSearchQuery("");
     setVisible(true);
     Animated.parallel([
@@ -86,6 +112,7 @@ export default function ThemedDropdown({
   }, [enabled, fadeAnim, slideAnim]);
 
   const close = useCallback(() => {
+    isClosing.current = true;
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 0,
@@ -97,7 +124,12 @@ export default function ThemedDropdown({
         duration: 200,
         useNativeDriver,
       }),
-    ]).start(() => setVisible(false));
+    ]).start(() => {
+      // Only hide if open() hasn't been called since close() started
+      if (isClosing.current) {
+        setVisible(false);
+      }
+    });
   }, [fadeAnim, slideAnim]);
 
   const handleSelect = useCallback(
@@ -114,19 +146,24 @@ export default function ThemedDropdown({
     return items.filter((item) => item.label.toLowerCase().includes(q));
   }, [items, searchQuery, searchable]);
 
-  // Limit visible list height to 60% of screen, or item count
+  // Limit visible list height accounting for keyboard
   const screenHeight = getScreenHeight();
+  const sheetHeaderHeight = searchable ? 130 : 80; // handle + title + optional search bar
+  const availableHeight = screenHeight - keyboardHeight - sheetHeaderHeight - Math.max(insets.bottom, Platform.OS === "ios" ? 34 : 16);
   const maxVisibleItems = Math.min(filteredItems.length, 8);
-  const listMaxHeight = Math.min(maxVisibleItems * 52, screenHeight * 0.55);
+  const listMaxHeight = Math.min(maxVisibleItems * 52, availableHeight, screenHeight * 0.55);
 
   const renderItem = useCallback(
     ({ item }: { item: DropdownItem }) => {
       const isSelected = item.value === selectedValue;
       return (
-        <TouchableOpacity
-          style={[styles.optionRow, isSelected && styles.optionRowSelected]}
+        <Pressable
+          style={({ pressed }) => [
+            styles.optionRow,
+            isSelected && styles.optionRowSelected,
+            pressed && styles.optionRowPressed,
+          ]}
           onPress={() => handleSelect(item.value)}
-          activeOpacity={0.6}
         >
           <Text
             style={[styles.optionText, isSelected && styles.optionTextSelected]}
@@ -141,7 +178,7 @@ export default function ThemedDropdown({
               color={theme.primary}
             />
           )}
-        </TouchableOpacity>
+        </Pressable>
       );
     },
     [selectedValue, handleSelect, styles, theme.primary],
@@ -152,41 +189,55 @@ export default function ThemedDropdown({
     [],
   );
 
-  const hasValue = !!selectedItem;
-  const showFloatingLabel = !!label && hasValue;
-
   return (
     <>
-      <TouchableOpacity
-        style={[
+      {/* Option A: label left — value right */}
+      <Pressable
+        style={({ pressed }) => [
           styles.trigger,
           !enabled && styles.triggerDisabled,
-          showFloatingLabel && styles.triggerWithLabel,
+          pressed && enabled && { opacity: 0.7 },
         ]}
         onPress={open}
-        activeOpacity={enabled ? 0.7 : 1}
       >
-        {showFloatingLabel && (
-          <Text style={styles.floatingLabel} numberOfLines={1}>
-            {label}
+        {label ? (
+          <>
+            <Text
+              style={[styles.triggerLabel, !enabled && styles.triggerLabelDisabled]}
+              numberOfLines={1}
+            >
+              {label}
+            </Text>
+            <Text
+              style={[
+                styles.triggerText,
+                !selectedItem && styles.triggerPlaceholder,
+                !enabled && styles.triggerTextDisabled,
+              ]}
+              numberOfLines={1}
+            >
+              {selectedItem ? selectedItem.label : "—"}
+            </Text>
+          </>
+        ) : (
+          <Text
+            style={[
+              styles.triggerText,
+              { flex: 1, textAlign: "left", maxWidth: "100%" },
+              !selectedItem && styles.triggerPlaceholder,
+              !enabled && styles.triggerTextDisabled,
+            ]}
+            numberOfLines={1}
+          >
+            {selectedItem ? selectedItem.label : placeholder}
           </Text>
         )}
-        <Text
-          style={[
-            styles.triggerText,
-            !selectedItem && styles.triggerPlaceholder,
-            !enabled && styles.triggerTextDisabled,
-          ]}
-          numberOfLines={1}
-        >
-          {selectedItem ? selectedItem.label : (label || placeholder)}
-        </Text>
         <Ionicons
-          name="chevron-down"
-          size={18}
+          name="chevron-forward"
+          size={16}
           color={enabled ? theme.textTertiary : theme.border}
         />
-      </TouchableOpacity>
+      </Pressable>
 
       <Modal
         visible={visible}
@@ -196,9 +247,8 @@ export default function ThemedDropdown({
         statusBarTranslucent
       >
         <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
-          <TouchableOpacity
+          <Pressable
             style={StyleSheet.absoluteFill}
-            activeOpacity={1}
             onPress={close}
           />
         </Animated.View>
@@ -208,15 +258,17 @@ export default function ThemedDropdown({
             {
               paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 34 : 16),
               transform: [{ translateY: slideAnim }],
+              marginBottom: keyboardHeight,
             },
           ]}
         >
-          <TouchableOpacity activeOpacity={0.7} onPress={close}>
+          <Pressable
+            style={({ pressed }) => [styles.sheetCloseRow, pressed && styles.sheetCloseRowPressed]}
+            onPress={close}
+          >
             <View style={styles.sheetHandle} />
-          </TouchableOpacity>
-          <Text style={styles.sheetTitle}>
-            {placeholder}
-          </Text>
+            <Text style={styles.sheetTitle}>{placeholder}</Text>
+          </Pressable>
           {searchable && (
             <View style={styles.searchContainer}>
               <Ionicons name="search" size={18} color={theme.textTertiary} style={styles.searchIcon} />
@@ -247,7 +299,7 @@ export default function ThemedDropdown({
             keyExtractor={keyExtractor}
             style={{ maxHeight: listMaxHeight }}
             showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
             getItemLayout={(_, index) => ({
               length: 52,
               offset: 52 * index,

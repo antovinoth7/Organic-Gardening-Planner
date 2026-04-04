@@ -12,33 +12,33 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
-  Modal,
-  TextInput,
+  ActivityIndicator,
   FlatList,
 } from "react-native";
 import {
   getTodayTasks,
-  updateTaskTemplate,
   getTodayTaskLogs,
+  getSeasonalCareReminder,
 } from "../services/tasks";
 import { getAllPlants } from "../services/plants";
 import { TaskTemplate, Plant, TaskLog, TaskType } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
 import { TASK_EMOJIS, TASK_COLORS } from "../utils/taskConstants";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute, NavigationProp, ParamListBase } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, useThemeMode } from "../theme";
 import { createStyles } from "../styles/todayStyles";
-import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 import Svg, { Circle, Path } from "react-native-svg";
 import { useTabBarScroll, TAB_BAR_HEIGHT } from "../components/FloatingTabBar";
+import { safeGetItem, safeSetItem } from "../utils/safeStorage";
+import { getErrorMessage } from "../utils/errorLogging";
 
 type AttentionSeverity = "critical" | "high" | "medium";
 
 type PlantAttentionItem = {
   plant: Plant;
   severity: AttentionSeverity;
-  icon: "medical" | "warning" | "water";
+  icon: "medical" | "warning" | "water" | "leaf" | "basket";
   reasons: string[];
   daysOverdue: number;
 };
@@ -89,6 +89,16 @@ const groupTasksByType = (
   });
 };
 
+/** Compact number display: 0-99 exact, 100-999 → "99+", 1000+ → "1k"/"1.5k" */
+const fmtCount = (n: number): string => {
+  if (n >= 1000) {
+    const k = n / 1000;
+    return `${Number.isInteger(k) ? k : k.toFixed(1)}k`;
+  }
+  if (n >= 100) return "99+";
+  return String(n);
+};
+
 const getGreeting = (): string => {
   const hour = new Date().getHours();
   if (hour < 12) return "Good Morning";
@@ -130,7 +140,9 @@ const THEME_ICONS: Record<
   system: { icon: "phone-portrait-outline", label: "Auto" },
 };
 
-export default function TodayScreen({ navigation, route }: any) {
+export default function TodayScreen() {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const route = useRoute();
   const theme = useTheme();
   const { mode, setMode } = useThemeMode();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -141,22 +153,24 @@ export default function TodayScreen({ navigation, route }: any) {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [taskLogs, setTaskLogs] = useState<TaskLog[]>([]);
-  const [showSkipModal, setShowSkipModal] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<TaskTemplate | null>(null);
-  const [skipReason, setSkipReason] = useState("");
-  const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [optimisticCompletedTaskIds, setOptimisticCompletedTaskIds] = useState<
-    string[]
-  >([]);
-  const [skippingTask, setSkippingTask] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   const isMountedRef = React.useRef(true);
+
+  // Check if banner was already dismissed today
+  useEffect(() => {
+    safeGetItem("seasonal_banner_dismissed_date").then((stored) => {
+      const today = new Date().toDateString();
+      if (stored === today) setBannerDismissed(true);
+    });
+  }, []);
+
+  const dismissBanner = useCallback(async () => {
+    setBannerDismissed(true);
+    await safeSetItem("seasonal_banner_dismissed_date", new Date().toDateString());
+  }, []);
   const completedTemplateIds = useMemo(
-    () =>
-      new Set([
-        ...taskLogs.map((log) => log.template_id),
-        ...optimisticCompletedTaskIds,
-      ]),
-    [taskLogs, optimisticCompletedTaskIds],
+    () => new Set(taskLogs.map((log) => log.template_id)),
+    [taskLogs],
   );
 
   const loadData = useCallback(async (options?: { silent?: boolean }) => {
@@ -183,13 +197,10 @@ export default function TodayScreen({ navigation, route }: any) {
       setTasks(filteredTasks);
       setPlants(plantsData);
       setTaskLogs(filteredLogs);
-      setOptimisticCompletedTaskIds((prev) =>
-        prev.filter((id) => !filteredLogs.some((log) => log.template_id === id)),
-      );
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (!isMountedRef.current) return;
       if (!options?.silent) {
-        Alert.alert("Error", error.message);
+        Alert.alert("Error", getErrorMessage(error));
       }
     } finally {
       if (isMountedRef.current && !options?.silent) {
@@ -203,18 +214,17 @@ export default function TodayScreen({ navigation, route }: any) {
     loadData();
     return () => {
       isMountedRef.current = false;
-      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
     };
   }, [loadData]);
 
   // Listen for refresh param (e.g., after completing tasks)
   useEffect(() => {
-    const refreshParam = route?.params?.refresh;
-    if (refreshParam) {
+    const params = route.params as Record<string, unknown> | undefined;
+    if (params?.refresh) {
       loadData();
       navigation.setParams({ refresh: undefined });
     }
-  }, [route?.params?.refresh, navigation, loadData]);
+  }, [route.params, navigation, loadData]);
 
   // Reset scroll and do a silent refresh whenever the screen regains focus.
   useFocusEffect(
@@ -225,34 +235,6 @@ export default function TodayScreen({ navigation, route }: any) {
       void loadData({ silent: true });
     }, [loadData, resetTabBar]),
   );
-
-  const handleSkipTask = async () => {
-    if (!selectedTask || skippingTask) return;
-
-    setSkippingTask(true);
-    try {
-      // Postpone to tomorrow
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
-      await updateTaskTemplate(selectedTask.id, {
-        next_due_at: tomorrow.toISOString(),
-      });
-
-      Alert.alert(
-        "Task Skipped",
-        `Task postponed to tomorrow${skipReason ? `: ${skipReason}` : ""}`,
-      );
-      setShowSkipModal(false);
-      setSkipReason("");
-      setSelectedTask(null);
-      loadData();
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
-    } finally {
-      setSkippingTask(false);
-    }
-  };
 
   const getDaysSince = useCallback((dateValue?: string | null) => {
     if (!dateValue) return null;
@@ -372,6 +354,42 @@ export default function TodayScreen({ navigation, route }: any) {
       });
     });
 
+    // Fertilising overdue check
+    (plants || []).forEach((plant) => {
+      const fertFreq = Number(plant.fertilising_frequency_days);
+      if (!Number.isFinite(fertFreq) || fertFreq <= 0) return;
+
+      const daysSinceFert = getDaysSince(plant.last_fertilised_date);
+      if (daysSinceFert !== null && daysSinceFert >= fertFreq) {
+        const daysOverdue = Math.max(0, daysSinceFert - fertFreq);
+        addPlantAttention(plant, {
+          severity: daysOverdue >= Math.ceil(fertFreq / 2) ? "high" : "medium",
+          icon: "leaf",
+          reason:
+            daysOverdue > 0
+              ? `Fertilising overdue by ${daysOverdue} day${daysOverdue === 1 ? "" : "s"}`
+              : "Fertilising due today",
+          daysOverdue,
+        });
+      }
+    });
+
+    // Harvest-ready check
+    (plants || []).forEach((plant) => {
+      if (!plant.expected_harvest_date) return;
+      const daysToHarvest = getDaysSince(plant.expected_harvest_date);
+      if (daysToHarvest === null || daysToHarvest < 0) return;
+      addPlantAttention(plant, {
+        severity: "medium",
+        icon: "basket",
+        reason:
+          daysToHarvest === 0
+            ? "Ready to harvest today"
+            : `Harvest overdue by ${daysToHarvest} day${daysToHarvest === 1 ? "" : "s"}`,
+        daysOverdue: daysToHarvest,
+      });
+    });
+
     const plantAttention = Array.from(attentionByPlant.values()).sort(
       (a, b) => {
         const bySeverity =
@@ -449,14 +467,6 @@ export default function TodayScreen({ navigation, route }: any) {
     for (const log of taskLogs) {
       doneByType.set(log.task_type, (doneByType.get(log.task_type) || 0) + 1);
     }
-    // Also count optimistic completions
-    for (const id of optimisticCompletedTaskIds) {
-      const task = tasks.find((t) => t.id === id);
-      if (task && !taskLogs.some((l) => l.template_id === id)) {
-        doneByType.set(task.task_type, (doneByType.get(task.task_type) || 0) + 1);
-      }
-    }
-
     // Gather all task types that appear (remaining or completed)
     const allTypes = new Set<TaskType>();
     for (const group of taskGroups) allTypes.add(group.type);
@@ -479,7 +489,7 @@ export default function TodayScreen({ navigation, route }: any) {
       if (b.overdueCount > 0 && a.overdueCount === 0) return 1;
       return b.total - a.total;
     });
-  }, [taskGroups, taskLogs, optimisticCompletedTaskIds, tasks]);
+  }, [taskGroups, taskLogs]);
 
   // Compute donut segments: one per task type (full arc = total for that type)
   const donutSegments = useMemo(() => {
@@ -501,6 +511,64 @@ export default function TodayScreen({ navigation, route }: any) {
       };
     });
   }, [stats.totalTasks, typeStats]);
+
+  const seasonalTip = useMemo(() => {
+    for (const plant of plants) {
+      const tip = getSeasonalCareReminder(plant);
+      if (tip) return tip;
+    }
+    return null;
+  }, [plants]);
+
+  const attentionKeyExtractor = useCallback(
+    (item: PlantAttentionItem) => item.plant.id,
+    [],
+  );
+
+  const renderAttentionItem = useCallback(
+    ({ item: attention }: { item: PlantAttentionItem }) => (
+      <TouchableOpacity
+        style={[
+          styles.alertCardH,
+          attention.severity === "critical" && styles.alertCardHCritical,
+          attention.severity === "high" && styles.alertCardHWarning,
+          attention.severity === "medium" && styles.alertCardHInfo,
+        ]}
+        onPress={() =>
+          navigation.navigate("Plants", {
+            screen: "PlantDetail",
+            params: { plantId: attention.plant.id },
+          })
+        }
+      >
+        <View
+          style={[
+            styles.alertIconH,
+            attention.severity === "critical" && { backgroundColor: theme.error },
+            attention.severity === "high" && { backgroundColor: theme.warning },
+            attention.severity === "medium" && { backgroundColor: theme.primary },
+          ]}
+        >
+          <Ionicons name={attention.icon} size={18} color="#fff" />
+        </View>
+        <Text style={styles.alertPlantNameH} numberOfLines={1}>
+          {attention.plant.name}
+        </Text>
+        <Text style={styles.alertTextH} numberOfLines={2}>
+          {attention.reasons.join(" • ")}
+        </Text>
+      </TouchableOpacity>
+    ),
+    [styles, navigation, theme],
+  );
+
+  if (loading && tasks.length === 0 && plants.length === 0) {
+    return (
+      <View style={[styles.container, { justifyContent: "center", alignItems: "center", paddingTop: insets.top }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -528,7 +596,7 @@ export default function TodayScreen({ navigation, route }: any) {
           </View>
           <TouchableOpacity style={styles.heroThemeToggle} onPress={cycleTheme}>
             <Ionicons
-              name={THEME_ICONS[mode].icon as any}
+              name={THEME_ICONS[mode].icon}
               size={20}
               color="#fff"
             />
@@ -538,112 +606,132 @@ export default function TodayScreen({ navigation, route }: any) {
 
       {/* Task Donut — segmented by type */}
       <View style={styles.donutCard}>
-        <Text style={styles.gardenHealthTitle}>📋 Today's Progress</Text>
+        <Text style={styles.gardenHealthTitle}>📋 Today&apos;s Progress</Text>
         <View style={styles.donutRow}>
-          {/* Donut (left) */}
-          <View style={styles.donutContainer}>
-            <Svg width={DONUT_SIZE} height={DONUT_SIZE}>
-              {/* Background track */}
-              <Circle
-                cx={DONUT_CENTER}
-                cy={DONUT_CENTER}
-                r={DONUT_RADIUS}
-                stroke={theme.border}
-                strokeWidth={DONUT_STROKE}
-                fill="none"
-              />
-              {/* Per-type arcs: faded = total, solid = done portion */}
-              {donutSegments.map((seg) => (
-                <React.Fragment key={seg.key}>
-                  {/* Full arc (faded) — remaining portion */}
-                  {seg.sweep > 0.5 && (
-                    <Path
-                      d={describeArc(
-                        DONUT_CENTER,
-                        DONUT_CENTER,
-                        DONUT_RADIUS,
-                        seg.startAngle,
-                        seg.startAngle + seg.sweep,
-                      )}
-                      stroke={seg.color + "40"}
-                      strokeWidth={DONUT_STROKE}
-                      strokeLinecap="round"
-                      fill="none"
-                    />
-                  )}
-                  {/* Done portion (solid) */}
-                  {seg.doneSweep > 0.5 && (
-                    <Path
-                      d={describeArc(
-                        DONUT_CENTER,
-                        DONUT_CENTER,
-                        DONUT_RADIUS,
-                        seg.startAngle,
-                        seg.startAngle + seg.doneSweep,
-                      )}
-                      stroke={seg.color}
-                      strokeWidth={DONUT_STROKE}
-                      strokeLinecap="round"
-                      fill="none"
-                    />
-                  )}
-                </React.Fragment>
-              ))}
-            </Svg>
-            <View style={styles.donutCenter}>
-              <Text style={styles.donutPercent}>{stats.completionRate}%</Text>
-              <Text style={styles.donutSubtext}>
-                {stats.completed}/{stats.totalTasks}
-              </Text>
-              {overdueTasks.length > 0 && (
-                <Text style={styles.donutOverdue}>
+          {/* Donut (left) — wrapped to stack ring + overdue badge */}
+          <View style={styles.donutWrap}>
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={() => navigation.navigate("Care Plan", { resetFilters: true })}
+            >
+            <View style={styles.donutContainer}>
+              <Svg width={DONUT_SIZE} height={DONUT_SIZE}>
+                {/* Background track */}
+                <Circle
+                  cx={DONUT_CENTER}
+                  cy={DONUT_CENTER}
+                  r={DONUT_RADIUS}
+                  stroke={theme.border}
+                  strokeWidth={DONUT_STROKE}
+                  fill="none"
+                />
+                {/* Per-type arcs: faded = total, solid = done portion */}
+                {donutSegments.map((seg) => (
+                  <React.Fragment key={seg.key}>
+                    {/* Full arc (faded) — remaining portion */}
+                    {seg.sweep > 0.5 && (
+                      <Path
+                        d={describeArc(
+                          DONUT_CENTER,
+                          DONUT_CENTER,
+                          DONUT_RADIUS,
+                          seg.startAngle,
+                          seg.startAngle + seg.sweep,
+                        )}
+                        stroke={seg.color + "40"}
+                        strokeWidth={DONUT_STROKE}
+                        strokeLinecap="round"
+                        fill="none"
+                      />
+                    )}
+                    {/* Done portion (solid) */}
+                    {seg.doneSweep > 0.5 && (
+                      <Path
+                        d={describeArc(
+                          DONUT_CENTER,
+                          DONUT_CENTER,
+                          DONUT_RADIUS,
+                          seg.startAngle,
+                          seg.startAngle + seg.doneSweep,
+                        )}
+                        stroke={seg.color}
+                        strokeWidth={DONUT_STROKE}
+                        strokeLinecap="round"
+                        fill="none"
+                      />
+                    )}
+                  </React.Fragment>
+                ))}
+              </Svg>
+              <View style={styles.donutCenter}>
+                <Text style={styles.donutPercent}>{stats.completionRate}%</Text>
+                <Text style={styles.donutSubtext}>
+                  {stats.completed}/{stats.totalTasks}
+                </Text>
+              </View>
+            </View>
+            </TouchableOpacity>
+            {/* Overdue pill anchored below the ring */}
+            {overdueTasks.length > 0 && (
+              <TouchableOpacity
+                style={styles.donutOverdueBadge}
+                activeOpacity={0.75}
+                onPress={() => navigation.navigate("Care Plan", { filterOverdue: true })}
+              >
+                <Ionicons name="alert-circle" size={11} color="#fff" />
+                <Text style={styles.donutOverdueBadgeText}>
                   {overdueTasks.length} overdue
                 </Text>
-              )}
-            </View>
+              </TouchableOpacity>
+            )}
           </View>
 
-          {/* Tiles (right) */}
-          {typeStats.length > 0 && (
-            <View style={styles.chipColumn}>
-              {typeStats.map((ts) => {
-                const color = TASK_COLORS[ts.type] || "#999";
-                const emoji = TASK_EMOJIS[ts.type] || "📌";
-                const allDone = ts.remaining === 0;
-                const hasOverdue = ts.overdueCount > 0;
-                return (
-                  <TouchableOpacity
-                    key={ts.type}
+          {/* Tiles (right) — all 7 task types always visible */}
+          <View style={styles.chipColumn}>
+            {(Object.keys(TASK_EMOJIS) as TaskType[]).map((type) => {
+              const ts = typeStats.find((s) => s.type === type);
+              const color = TASK_COLORS[type];
+              const emoji = TASK_EMOJIS[type];
+              const done = ts?.done ?? 0;
+              const total = ts?.total ?? 0;
+              const remaining = ts?.remaining ?? 0;
+              const overdueCount = ts?.overdueCount ?? 0;
+              const hasNothing = total === 0;
+              const allDone = !hasNothing && remaining === 0;
+              const hasOverdue = overdueCount > 0;
+              return (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.chip,
+                    { backgroundColor: color + "14" },
+                    hasNothing && styles.chipEmpty,
+                    allDone && styles.chipDone,
+                    hasOverdue && styles.chipOverdue,
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={() => navigation.navigate("Care Plan")}
+                >
+                  <Text style={styles.chipEmoji}>{emoji}</Text>
+                  <Text
                     style={[
-                      styles.chip,
-                      { backgroundColor: color + "14" },
-                      allDone && styles.chipDone,
-                      hasOverdue && styles.chipOverdue,
+                      styles.chipText,
+                      { color: hasNothing ? theme.textSecondary : color },
+                      allDone && styles.chipTextDone,
                     ]}
-                    activeOpacity={0.7}
-                    onPress={() => navigation.navigate("Care Plan")}
                   >
-                    <Text style={styles.chipEmoji}>{emoji}</Text>
-                    <Text
-                      style={[
-                        styles.chipText,
-                        { color },
-                        allDone && styles.chipTextDone,
-                      ]}
-                    >
-                      {ts.done}/{ts.total}
-                    </Text>
-                    {hasOverdue && (
-                      <Text style={styles.chipOverdueCount}>⚠{ts.overdueCount}</Text>
-                    )}
-                    {allDone && (
-                      <Ionicons name="checkmark" size={13} color={color} />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
+                    {fmtCount(done)}/{fmtCount(total)}
+                  </Text>
+                  {hasOverdue && (
+                    <Ionicons name="alert-circle" size={12} color={theme.error} />
+                  )}
+                  {allDone && (
+                    <Ionicons name="checkmark" size={13} color={color} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
       </View>
 
@@ -690,6 +778,17 @@ export default function TodayScreen({ navigation, route }: any) {
         </View>
       </View>
 
+      {/* Seasonal tip banner — shown once per day, dismissible */}
+      {seasonalTip !== null && !bannerDismissed && (
+        <View style={styles.seasonalBanner}>
+          <Ionicons name="sunny-outline" size={16} color={theme.warning} />
+          <Text style={styles.seasonalBannerText}>{seasonalTip}</Text>
+          <TouchableOpacity style={styles.seasonalBannerClose} onPress={dismissBanner} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close" size={16} color={theme.textSecondary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Plant Health Alerts — horizontal cards */}
       {stats.plantAttention.length > 0 && (
         <View style={styles.alertsSection}>
@@ -700,48 +799,9 @@ export default function TodayScreen({ navigation, route }: any) {
             horizontal
             showsHorizontalScrollIndicator={false}
             data={stats.plantAttention}
-            keyExtractor={(item) => item.plant.id}
+            keyExtractor={attentionKeyExtractor}
             contentContainerStyle={{ paddingRight: 8 }}
-            renderItem={({ item: attention }) => (
-              <TouchableOpacity
-                style={[
-                  styles.alertCardH,
-                  attention.severity === "critical" &&
-                    styles.alertCardHCritical,
-                  attention.severity === "high" && styles.alertCardHWarning,
-                  attention.severity === "medium" && styles.alertCardHInfo,
-                ]}
-                onPress={() =>
-                  navigation.navigate("Plants", {
-                    screen: "PlantDetail",
-                    params: { plantId: attention.plant.id },
-                  })
-                }
-              >
-                <View
-                  style={[
-                    styles.alertIconH,
-                    attention.severity === "critical" && {
-                      backgroundColor: theme.error,
-                    },
-                    attention.severity === "high" && {
-                      backgroundColor: theme.warning,
-                    },
-                    attention.severity === "medium" && {
-                      backgroundColor: theme.primary,
-                    },
-                  ]}
-                >
-                  <Ionicons name={attention.icon} size={18} color="#fff" />
-                </View>
-                <Text style={styles.alertPlantNameH} numberOfLines={1}>
-                  {attention.plant.name}
-                </Text>
-                <Text style={styles.alertTextH} numberOfLines={2}>
-                  {attention.reasons.join(" • ")}
-                </Text>
-              </TouchableOpacity>
-            )}
+            renderItem={renderAttentionItem}
           />
         </View>
       )}
@@ -760,69 +820,6 @@ export default function TodayScreen({ navigation, route }: any) {
         </View>
       )}
 
-      {/* Skip Task Modal */}
-      <Modal
-        visible={showSkipModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowSkipModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Skip Task</Text>
-            <Text style={styles.modalSubtext}>
-              This task will be postponed to tomorrow
-            </Text>
-
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Reason (optional)"
-              value={skipReason}
-              onChangeText={(text) =>
-                setSkipReason(sanitizeAlphaNumericSpaces(text))
-              }
-              placeholderTextColor="#999"
-              multiline
-            />
-
-            <View style={styles.skipReasons}>
-              {["Weather", "Already done", "Not needed", "Too busy"].map(
-                (reason) => (
-                  <TouchableOpacity
-                    key={reason}
-                    style={styles.reasonChip}
-                    onPress={() => setSkipReason(reason)}
-                  >
-                    <Text style={styles.reasonText}>{reason}</Text>
-                  </TouchableOpacity>
-                ),
-              )}
-            </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={() => {
-                  setShowSkipModal(false);
-                  setSkipReason("");
-                  setSelectedTask(null);
-                }}
-              >
-                <Text style={styles.modalButtonTextCancel}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonConfirm]}
-                onPress={handleSkipTask}
-                disabled={skippingTask}
-              >
-                <Text style={styles.modalButtonText}>
-                  {skippingTask ? "Skipping..." : "Skip to Tomorrow"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }

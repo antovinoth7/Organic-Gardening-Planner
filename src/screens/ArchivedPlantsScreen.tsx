@@ -1,16 +1,18 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme';
 import { getArchivedPlants, restorePlant } from '../services/plants';
 import { Plant } from '../types/database.types';
 import { createStyles } from '../styles/archivedPlantsStyles';
+import { getErrorMessage } from '../utils/errorLogging';
 
-export default function ArchivedPlantsScreen({ navigation }: any) {
+export default function ArchivedPlantsScreen() {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,8 +23,8 @@ export default function ArchivedPlantsScreen({ navigation }: any) {
     try {
       const archivedPlants = await getArchivedPlants();
       setPlants(archivedPlants);
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
+    } catch (error: unknown) {
+      Alert.alert('Error', getErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -49,8 +51,8 @@ export default function ArchivedPlantsScreen({ navigation }: any) {
               await restorePlant(plant.id);
               Alert.alert('Restored', 'Plant restored successfully.');
               loadArchivedPlants();
-            } catch (error: any) {
-              Alert.alert('Error', error.message);
+            } catch (error: unknown) {
+              Alert.alert('Error', getErrorMessage(error));
             } finally {
               setRestoringId(null);
             }
@@ -60,7 +62,9 @@ export default function ArchivedPlantsScreen({ navigation }: any) {
     );
   };
 
-  const renderItem = ({ item }: { item: Plant }) => {
+  const keyExtractor = useCallback((item: Plant) => item.id, []);
+
+  const renderItem = useCallback(({ item }: { item: Plant }) => {
     const deletedAt = item.deleted_at
       ? new Date(item.deleted_at).toLocaleDateString('en-US', {
           month: 'short',
@@ -95,7 +99,7 @@ export default function ArchivedPlantsScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
     );
-  };
+  }, [styles, handleRestore, restoringId, theme.primary]);
 
   return (
     <View style={styles.container}>
@@ -123,7 +127,7 @@ export default function ArchivedPlantsScreen({ navigation }: any) {
       ) : (
         <FlatList
           data={plants}
-          keyExtractor={(item) => item.id}
+          keyExtractor={keyExtractor}
           renderItem={renderItem}
           contentContainerStyle={[styles.listContent, { paddingBottom: Math.max(insets.bottom, 48) + 16 }]}
         />

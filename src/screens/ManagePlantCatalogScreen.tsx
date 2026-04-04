@@ -13,6 +13,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import ThemedDropdown from "../components/ThemedDropdown";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNavigation, NavigationProp, ParamListBase } from "@react-navigation/native";
 import { useTheme } from "../theme";
 import { createStyles } from "../styles/managePlantCatalogStyles";
 import {
@@ -39,6 +40,7 @@ import {
 } from "../types/database.types";
 import { getPlantCareProfile, getStaticPruningDefaults } from "../utils/plantCareDefaults";
 import { sanitizeLandmarkText } from "../utils/textSanitizer";
+import { getErrorMessage } from "../utils/errorLogging";
 
 type EditPlantState = {
   name: string;
@@ -141,15 +143,14 @@ const isDuplicate = (list: string[], value: string, ignore?: string) => {
   });
 };
 
-export default function ManagePlantCatalogScreen({ navigation }: any) {
+export default function ManagePlantCatalogScreen() {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
 
   const [catalog, setCatalog] = useState<PlantCatalog>(DEFAULT_PLANT_CATALOG);
-  const [careProfiles, setCareProfiles] = useState<PlantCareProfiles>(
-    {} as PlantCareProfiles,
-  );
+  const [careProfiles, setCareProfiles] = useState<Partial<PlantCareProfiles>>({});
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -177,10 +178,10 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
       setCatalog(catalogData);
       setPlants(allPlants);
       setCareProfiles(careProfileData);
-    } catch (error: any) {
+    } catch (error: unknown) {
       Alert.alert(
         "Error",
-        error?.message || "Failed to load plant catalog. Please try again.",
+        getErrorMessage(error) || "Failed to load plant catalog. Please try again.",
       );
     } finally {
       setLoading(false);
@@ -228,7 +229,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
     return saved;
   };
 
-  const saveCareProfiles = async (nextProfiles: PlantCareProfiles) => {
+  const saveCareProfiles = async (nextProfiles: Partial<PlantCareProfiles>) => {
     const saved = await savePlantCareProfiles(nextProfiles);
     setCareProfiles(saved);
     return saved;
@@ -238,10 +239,10 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
     setSaving(true);
     try {
       await saveCatalog(nextCatalog);
-    } catch (error: any) {
+    } catch (error: unknown) {
       Alert.alert(
         "Error",
-        error?.message || "Failed to save plant catalog. Please try again.",
+        getErrorMessage(error) || "Failed to save plant catalog. Please try again.",
       );
     } finally {
       setSaving(false);
@@ -374,7 +375,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
 
-    const nextProfiles: PlantCareProfiles = {
+    const nextProfiles: Partial<PlantCareProfiles> = {
       ...careProfiles,
       [activeCategory]: {
         ...categoryCareProfiles,
@@ -400,10 +401,10 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
     try {
       await saveCareProfiles(nextProfiles);
       closeCareModal();
-    } catch (error: any) {
+    } catch (error: unknown) {
       Alert.alert(
         "Error",
-        error?.message || "Failed to save care defaults. Please try again.",
+        getErrorMessage(error) || "Failed to save care defaults. Please try again.",
       );
     } finally {
       setSaving(false);
@@ -429,7 +430,7 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
           onPress: async () => {
             const nextCategory = { ...categoryCareProfiles };
             delete nextCategory[careModal.plantName];
-            const nextProfiles: PlantCareProfiles = {
+            const nextProfiles: Partial<PlantCareProfiles> = {
               ...careProfiles,
               [activeCategory]: nextCategory,
             };
@@ -437,10 +438,10 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
             try {
               await saveCareProfiles(nextProfiles);
               closeCareModal();
-            } catch (error: any) {
+            } catch (error: unknown) {
               Alert.alert(
                 "Error",
-                error?.message ||
+                getErrorMessage(error) ||
                   "Failed to reset care defaults. Please try again.",
               );
             } finally {
@@ -559,10 +560,10 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
         }
 
         setEditPlant(null);
-      } catch (error: any) {
+      } catch (error: unknown) {
         Alert.alert(
           "Error",
-          error?.message || "Failed to rename plant. Please try again.",
+          getErrorMessage(error) || "Failed to rename plant. Please try again.",
         );
       } finally {
         setSaving(false);
@@ -652,10 +653,10 @@ export default function ManagePlantCatalogScreen({ navigation }: any) {
       }
 
       setReassignPlant(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       Alert.alert(
         "Error",
-        error?.message || "Failed to delete plant. Please try again.",
+        getErrorMessage(error) || "Failed to delete plant. Please try again.",
       );
     } finally {
       setSaving(false);

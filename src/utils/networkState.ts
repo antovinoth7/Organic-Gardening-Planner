@@ -1,4 +1,5 @@
 import NetInfo from "@react-native-community/netinfo";
+import { logger } from './logger';
 
 /**
  * Network State Monitoring Utility
@@ -26,7 +27,7 @@ const initNetworkMonitoring = (): void => {
     isOnline = state.isConnected ?? true;
 
     if (wasOnline !== isOnline) {
-      console.log(`Network state changed: ${isOnline ? "online" : "offline"}`);
+      logger.debug(`Network state changed: ${isOnline ? "online" : "offline"}`);
     }
   });
 };
@@ -39,7 +40,7 @@ export const cleanupNetworkMonitoring = (): void => {
   if (unsubscribe) {
     unsubscribe();
     unsubscribe = null;
-    console.log('Network monitoring cleaned up');
+    logger.debug('Network monitoring cleaned up');
   }
 };
 

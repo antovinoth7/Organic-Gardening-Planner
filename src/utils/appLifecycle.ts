@@ -5,6 +5,7 @@
 
 import { AppState, AppStateStatus } from 'react-native';
 import { cleanupNetworkMonitoring } from './networkState';
+import { logger } from './logger';
 
 /**
  * Handle app state changes
@@ -13,12 +14,12 @@ import { cleanupNetworkMonitoring } from './networkState';
  */
 const handleAppStateChange = async (nextAppState: AppStateStatus): Promise<void> => {
   if (nextAppState === 'background') {
-    console.log('App backgrounded');
+    logger.debug('App backgrounded');
     // Firestore cache is managed automatically by Firebase SDK
   }
   
   if (nextAppState === 'active') {
-    console.log('App foregrounded');
+    logger.debug('App foregrounded');
     // Firestore will automatically reconnect if needed
   }
 };

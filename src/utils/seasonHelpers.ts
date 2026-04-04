@@ -9,6 +9,12 @@
  *   ne_monsoon – October to Dec: Northeast monsoon (dominant in TN, even heavier)
  *   cool_dry   – January to Feb: mild post-monsoon dry period
  */
+// ---------------------------------------------------------------------------
+// Seasonal Pest & Disease Alerts (Kanyakumari / South Tamil Nadu)
+// ---------------------------------------------------------------------------
+
+import { PlantType } from "../types/database.types";
+
 export type KKSeason = "summer" | "sw_monsoon" | "ne_monsoon" | "cool_dry";
 
 export function getCurrentSeason(): KKSeason {
@@ -65,12 +71,6 @@ export function getWateringFrequencyMultiplier(
       return 1.0;
   }
 }
-
-// ---------------------------------------------------------------------------
-// Seasonal Pest & Disease Alerts (Kanyakumari / South Tamil Nadu)
-// ---------------------------------------------------------------------------
-
-import { PlantType } from "../types/database.types";
 
 interface SeasonalPestAlert {
   issue: string;

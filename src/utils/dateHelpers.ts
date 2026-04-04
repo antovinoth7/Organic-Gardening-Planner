@@ -4,6 +4,8 @@
  * Provides a minimal, timezone-safe helper used in the UI.
  */
 
+import { logger } from './logger';
+
 /**
  * Format a Date to a local YYYY-MM-DD string without UTC shift.
  */
@@ -61,7 +63,7 @@ export const getYearsOld = (dateValue: string | Date | null): number | null => {
 
     return years >= 0 ? years : null;
   } catch (error) {
-    console.warn("Error calculating age:", error);
+    logger.warn('Error calculating age', error as Error);
     return null;
   }
 };

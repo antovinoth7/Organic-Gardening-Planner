@@ -24,8 +24,8 @@ export const lightTheme = {
   accentLight: '#fde7d6',
   
   // Border colors
-  border: '#ddd',
-  borderLight: '#eee',
+  border: '#dddddd',
+  borderLight: '#eeeeee',
   borderDark: '#e0e0e0',
   
   // Status colors
@@ -48,12 +48,12 @@ export const lightTheme = {
   inputBackground: '#fff',
   inputText: '#1a1a1a',
   inputPlaceholder: '#5f5f5f',
-  inputBorder: '#ddd',
+  inputBorder: '#dddddd',
   
   // Picker colors
   pickerBackground: '#fff',
   pickerText: '#333',
-  pickerBorder: '#ddd',
+  pickerBorder: '#dddddd',
   
   // Tab bar
   tabBarActive: '#2e7d32',
@@ -84,7 +84,7 @@ export const darkTheme = {
   
   // Border colors
   border: '#404040',
-  borderLight: '#333',
+  borderLight: '#333333',
   borderDark: '#505050',
   
   // Status colors

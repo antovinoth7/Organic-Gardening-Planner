@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from './logger';
 
 /**
  * Safe AsyncStorage Wrapper with Mutex
@@ -22,7 +23,7 @@ class StorageQueue {
     return new Promise((resolve, reject) => {
       // Prevent queue overflow - reject if too many operations pending
       if (this.queue.length >= MAX_QUEUE_SIZE) {
-        console.error(`Storage queue overflow: ${this.queue.length} items pending`);
+        logger.error(`Storage queue overflow: ${this.queue.length} items pending`);
         reject(new Error('Storage queue overflow - too many pending operations'));
         return;
       }
@@ -78,28 +79,28 @@ export const safeGetData = async <T>(key: string, retries = 2): Promise<T[]> => 
         
         // Validate that parsed data is an array
         if (!Array.isArray(parsed)) {
-          console.warn(`Data at key ${key} is not an array, returning empty array`);
+          logger.warn(`Data at key ${key} is not an array, returning empty array`);
           return [];
         }
         
         return parsed;
       } catch (e: any) {
-        console.error(`Error reading ${key} (attempt ${i + 1}/${retries + 1}):`, e);
+        logger.error(`Error reading ${key} (attempt ${i + 1}/${retries + 1}):`, e as Error);
         
         // If JSON parse error, data is corrupted - clear it
         if (e instanceof SyntaxError || e?.message?.includes('JSON')) {
-          console.warn(`Corrupted data at ${key}, clearing...`);
+          logger.warn(`Corrupted data at ${key}, clearing...`);
           try {
             await AsyncStorage.removeItem(key);
           } catch (clearError) {
-            console.error(`Failed to clear corrupted data at ${key}:`, clearError);
+            logger.error(`Failed to clear corrupted data at ${key}:`, clearError as Error);
           }
           return [];
         }
         
         // On last retry, return empty array instead of throwing
         if (i === retries) {
-          console.error(`All retries exhausted for ${key}, returning empty array`);
+          logger.error(`All retries exhausted for ${key}, returning empty array`);
           return [];
         }
         
@@ -108,7 +109,7 @@ export const safeGetData = async <T>(key: string, retries = 2): Promise<T[]> => 
       }
     }
 
-    console.error(`Failed to read ${key} after ${retries + 1} attempts`);
+    logger.error(`Failed to read ${key} after ${retries + 1} attempts`);
     return [];
   });
 };
@@ -122,7 +123,7 @@ export const safeSetData = async <T>(key: string, value: T[], retries = 2): Prom
 
     // Validate input
     if (!Array.isArray(value)) {
-      console.error(`Attempted to save non-array data to ${key}`);
+      logger.error(`Attempted to save non-array data to ${key}`);
       return false;
     }
 
@@ -133,7 +134,7 @@ export const safeSetData = async <T>(key: string, value: T[], retries = 2): Prom
         return true;
       } catch (e: any) {
         lastError = e;
-        console.error(`Error saving ${key} (attempt ${i + 1}/${retries + 1}):`, e);
+        logger.error(`Error saving ${key} (attempt ${i + 1}/${retries + 1}):`, e as Error);
         
         // Wait before retry
         if (i < retries) {
@@ -142,7 +143,7 @@ export const safeSetData = async <T>(key: string, value: T[], retries = 2): Prom
       }
     }
 
-    console.error(`Failed to save ${key} after ${retries + 1} attempts:`, lastError);
+    logger.error(`Failed to save ${key} after ${retries + 1} attempts:`, lastError as Error);
     return false;
   });
 };
@@ -156,7 +157,7 @@ export const safeGetItem = async (key: string, retries = 2): Promise<string | nu
       try {
         return await AsyncStorage.getItem(key);
       } catch (e: any) {
-        console.error(`Error reading item ${key} (attempt ${i + 1}/${retries + 1}):`, e);
+        logger.error(`Error reading item ${key} (attempt ${i + 1}/${retries + 1}):`, e as Error);
         
         if (i < retries) {
           await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
@@ -164,7 +165,7 @@ export const safeGetItem = async (key: string, retries = 2): Promise<string | nu
       }
     }
 
-    console.error(`Failed to read item ${key} after ${retries + 1} attempts`);
+    logger.error(`Failed to read item ${key} after ${retries + 1} attempts`);
     return null;
   });
 };
@@ -179,7 +180,7 @@ export const safeSetItem = async (key: string, value: string, retries = 2): Prom
         await AsyncStorage.setItem(key, value);
         return true;
       } catch (e: any) {
-        console.error(`Error saving item ${key} (attempt ${i + 1}/${retries + 1}):`, e);
+        logger.error(`Error saving item ${key} (attempt ${i + 1}/${retries + 1}):`, e as Error);
         
         if (i < retries) {
           await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
@@ -187,7 +188,7 @@ export const safeSetItem = async (key: string, value: string, retries = 2): Prom
       }
     }
 
-    console.error(`Failed to save item ${key} after ${retries + 1} attempts`);
+    logger.error(`Failed to save item ${key} after ${retries + 1} attempts`);
     return false;
   });
 };

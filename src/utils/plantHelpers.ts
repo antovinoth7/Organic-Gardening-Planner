@@ -1,4 +1,5 @@
 import { GrowthStage, PlantType } from "../types/database.types";
+import { logger } from "./logger";
 
 // Companion planting data
 const COMPANION_PLANTS: Record<string, string[]> = {
@@ -266,7 +267,7 @@ export function calculateExpectedHarvestDate(
     const d = String(harvestDate.getDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;
   } catch (error) {
-    console.warn("Error calculating harvest date:", error);
+    logger.warn("Error calculating harvest date", error as Error);
     return null;
   }
 }

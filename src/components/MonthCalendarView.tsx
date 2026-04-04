@@ -1,13 +1,13 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { TaskTemplate, TaskType } from "../types/database.types";
+import { useTheme } from "../theme";
+import { createStyles } from "../styles/calendarStyles";
 
 interface MonthCalendarViewProps {
   currentMonth: Date;
   selectedDate: Date | null;
-  styles: any;
-  theme: any;
   taskColors: Record<TaskType, string>;
   getTasksForDate: (date: Date) => TaskTemplate[];
   onSelectDate: (date: Date) => void;
@@ -17,13 +17,14 @@ interface MonthCalendarViewProps {
 export default function MonthCalendarView({
   currentMonth,
   selectedDate,
-  styles,
-  theme,
   taskColors,
   getTasksForDate,
   onSelectDate,
   onNavigateMonth,
 }: MonthCalendarViewProps) {
+  const theme = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   const monthStart = new Date(
     currentMonth.getFullYear(),
     currentMonth.getMonth(),

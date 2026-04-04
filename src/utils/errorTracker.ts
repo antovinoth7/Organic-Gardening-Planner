@@ -39,7 +39,7 @@ class ErrorTracker {
       this.initialized = true;
       logger.debug('Error tracker initialized');
     } catch (error) {
-      console.error('Failed to initialize error tracker:', error);
+      logger.error('Failed to initialize error tracker', error as Error);
     }
   }
 
@@ -72,7 +72,7 @@ class ErrorTracker {
     try {
       await AsyncStorage.setItem(ERROR_LOG_KEY, JSON.stringify(this.errorLogs));
     } catch (storageError) {
-      console.error('Failed to save error log:', storageError);
+      logger.error('Failed to save error log', storageError as Error);
     }
 
     // Log to console in development
@@ -121,7 +121,7 @@ class ErrorTracker {
       await AsyncStorage.removeItem(ERROR_LOG_KEY);
       logger.info('Error logs cleared');
     } catch (error) {
-      console.error('Failed to clear error logs:', error);
+      logger.error('Failed to clear error logs', error as Error);
     }
   }
 

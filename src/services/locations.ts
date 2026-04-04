@@ -3,7 +3,7 @@ import { auth, db, refreshAuthToken } from "../lib/firebase";
 import { getData, setData, KEYS } from "../lib/storage";
 import { LocationConfig } from "../types/database.types";
 import { logError } from "../utils/errorLogging";
-import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
+import { withTimeoutAndRetry, FIRESTORE_READ_TIMEOUT_MS } from "../utils/firestoreTimeout";
 
 export const DEFAULT_PARENT_LOCATIONS = [
   "Mangarai",
@@ -135,8 +135,7 @@ export const getLocationConfig = async (): Promise<LocationConfig> => {
   try {
     const docRef = doc(db, SETTINGS_COLLECTION, user.uid);
     const snapshot = await withTimeoutAndRetry(() => getDoc(docRef), {
-      timeoutMs: 10000,
-      maxRetries: 2,
+      timeoutMs: FIRESTORE_READ_TIMEOUT_MS,
     });
 
     if (!snapshot.exists()) {
@@ -147,7 +146,7 @@ export const getLocationConfig = async (): Promise<LocationConfig> => {
             { [LOCATIONS_FIELD]: cached, updated_at: serverTimestamp() },
             { merge: true }
           ),
-        { timeoutMs: 10000, maxRetries: 1, throwOnTimeout: false }
+        { timeoutMs: FIRESTORE_READ_TIMEOUT_MS, maxRetries: 1, throwOnTimeout: false }
       );
       return cached;
     }
@@ -184,7 +183,7 @@ export const saveLocationConfig = async (
           { [LOCATIONS_FIELD]: normalized, updated_at: serverTimestamp() },
           { merge: true }
         ),
-      { timeoutMs: 10000, maxRetries: 2, throwOnTimeout: false }
+      { timeoutMs: FIRESTORE_READ_TIMEOUT_MS, throwOnTimeout: false }
     );
   } catch (error) {
     logError("network", "Failed to save location config", error as Error, {

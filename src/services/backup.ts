@@ -13,6 +13,7 @@ import { getData, setData, KEYS } from "../lib/storage";
 import { getArchivedPlants, getPlants } from "./plants";
 import { getJournalEntries } from "./journal";
 import { Plant, JournalEntry } from "../types/database.types";
+import { QueryDocumentSnapshot } from "firebase/firestore";
 import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
 import {
   createZipWithImages,
@@ -25,12 +26,13 @@ import {
   migrateImagesToMediaLibrary,
   resolveLocalImageUri,
 } from "../lib/imageStorage";
+import { logger } from "../utils/logger";
 
 const BACKUP_PLANT_PAGE_SIZE = 200;
 
 const getAllPlantsForBackup = async (): Promise<Plant[]> => {
   const paginatedPlants: Plant[] = [];
-  let lastDoc: any;
+  let lastDoc: QueryDocumentSnapshot | undefined;
 
   while (true) {
     const { plants, lastDoc: newLastDoc } = await getPlants(
@@ -55,7 +57,7 @@ const getAllPlantsForBackup = async (): Promise<Plant[]> => {
   try {
     archivedPlants = await getArchivedPlants();
   } catch (error) {
-    console.warn("Failed to fetch archived plants for backup:", error);
+    logger.warn("Failed to fetch archived plants for backup", error as Error);
   }
 
   const mergedPlants = new Map<string, Plant>();
@@ -220,7 +222,7 @@ export const getImagesOnlyStorageSize = async (): Promise<number> => {
 
     return totalSize;
   } catch (error) {
-    console.error("Error calculating images-only size:", error);
+    logger.error("Error calculating images-only size", error as Error);
     return 0;
   }
 };
@@ -232,7 +234,7 @@ export const getImagesOnlyStorageSize = async (): Promise<number> => {
  */
 export const exportImagesOnly = async (): Promise<string> => {
   try {
-    console.log("Starting images-only export...");
+    logger.info("Starting images-only export...");
 
     const [plants, journal] = await withTimeoutAndRetry(
       () => Promise.all([getAllPlantsForBackup(), getJournalEntries()]),
@@ -242,7 +244,7 @@ export const exportImagesOnly = async (): Promise<string> => {
     const imageFilenames = collectReferencedImageFilenames(plants, journal);
     const imageFiles = await resolveImageFilesFromFilenames(imageFilenames);
 
-    console.log(`Found ${imageFiles.length} images to export`);
+    logger.info(`Found ${imageFiles.length} images to export`);
 
     if (imageFiles.length === 0) {
       throw new Error("No images found to export");
@@ -256,7 +258,7 @@ export const exportImagesOnly = async (): Promise<string> => {
 
     const zipUri = await createZipWithImages(manifest, imageFiles);
 
-    console.log("Images-only backup created:", zipUri);
+    logger.info("Images-only backup created: " + zipUri);
 
     if (Platform.OS !== "web" && (await isAvailableAsync())) {
       await shareAsync(zipUri, {
@@ -268,7 +270,7 @@ export const exportImagesOnly = async (): Promise<string> => {
 
     return zipUri;
   } catch (error) {
-    console.error("Error exporting images:", error);
+    logger.error("Error exporting images", error as Error);
     throw new Error("Failed to export images: " + (error as Error).message);
   }
 };
@@ -280,7 +282,7 @@ export const exportImagesOnly = async (): Promise<string> => {
  */
 export const importImagesOnly = async (): Promise<number> => {
   try {
-    console.log("Starting images-only import...");
+    logger.info("Starting images-only import...");
 
     const result = await getDocumentAsync({
       type: "application/zip",
@@ -310,14 +312,14 @@ export const importImagesOnly = async (): Promise<number> => {
     if (Platform.OS === "android") {
       try {
         const migration = await migrateImagesToMediaLibrary();
-        console.log("Post-import migration:", migration.message);
+        logger.info("Post-import migration: " + migration.message);
       } catch (migrationError) {
-        console.warn("Post-import migration failed:", migrationError);
+        logger.warn("Post-import migration failed", migrationError as Error);
       }
     }
 
-    console.log(`Extracted ${imageUris.size} images to local storage`);
-    console.log("Available image filenames:", Array.from(imageUris.keys()));
+    logger.info(`Extracted ${imageUris.size} images to local storage`);
+    logger.debug("Available image filenames: " + Array.from(imageUris.keys()).join(", "));
 
     const plants = await getData<Plant>(KEYS.PLANTS);
     const journal = await getData<JournalEntry>(KEYS.JOURNAL);
@@ -414,14 +416,11 @@ export const importImagesOnly = async (): Promise<number> => {
     await setData(KEYS.PLANTS, updatedPlants);
     await setData(KEYS.JOURNAL, updatedJournal);
 
-    console.log("Images import completed:");
-    console.log(`- ${imageUris.size} images extracted`);
-    console.log(`- ${plantsUpdated} plant photos updated`);
-    console.log(`- ${journalUpdated} journal entries updated`);
+    logger.info(`Images import completed: ${imageUris.size} extracted, ${plantsUpdated} plant photos updated, ${journalUpdated} journal entries updated`);
 
     return imageUris.size;
   } catch (error) {
-    console.error("Error importing images:", error);
+    logger.error("Error importing images", error as Error);
     throw new Error("Failed to import images: " + (error as Error).message);
   }
 };

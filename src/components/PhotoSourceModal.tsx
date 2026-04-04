@@ -28,7 +28,7 @@ export default function PhotoSourceModal({
   subtitle = "Choose a source",
 }: PhotoSourceModalProps) {
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
 
   const handleAction = (action: () => void) => {
     onClose();

@@ -24,6 +24,7 @@ export const createStyles = (theme: Theme) =>
         android: {
           elevation: 8,
         },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- web-specific CSS property not in RN StyleSheet types
         web: {
           boxShadow: "0 -2px 8px rgba(0, 0, 0, 0.08)",
         } as any,

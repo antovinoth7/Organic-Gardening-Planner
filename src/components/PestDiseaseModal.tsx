@@ -32,6 +32,7 @@ import { saveImageLocallyWithFilename } from "../lib/imageStorage";
 import { createTaskTemplate } from "../services/tasks";
 import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 import { toLocalDateString, formatDateDisplay } from "../utils/dateHelpers";
+import { logger } from "../utils/logger";
 
 const ISSUE_SEVERITY_OPTIONS: { value: IssueSeverity; label: string }[] = [
   { value: "low", label: "Low" },
@@ -127,7 +128,7 @@ export default function PestDiseaseModal({
       });
       if (!result.canceled) setPestPhotoUri(result.assets[0].uri);
     } catch (error) {
-      console.warn("Camera launch failed:", error);
+      logger.warn("Camera launch failed", error as Error);
       Alert.alert("Camera Error", "Failed to open camera. Please try again.");
     }
   };

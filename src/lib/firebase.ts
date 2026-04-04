@@ -17,6 +17,7 @@ import { initializeApp } from 'firebase/app';
 import * as FirebaseAuth from '@firebase/auth';
 import { initializeFirestore, memoryLocalCache } from 'firebase/firestore';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../utils/logger';
 
 const apiKey = process.env.EXPO_PUBLIC_FIREBASE_API_KEY;
 const authDomain = process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN;
@@ -63,15 +64,15 @@ if (typeof getReactNativePersistence === 'function') {
     auth = FirebaseAuth.initializeAuth(app, {
       persistence: getReactNativePersistence(ReactNativeAsyncStorage),
     });
-  } catch (error: any) {
-    if (error?.code === 'auth/already-initialized') {
+  } catch (error: unknown) {
+    if (error != null && typeof error === 'object' && 'code' in error && (error as { code: unknown }).code === 'auth/already-initialized') {
       auth = FirebaseAuth.getAuth(app);
     } else {
       throw error;
     }
   }
 } else {
-  console.warn(
+  logger.warn(
     'Firebase RN persistence helper is unavailable; falling back to default auth initialization.'
   );
   auth = FirebaseAuth.getAuth(app);
@@ -124,8 +125,8 @@ export const refreshAuthToken = async (forceRefresh = false): Promise<boolean> =
         await user.getIdToken(/* forceRefresh */ true);
         lastTokenRefresh = Date.now();
         return true;
-      } catch (error: any) {
-        console.error('Token refresh failed:', error);
+      } catch (error: unknown) {
+        logger.error('Token refresh failed', error instanceof Error ? error : new Error(String(error)));
         return false;
       } finally {
         pendingRefresh = null;
@@ -133,8 +134,8 @@ export const refreshAuthToken = async (forceRefresh = false): Promise<boolean> =
     })();
 
     return pendingRefresh;
-  } catch (error: any) {
-    console.error('Token refresh failed:', error);
+  } catch (error: unknown) {
+    logger.error('Token refresh failed', error instanceof Error ? error : new Error(String(error)));
     return false;
   }
 };

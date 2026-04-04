@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { auth } from '../lib/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from '@firebase/auth';
@@ -6,10 +6,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import FloatingLabelInput from '../components/FloatingLabelInput';
 import { createStyles } from '../styles/authStyles';
+import { getErrorMessage, getErrorCode } from '../utils/errorLogging';
 
 export default function AuthScreen() {
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
@@ -35,19 +36,20 @@ export default function AuthScreen() {
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
-    } catch (error: any) {
-      let message = error.message;
+    } catch (error: unknown) {
+      let message = getErrorMessage(error);
+      const code = getErrorCode(error);
       
       // Provide user-friendly error messages
-      if (error.code === 'auth/email-already-in-use') {
+      if (code === 'auth/email-already-in-use') {
         message = 'This email is already registered. Please sign in instead.';
-      } else if (error.code === 'auth/invalid-email') {
+      } else if (code === 'auth/invalid-email') {
         message = 'Please enter a valid email address.';
-      } else if (error.code === 'auth/user-not-found') {
+      } else if (code === 'auth/user-not-found') {
         message = 'No account found with this email. Please sign up.';
-      } else if (error.code === 'auth/wrong-password') {
+      } else if (code === 'auth/wrong-password') {
         message = 'Incorrect password. Please try again.';
-      } else if (error.code === 'auth/invalid-credential') {
+      } else if (code === 'auth/invalid-credential') {
         message = 'Invalid email or password. Please try again.';
       }
       

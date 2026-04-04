@@ -191,6 +191,124 @@ npm run web
 npm run lint
 ```
 
+## Naming Conventions
+
+| Artifact | Convention | Example |
+|---|---|---|
+| Components | PascalCase `.tsx` | `PlantCard.tsx` |
+| Screens | PascalCase + `Screen` suffix | `PlantDetailScreen.tsx` |
+| Hooks | `use` prefix, camelCase | `useCalendarData.ts` |
+| Services | camelCase `.ts` | `plants.ts`, `tasks.ts` |
+| Style files | `*Styles.ts` in `src/styles/` | `plantCardStyles.ts` |
+| Constants | `UPPER_SNAKE_CASE` | `DONUT_SIZE`, `ANIMATION_DURATION` |
+| Functions | camelCase | `getTasksByDate`, `createPlantEntry` |
+| Types / Interfaces | PascalCase | `Plant`, `TaskTemplate` |
+
+## TypeScript Standards
+
+- `strict: true` is enforced. Never add `// @ts-ignore` or `// @ts-expect-error` without an explanatory comment.
+- Prefer `interface` for object shapes, `type` for unions/aliases.
+- Use enums for closed stable sets (e.g. `JournalEntryType`). Use union string literals for flexible sets (e.g. `TaskType`).
+- Never use `any`. If a third-party type is missing, extend or wrap it.
+- Use `Partial<T>`, `Pick<T, K>`, `Record<K, V>` generics rather than duplicating shapes.
+- Type all hook return values explicitly; don't rely on inference for public-facing hook contracts.
+- Avoid `as` casts; use type guards instead.
+- Update `src/types/database.types.ts` first whenever the Firestore schema changes.
+
+## Component Standards
+
+- Functional components only. No class components except `ErrorBoundary`.
+- Define a `Props` interface at the top of each component file and destructure props in the function signature.
+- Keep components focused — split at ~300 lines.
+- Styles live in `src/styles/<name>Styles.ts` via `createStyles(theme)`. Never use inline `StyleSheet.create` inside a component file.
+- Access theme via `useTheme()`. Never hardcode colors.
+- Use `useCallback` and `useMemo` for values passed to child components.
+- Add `accessible`, `accessibilityLabel`, and `accessibilityRole` where relevant.
+
+### Component Template
+
+```tsx
+import React, { useCallback, useMemo } from 'react';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { useTheme } from '../theme/ThemeContext';
+import { createStyles } from '../styles/myComponentStyles';
+
+interface Props {
+  value: string;
+  onPress: () => void;
+}
+
+export function MyComponent({ value, onPress }: Props) {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
+  const handlePress = useCallback(() => {
+    onPress();
+  }, [onPress]);
+
+  return (
+    <TouchableOpacity style={styles.container} onPress={handlePress}>
+      <Text style={styles.label}>{value}</Text>
+    </TouchableOpacity>
+  );
+}
+```
+
+## Hook Standards
+
+- One concern per hook. Compose small hooks rather than building monolithic ones.
+- Always clean up subscriptions, intervals, and async operations:
+  - Use an `isMounted` ref to guard `setState` after unmount.
+  - Return a cleanup function from `useEffect`.
+- Use `useFocusEffect` (React Navigation) instead of `useEffect` when data must refresh on screen re-focus.
+- Memoize expensive derived data with `useMemo`. Use `Map` for O(1) lookups over arrays.
+- Export hook return types explicitly.
+- When adding complex data logic to a screen, extract it into a custom hook in `src/hooks/`.
+
+## State Management Rules
+
+- `useState` for local UI state.
+- React Context API for cross-screen state (theme, tab bar scroll). No Redux or external store.
+- Server/async state lives inside custom hooks with explicit loading/error states.
+- After any mutation, call the relevant service's `invalidate()` to mark the in-memory cache stale.
+
+## Performance Standards
+
+- Use `FlatList` / `SectionList` for any list that may exceed ~20 items. Never `ScrollView` + `.map()` for dynamic lists.
+- Memoize `renderItem` and `keyExtractor` with `useCallback`.
+- Render images with `expo-image` and `cachePolicy="memory-disk"`.
+- Avoid anonymous functions in JSX props — extract to `useCallback`.
+- Add `removeClippedSubviews` on long flat lists.
+- Debounce user search input (minimum 300 ms).
+
+## Navigation Standards
+
+- Navigator definitions live in `App.tsx`. Do not define navigators inside screen files.
+- Screen components access navigation via `useNavigation()` and `useRoute()` hooks only.
+- Pass only primitives or serialisable values via route params. Load full objects inside the screen.
+- Coordinate scroll-hide behaviour through `TabBarScrollContext`; do not reimplement scroll detection in individual screens.
+- Keep existing route names unchanged unless all callers are updated in the same change.
+
+## Code Quality Rules
+
+- No `console.log` in committed code. Use `src/utils/logger.ts` or remove debug statements.
+- No commented-out code blocks. Delete dead code; git history preserves it.
+- No TODO comments without an associated issue number.
+- ESLint must pass with zero errors before committing (`npm run lint`).
+- Keep functions ≤ 50 lines; extract helpers when exceeded.
+- Magic numbers must be named constants.
+- No docstrings, comments, or type annotations added to code that was not changed.
+- No error handling for impossible scenarios; no abstractions for one-off operations.
+
+## File Creation Checklist
+
+Before creating a new file:
+1. Does an existing file already handle this concern?
+2. Is the file in the correct `src/` subdirectory?
+3. Does it follow the naming convention above?
+4. For a new component or screen: is there a matching `*Styles.ts` in `src/styles/`?
+5. For a new service: does it implement the cache → auth refresh → Firestore → AsyncStorage fallback pattern?
+
 ## When You Change Behavior
 - Update this file if contributor guidance changes.
 - Keep `README.md` as the primary architecture and usage document, and update any remaining docs only if you also bring them in line with the code.

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   getTaskTemplates,
   deleteTasksForPlantIds,
@@ -12,8 +12,41 @@ import {
   JournalEntry,
 } from "../types/database.types";
 import { isNetworkAvailable } from "../utils/networkState";
+import { logger } from "../utils/logger";
 
-type GroupBy = "none" | "location" | "type";
+type GroupBy = "none" | "location" | "type" | "plant";
+
+export interface HarvestReadyItem {
+  plant: Plant;
+  nextDate: Date;
+  daysUntil: number;
+  isReady: boolean;
+}
+
+export interface UseCalendarDataReturn {
+  tasks: TaskTemplate[];
+  plants: Plant[];
+  initialLoading: boolean;
+  refreshing: boolean;
+  isMountedRef: React.MutableRefObject<boolean>;
+  loadData: (options?: { force?: boolean }) => Promise<void>;
+  handleRefresh: () => Promise<void>;
+  plantMap: Map<string, Plant>;
+  filteredTasks: TaskTemplate[];
+  overdueTasks: TaskTemplate[];
+  tasksByDateKey: Map<string, TaskTemplate[]>;
+  filteredHarvestsReady: HarvestReadyItem[];
+  todayTasks: TaskTemplate[];
+  weekTasks: TaskTemplate[];
+  tasksForDisplay: TaskTemplate[];
+  groupedTasks: Record<string, TaskTemplate[]>;
+  isSearching: boolean;
+  getTasksForDate: (date: Date) => TaskTemplate[];
+  getRawTasksForDate: (date: Date) => TaskTemplate[];
+  getPlantDetails: (plantId: string | null) => { name: string; location: string; type: string };
+  groupTasks: (taskList: TaskTemplate[]) => Record<string, TaskTemplate[]>;
+  sortTasks: (taskList: TaskTemplate[]) => TaskTemplate[];
+}
 
 interface UseCalendarDataOptions {
   normalizedSearchQuery: string;
@@ -23,6 +56,8 @@ interface UseCalendarDataOptions {
   currentMonth: Date;
   selectedDate: Date | null;
   groupBy: GroupBy;
+  filterTaskTypes: Set<string>;
+  filterOverdueOnly: boolean;
 }
 
 export function useCalendarData({
@@ -33,7 +68,9 @@ export function useCalendarData({
   currentMonth,
   selectedDate,
   groupBy,
-}: UseCalendarDataOptions) {
+  filterTaskTypes,
+  filterOverdueOnly,
+}: UseCalendarDataOptions): UseCalendarDataReturn {
   const [tasks, setTasks] = useState<TaskTemplate[]>([]);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [harvestEntries, setHarvestEntries] = useState<JournalEntry[]>([]);
@@ -42,6 +79,13 @@ export function useCalendarData({
 
   const isMountedRef = useRef(true);
   const lastLoadTimeRef = useRef(0);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const loadData = React.useCallback(async (options?: { force?: boolean }) => {
     // Debounce: skip if loaded recently (within 2s) unless forced
@@ -90,7 +134,7 @@ export function useCalendarData({
                   errorCode !== "permission-denied" &&
                   errorCode !== "unauthenticated"
                 ) {
-                  console.warn(`Failed to verify plant ${plantId}:`, error);
+                  logger.warn(`Failed to verify plant ${plantId}:`, error as Error);
                 }
                 return null;
               }
@@ -104,7 +148,7 @@ export function useCalendarData({
       }
     } catch (error) {
       if (!isMountedRef.current) return;
-      console.error(error);
+      logger.error('Failed to load calendar data', error as Error);
     } finally {
       if (isMountedRef.current) {
         setInitialLoading(false);
@@ -188,7 +232,7 @@ export function useCalendarData({
       if (groupBy === "none") return { "": sorted };
 
       if (groupBy === "location") {
-        return sorted.reduce(
+        return sorted.reduce<Record<string, TaskTemplate[]>>(
           (acc, task) => {
             const location =
               getPlantDetails(task.plant_id).location || "General";
@@ -196,19 +240,31 @@ export function useCalendarData({
             acc[location].push(task);
             return acc;
           },
-          {} as Record<string, TaskTemplate[]>,
+          {},
         );
       }
 
       if (groupBy === "type") {
-        return sorted.reduce(
+        return sorted.reduce<Record<string, TaskTemplate[]>>(
           (acc, task) => {
             const type = task.task_type;
             if (!acc[type]) acc[type] = [];
             acc[type].push(task);
             return acc;
           },
-          {} as Record<string, TaskTemplate[]>,
+          {},
+        );
+      }
+
+      if (groupBy === "plant") {
+        return sorted.reduce<Record<string, TaskTemplate[]>>(
+          (acc, task) => {
+            const plantName = getPlantDetails(task.plant_id).name || "General";
+            if (!acc[plantName]) acc[plantName] = [];
+            acc[plantName].push(task);
+            return acc;
+          },
+          {},
         );
       }
 
@@ -219,10 +275,26 @@ export function useCalendarData({
 
   const isSearching = normalizedSearchQuery.length > 0;
 
-  const filteredTasks = useMemo(
+  // Tasks after search only — used for raw date lookups (ignores type/overdue filters)
+  const searchFilteredTasks = useMemo(
     () => filterTasksBySearch(tasks),
     [tasks, filterTasksBySearch],
   );
+
+  const filteredTasks = useMemo(() => {
+    let result = searchFilteredTasks;
+    if (filterTaskTypes.size > 0) {
+      result = result.filter((t) => filterTaskTypes.has(t.task_type));
+    }
+    if (filterOverdueOnly) {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      result = result.filter(
+        (t) => t.next_due_at && new Date(t.next_due_at) < todayStart,
+      );
+    }
+    return result;
+  }, [searchFilteredTasks, filterTaskTypes, filterOverdueOnly]);
 
   // Pre-build a date→tasks map so calendar cells do O(1) lookups instead of O(tasks) per cell
   const tasksByDateKey = useMemo(() => {
@@ -240,11 +312,35 @@ export function useCalendarData({
     return map;
   }, [filteredTasks]);
 
+  // Raw date map — search-filtered only, ignores type/overdue filters
+  // Used to distinguish "no tasks exist" from "tasks hidden by filter"
+  const rawTasksByDateKey = useMemo(() => {
+    const map = new Map<string, TaskTemplate[]>();
+    for (const task of searchFilteredTasks) {
+      if (!task.next_due_at) continue;
+      const key = new Date(task.next_due_at).toDateString();
+      const arr = map.get(key);
+      if (arr) {
+        arr.push(task);
+      } else {
+        map.set(key, [task]);
+      }
+    }
+    return map;
+  }, [searchFilteredTasks]);
+
   const getTasksForDate = React.useCallback(
     (date: Date) => {
       return tasksByDateKey.get(date.toDateString()) || [];
     },
     [tasksByDateKey],
+  );
+
+  const getRawTasksForDate = React.useCallback(
+    (date: Date) => {
+      return rawTasksByDateKey.get(date.toDateString()) || [];
+    },
+    [rawTasksByDateKey],
   );
 
   const getHarvestsReady = React.useCallback(() => {
@@ -281,18 +377,26 @@ export function useCalendarData({
           isReady: daysUntil <= 7 && daysUntil >= 0,
         };
       })
-      .filter(Boolean);
+      .filter((item): item is HarvestReadyItem => item !== null);
   }, [plants, harvestEntries]);
 
   const harvestsReady = useMemo(() => getHarvestsReady(), [getHarvestsReady]);
 
+  const overdueTasks = useMemo(() => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    return filteredTasks.filter(
+      (t) => t.next_due_at && new Date(t.next_due_at) < todayStart,
+    );
+  }, [filteredTasks]);
+
   const filteredHarvestsReady = useMemo(
     () =>
       normalizedSearchQuery
-        ? harvestsReady.filter((item: any) => {
-            const plantName = item?.plant?.name || "";
-            const plantLocation = item?.plant?.location || "";
-            const plantType = item?.plant?.plant_type || "";
+        ? harvestsReady.filter((item: HarvestReadyItem) => {
+            const plantName = item.plant.name || "";
+            const plantLocation = item.plant.location || "";
+            const plantType = item.plant.plant_type || "";
             return [
               plantName,
               plantLocation,
@@ -382,6 +486,7 @@ export function useCalendarData({
     // Derived data
     plantMap,
     filteredTasks,
+    overdueTasks,
     tasksByDateKey,
     filteredHarvestsReady,
     todayTasks,
@@ -391,6 +496,7 @@ export function useCalendarData({
     isSearching,
     // Helpers
     getTasksForDate,
+    getRawTasksForDate,
     getPlantDetails,
     groupTasks,
     sortTasks,

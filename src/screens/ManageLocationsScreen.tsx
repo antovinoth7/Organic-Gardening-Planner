@@ -13,6 +13,7 @@ import FloatingLabelInput from "../components/FloatingLabelInput";
 import { Ionicons } from "@expo/vector-icons";
 import ThemedDropdown from "../components/ThemedDropdown";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNavigation, NavigationProp, ParamListBase } from "@react-navigation/native";
 import { useTheme } from "../theme";
 import {
   DEFAULT_CHILD_LOCATIONS,
@@ -26,6 +27,7 @@ import { getAllPlants, updatePlantLocation } from "../services/plants";
 import { Plant } from "../types/database.types";
 import { sanitizeLandmarkText } from "../utils/textSanitizer";
 import { createStyles } from "../styles/manageLocationsStyles";
+import { getErrorMessage } from "../utils/errorLogging";
 
 type EditModalState = {
   type: "parent" | "child";
@@ -65,9 +67,10 @@ const isDuplicate = (list: string[], value: string, ignore?: string) => {
   });
 };
 
-export default function ManageLocationsScreen({ navigation }: any) {
+export default function ManageLocationsScreen() {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
 
   const [parentLocations, setParentLocations] = useState<string[]>(
@@ -101,10 +104,10 @@ export default function ManageLocationsScreen({ navigation }: any) {
       setChildLocations(config.childLocations);
       setShortNames(config.parentLocationShortNames ?? {});
       setPlants(allPlants);
-    } catch (error: any) {
+    } catch (error: unknown) {
       Alert.alert(
         "Error",
-        error?.message || "Failed to load locations. Please try again.",
+        getErrorMessage(error) || "Failed to load locations. Please try again.",
       );
     } finally {
       setLoading(false);
@@ -227,10 +230,10 @@ export default function ManageLocationsScreen({ navigation }: any) {
       await saveConfig([...parentLocations, name], childLocations, updatedShortNames);
       setNewParentName("");
       setNewParentShortName("");
-    } catch (error: any) {
+    } catch (error: unknown) {
       Alert.alert(
         "Error",
-        error?.message || "Failed to add location. Please try again.",
+        getErrorMessage(error) || "Failed to add location. Please try again.",
       );
     } finally {
       setSaving(false);
@@ -259,10 +262,10 @@ export default function ManageLocationsScreen({ navigation }: any) {
     try {
       await saveConfig(parentLocations, [...childLocations, name]);
       setNewChildName("");
-    } catch (error: any) {
+    } catch (error: unknown) {
       Alert.alert(
         "Error",
-        error?.message || "Failed to add section. Please try again.",
+        getErrorMessage(error) || "Failed to add section. Please try again.",
       );
     } finally {
       setSaving(false);
@@ -324,10 +327,10 @@ export default function ManageLocationsScreen({ navigation }: any) {
           await saveConfig(parentLocations, updatedChildren);
         }
         setEditModal(null);
-      } catch (error: any) {
+      } catch (error: unknown) {
         Alert.alert(
           "Error",
-          error?.message || "Failed to rename. Please try again.",
+          getErrorMessage(error) || "Failed to rename. Please try again.",
         );
       } finally {
         setSaving(false);
@@ -409,10 +412,10 @@ export default function ManageLocationsScreen({ navigation }: any) {
         await saveConfig(parentLocations, updatedChildren);
       }
       setReassignModal(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       Alert.alert(
         "Error",
-        error?.message || "Failed to delete. Please try again.",
+        getErrorMessage(error) || "Failed to delete. Please try again.",
       );
     } finally {
       setSaving(false);

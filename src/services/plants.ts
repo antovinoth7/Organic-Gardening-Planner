@@ -23,8 +23,9 @@ import {
   SavedImage,
 } from "../lib/imageStorage";
 import { getData, setData, KEYS } from "../lib/storage";
-import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
+import { withTimeoutAndRetry, FIRESTORE_WRITE_TIMEOUT_MS, FIRESTORE_READ_TIMEOUT_MS } from "../utils/firestoreTimeout";
 import { logError } from "../utils/errorLogging";
+import { logger } from "../utils/logger";
 import {
   getCached,
   setCached,
@@ -73,8 +74,7 @@ export const getPlants = async (
 
     // Wrap Firestore call with timeout
     const snapshot = await withTimeoutAndRetry(() => getDocs(q), {
-      timeoutMs: 15000,
-      maxRetries: 2,
+      timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS,
     });
 
     // Batch image resolution for better performance
@@ -102,7 +102,7 @@ export const getPlants = async (
         try {
           return await resolveLocalImageUri(p.photoIdentifier);
         } catch (error) {
-          console.warn("Failed to resolve plant image:", error);
+          logger.warn("Failed to resolve plant image", error as Error);
           return null;
         }
       }),
@@ -127,7 +127,7 @@ export const getPlants = async (
       lastDoc: snapshot.docs[snapshot.docs.length - 1],
     };
   } catch (error) {
-    console.warn("Failed to fetch from Firestore, using cached data:", error);
+    logger.warn("Failed to fetch plants, using cached data", error as Error);
     logError(
       "network",
       "Failed to fetch plants from Firestore",
@@ -145,7 +145,7 @@ export const getPlants = async (
         try {
           return await resolveLocalImageUri(id);
         } catch (error) {
-          console.warn("Failed to resolve cached plant image:", error);
+          logger.warn("Failed to resolve cached plant image", error as Error);
           return null;
         }
       }),
@@ -186,9 +186,9 @@ export const getAllPlants = async (
 
       lastDoc = response.lastDoc;
     } catch (error) {
-      console.warn(
-        "getAllPlants: page fetch failed, returning partial results:",
-        error,
+      logger.warn(
+        "getAllPlants: page fetch failed, returning partial results",
+        error as Error,
       );
       break;
     }
@@ -202,11 +202,12 @@ export const getPlant = async (id: string): Promise<Plant | null> => {
   const user = auth.currentUser;
   if (!user) throw new Error("Not authenticated");
 
+  await refreshAuthToken();
+
   const docRef = doc(db, PLANTS_COLLECTION, id);
 
   const docSnap = await withTimeoutAndRetry(() => getDoc(docRef), {
-    timeoutMs: 10000,
-    maxRetries: 2,
+    timeoutMs: FIRESTORE_READ_TIMEOUT_MS,
   });
 
   if (!docSnap.exists()) return null;
@@ -215,7 +216,7 @@ export const getPlant = async (id: string): Promise<Plant | null> => {
 
   // Security: Verify the plant belongs to the current user
   if (data.user_id !== user.uid) {
-    console.warn("Attempted to access plant belonging to another user");
+    logger.warn("Attempted to access plant belonging to another user");
     return null;
   }
 
@@ -249,8 +250,7 @@ export const getArchivedPlants = async (): Promise<Plant[]> => {
     );
 
     const snapshot = await withTimeoutAndRetry(() => getDocs(q), {
-      timeoutMs: 15000,
-      maxRetries: 2,
+      timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS,
     });
 
     const plants = snapshot.docs.map((doc) => {
@@ -275,7 +275,7 @@ export const getArchivedPlants = async (): Promise<Plant[]> => {
 
     return plants;
   } catch (error) {
-    console.warn("Failed to fetch archived plants, using cached data:", error);
+    logger.warn("Failed to fetch archived plants, using cached data", error as Error);
     const cachedPlants = await getData<Plant>(KEYS.PLANTS);
     return cachedPlants.filter((plant) => plant.is_deleted);
   }
@@ -292,8 +292,7 @@ export const plantExists = async (id: string): Promise<boolean> => {
   );
 
   const snapshot = await withTimeoutAndRetry(() => getDocs(q), {
-    timeoutMs: 10000,
-    maxRetries: 2,
+    timeoutMs: FIRESTORE_READ_TIMEOUT_MS,
   });
 
   return !snapshot.empty;
@@ -319,7 +318,7 @@ export const createPlant = async (
 
   const docRef = await withTimeoutAndRetry(
     () => addDoc(collection(db, PLANTS_COLLECTION), newPlant),
-    { timeoutMs: 15000, maxRetries: 2 },
+    { timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS },
   );
 
   const resolvedPhotoUrl = await resolveLocalImageUri(photoFilename ?? null);
@@ -353,8 +352,7 @@ export const updatePlant = async (
     delete (firestoreUpdates as Partial<Plant>).photo_url;
   }
   await withTimeoutAndRetry(() => updateDoc(docRef, firestoreUpdates as any), {
-    timeoutMs: 15000,
-    maxRetries: 2,
+    timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS,
   });
 
   const updated = await getPlant(id);
@@ -380,8 +378,7 @@ export const updatePlantLocation = async (
 ): Promise<void> => {
   const docRef = doc(db, PLANTS_COLLECTION, id);
   await withTimeoutAndRetry(() => updateDoc(docRef, { location }), {
-    timeoutMs: 10000,
-    maxRetries: 2,
+    timeoutMs: FIRESTORE_READ_TIMEOUT_MS,
   });
 
   invalidate(CACHE_KEYS.ALL_PLANTS);
@@ -401,7 +398,7 @@ export const updatePlantVariety = async (
   const docRef = doc(db, PLANTS_COLLECTION, id);
   await withTimeoutAndRetry(
     () => updateDoc(docRef, { plant_variety: plantVariety }),
-    { timeoutMs: 10000, maxRetries: 2 },
+    { timeoutMs: FIRESTORE_READ_TIMEOUT_MS },
   );
 
   invalidate(CACHE_KEYS.ALL_PLANTS);
@@ -425,7 +422,7 @@ export const deletePlant = async (id: string): Promise<void> => {
         is_deleted: true,
         deleted_at: Timestamp.now(),
       }),
-    { timeoutMs: 10000, maxRetries: 2 },
+    { timeoutMs: FIRESTORE_READ_TIMEOUT_MS },
   );
 
   // Invalidate in-memory cache
@@ -441,7 +438,7 @@ export const deletePlant = async (id: string): Promise<void> => {
     const { deleteTasksForPlantIds } = await import("./tasks");
     await deleteTasksForPlantIds([id]);
   } catch (error) {
-    console.warn("Failed to cascade-delete tasks for plant:", error);
+    logger.warn("Failed to cascade-delete tasks for plant", error as Error);
   }
 };
 
@@ -453,12 +450,11 @@ export const restorePlant = async (id: string): Promise<Plant> => {
         is_deleted: false,
         deleted_at: null,
       }),
-    { timeoutMs: 10000, maxRetries: 2 },
+    { timeoutMs: FIRESTORE_READ_TIMEOUT_MS },
   );
 
   const docSnap = await withTimeoutAndRetry(() => getDoc(docRef), {
-    timeoutMs: 10000,
-    maxRetries: 2,
+    timeoutMs: FIRESTORE_READ_TIMEOUT_MS,
   });
 
   if (!docSnap.exists()) throw new Error("Plant not found");

@@ -111,42 +111,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     gridRow: {
       justifyContent: "space-between",
     },
-    activeFiltersRow: {
-      backgroundColor: theme.background,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-    },
-    activeFiltersScroll: {
-      alignItems: "center",
-      gap: 6,
-    },
-    activeFilterPill: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.primaryLight,
-      borderRadius: 14,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      gap: 4,
-      borderWidth: 1,
-      borderColor: theme.primary,
-    },
-    activeFilterPillText: {
-      fontSize: 12,
-      color: theme.primary,
-      fontWeight: "600",
-    },
-    clearAllPill: {
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-    },
-    clearAllPillText: {
-      fontSize: 12,
-      color: theme.error,
-      fontWeight: "600",
-    },
+
     sortMenu: {
       backgroundColor: theme.backgroundSecondary,
       marginHorizontal: 16,
@@ -289,6 +254,37 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
+    },
+    resultsRight: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    sortPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 14,
+      backgroundColor: theme.backgroundSecondary,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    sortPillText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: theme.text,
+    },
+    viewToggleBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: theme.backgroundSecondary,
+      borderWidth: 1,
+      borderColor: theme.border,
+      alignItems: "center",
+      justifyContent: "center",
     },
     resultsCount: {
       fontSize: 16,

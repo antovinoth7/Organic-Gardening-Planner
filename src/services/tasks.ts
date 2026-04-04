@@ -19,14 +19,16 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { getData, setData, KEYS } from "../lib/storage";
-import { withTimeoutAndRetry } from "../utils/firestoreTimeout";
+import { withTimeoutAndRetry, FIRESTORE_WRITE_TIMEOUT_MS, FIRESTORE_READ_TIMEOUT_MS } from "../utils/firestoreTimeout";
 import { logError } from "../utils/errorLogging";
+import { logger } from "../utils/logger";
 import {
   getCached,
   setCached,
   invalidate,
   CACHE_KEYS,
 } from "../lib/dataCache";
+import { TASK_DUE_TIME_HOUR, MS_PER_DAY } from "../utils/taskConstants";
 import {
   getCurrentSeason,
   getWateringFrequencyMultiplier,
@@ -74,8 +76,7 @@ export const getTaskTemplates = async (): Promise<TaskTemplate[]> => {
     );
 
     const snapshot = await withTimeoutAndRetry(() => getDocs(q), {
-      timeoutMs: 15000,
-      maxRetries: 2,
+      timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS,
     });
 
     const tasks = snapshot.docs.map((doc) => ({
@@ -95,7 +96,7 @@ export const getTaskTemplates = async (): Promise<TaskTemplate[]> => {
 
     return tasks;
   } catch (error) {
-    console.warn("Failed to fetch from Firestore, using cached data:", error);
+    logger.warn("Failed to fetch task templates, using cached data", error as Error);
     logError("network", "Failed to fetch task templates", error as Error);
     return getData<TaskTemplate>(KEYS.TASKS);
   }
@@ -133,8 +134,7 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
     );
 
     const snapshot = await withTimeoutAndRetry(() => getDocs(q), {
-      timeoutMs: 15000,
-      maxRetries: 2,
+      timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS,
     });
 
     let tasks = snapshot.docs.map((doc) => ({
@@ -161,7 +161,7 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
     setCached(CACHE_KEYS.TODAY_TASKS, tasks);
     return tasks;
   } catch (error) {
-    console.warn("Failed to fetch from Firestore, using cached data:", error);
+    logger.warn("Failed to fetch today tasks, using cached data", error as Error);
     logError("network", "Failed to fetch today tasks", error as Error);
     const cachedTasks = await getData<TaskTemplate>(KEYS.TASKS);
     const todayEnd = new Date(
@@ -200,7 +200,7 @@ export const createTaskTemplate = async (
 
   const docRef = await withTimeoutAndRetry(
     () => addDoc(collection(db, TASKS_COLLECTION), newTemplate),
-    { timeoutMs: 15000, maxRetries: 2 },
+    { timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS },
   );
 
   const result = {
@@ -234,14 +234,12 @@ export const updateTaskTemplate = async (
   }
 
   await withTimeoutAndRetry(() => updateDoc(docRef, firestoreUpdates), {
-    timeoutMs: 15000,
-    maxRetries: 2,
+    timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS,
   });
 
   // Use direct document read instead of query for better performance
   const docSnap = await withTimeoutAndRetry(() => getDoc(docRef), {
-    timeoutMs: 10000,
-    maxRetries: 2,
+    timeoutMs: FIRESTORE_READ_TIMEOUT_MS,
   });
 
   if (!docSnap.exists()) throw new Error("Task template not found");
@@ -287,10 +285,10 @@ export const deleteTasksForPlantIds = async (
     try {
       await withTimeoutAndRetry(
         () => deleteDoc(doc(db, TASKS_COLLECTION, task.id)),
-        { timeoutMs: 10000, maxRetries: 2 },
+        { timeoutMs: FIRESTORE_READ_TIMEOUT_MS },
       );
     } catch (error) {
-      console.warn(`Failed to delete task template ${task.id}:`, error);
+      logger.warn(`Failed to delete task template ${task.id}`, error as Error);
     }
   }
 
@@ -298,10 +296,10 @@ export const deleteTasksForPlantIds = async (
     try {
       await withTimeoutAndRetry(
         () => deleteDoc(doc(db, TASK_LOGS_COLLECTION, log.id)),
-        { timeoutMs: 10000, maxRetries: 2 },
+        { timeoutMs: FIRESTORE_READ_TIMEOUT_MS },
       );
     } catch (error) {
-      console.warn(`Failed to delete task log ${log.id}:`, error);
+      logger.warn(`Failed to delete task log ${log.id}`, error as Error);
     }
   }
 
@@ -365,7 +363,7 @@ export const markTaskDone = async (
   // Calculate next due date at 6 PM (18:00) instead of using completion time
   const nextDueAt = new Date(doneAt);
   nextDueAt.setDate(nextDueAt.getDate() + effectiveDays);
-  nextDueAt.setHours(18, 0, 0, 0); // Always set to 6:00 PM
+  nextDueAt.setHours(TASK_DUE_TIME_HOUR, 0, 0, 0); // Always set to 6:00 PM
 
   const startOfDay = new Date(doneAt);
   startOfDay.setHours(0, 0, 0, 0);
@@ -469,9 +467,9 @@ export const markTaskDone = async (
         await setData(KEYS.PLANTS, cachedPlants);
       }
     } catch (error) {
-      console.warn(
-        `Failed to update ${plantLastCareField} for plant ${template.plant_id}:`,
-        error,
+      logger.warn(
+        `Failed to update ${plantLastCareField} for plant ${template.plant_id}`,
+        error as Error,
       );
     }
   }
@@ -492,6 +490,8 @@ export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {
   if (!user) throw new Error("Not authenticated");
 
   try {
+    await refreshAuthToken();
+
     let q;
 
     if (templateId) {
@@ -509,7 +509,9 @@ export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {
       );
     }
 
-    const snapshot = await getDocs(q);
+    const snapshot = await withTimeoutAndRetry(() => getDocs(q), {
+      timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS,
+    });
     const logs = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
@@ -530,7 +532,7 @@ export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {
 
     return logs;
   } catch (error) {
-    console.warn("Failed to fetch from Firestore, using cached data:", error);
+    logger.warn("Failed to fetch task logs, using cached data", error as Error);
     const cachedLogs = await getData<TaskLog>(KEYS.TASK_LOGS);
     const filtered = templateId
       ? cachedLogs.filter((log) => log.template_id === templateId)
@@ -569,8 +571,7 @@ export const getTodayTaskLogs = async (): Promise<TaskLog[]> => {
     );
 
     const snapshot = await withTimeoutAndRetry(() => getDocs(q), {
-      timeoutMs: 15000,
-      maxRetries: 2,
+      timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS,
     });
 
     const logs = snapshot.docs.map((d) => ({
@@ -590,7 +591,7 @@ export const getTodayTaskLogs = async (): Promise<TaskLog[]> => {
     setCached(CACHE_KEYS.TODAY_TASK_LOGS, logs);
     return logs;
   } catch (error) {
-    console.warn("Failed to fetch today logs, using cached data:", error);
+    logger.warn("Failed to fetch today logs, using cached data", error as Error);
     const cachedLogs = await getData<TaskLog>(KEYS.TASK_LOGS);
     return cachedLogs.filter((log) => {
       const logDate = new Date(log.done_at);
@@ -624,7 +625,7 @@ const computeNextDueAt = (
 
   const nextDueAt = new Date(base);
   nextDueAt.setDate(nextDueAt.getDate() + frequency);
-  nextDueAt.setHours(18, 0, 0, 0);
+  nextDueAt.setHours(TASK_DUE_TIME_HOUR, 0, 0, 0);
 
   return nextDueAt.toISOString();
 };
@@ -826,7 +827,7 @@ export const calculateTaskPriority = (
   const dueDate = new Date(task.next_due_at);
   const now = new Date();
   const daysOverdue = Math.floor(
-    (now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24),
+    (now.getTime() - dueDate.getTime()) / MS_PER_DAY,
   );
 
   if (daysOverdue > 2) {

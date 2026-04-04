@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -23,28 +23,36 @@ import { getAllPlants } from "../services/plants";
 import { Plant, JournalEntry, JournalEntryType } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNavigation, useRoute, NavigationProp, ParamListBase } from "@react-navigation/native";
 import { useTheme } from "../theme";
 import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 import { createStyles } from "../styles/journalFormStyles";
+import { logger } from "../utils/logger";
 import {
   getFilenameFromUri,
   getLocalImageUriFromFilename,
   resolveLocalImageUri,
 } from "../lib/imageStorage";
+import { getErrorMessage } from "../utils/errorLogging";
 
 type PhotoItem = {
   uri: string | null;
   filename: string | null;
 };
 
-export default function JournalFormScreen({ navigation, route }: any) {
+export default function JournalFormScreen() {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const route = useRoute();
+  const params = (route.params || {}) as {
+    entry?: JournalEntry;
+    initialEntryType?: JournalEntryType;
+    initialPlantId?: string;
+  };
+  const editEntry = params.entry;
+  const initialEntryType = params.initialEntryType;
+  const initialPlantId = params.initialPlantId;
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const editEntry = route.params?.entry as JournalEntry | undefined;
-  const initialEntryType = route.params?.initialEntryType as
-    | JournalEntryType
-    | undefined;
-  const initialPlantId = route.params?.initialPlantId as string | undefined;
   const isEditing = !!editEntry;
 
   const [entryType, setEntryType] = useState<JournalEntryType>(
@@ -111,8 +119,8 @@ export default function JournalFormScreen({ navigation, route }: any) {
     try {
       const data = await getAllPlants();
       setPlants(data);
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
+    } catch (error: unknown) {
+      Alert.alert("Error", getErrorMessage(error));
     }
   };
 
@@ -164,7 +172,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
         }
       }
     } catch (error) {
-      console.warn("Camera launch failed:", error);
+      logger.warn("Camera launch failed", error as Error);
       Alert.alert("Camera Error", "Failed to open camera. Please try again.");
     }
   };
@@ -286,14 +294,14 @@ export default function JournalFormScreen({ navigation, route }: any) {
         params: { refresh: Date.now() },
         merge: true,
       });
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
+    } catch (error: unknown) {
+      Alert.alert("Error", getErrorMessage(error));
     } finally {
       setLoading(false);
     }
   };
 
-  const styles = createStyles(theme);
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   return (
     <KeyboardAvoidingView
@@ -517,12 +525,14 @@ export default function JournalFormScreen({ navigation, route }: any) {
 
             <Text style={styles.label}>Quality</Text>
             <View style={styles.qualityButtons}>
-              {[
-                { value: "excellent", label: "Excellent", emoji: "🌟" },
-                { value: "good", label: "Good", emoji: "👍" },
-                { value: "fair", label: "Fair", emoji: "👌" },
-                { value: "poor", label: "Poor", emoji: "👎" },
-              ].map((quality) => (
+              {(
+                [
+                  { value: "excellent" as const, label: "Excellent", emoji: "🌟" },
+                  { value: "good" as const, label: "Good", emoji: "👍" },
+                  { value: "fair" as const, label: "Fair", emoji: "👌" },
+                  { value: "poor" as const, label: "Poor", emoji: "👎" },
+                ] satisfies Array<{ value: "excellent" | "good" | "fair" | "poor"; label: string; emoji: string }>
+              ).map((quality) => (
                 <TouchableOpacity
                   key={quality.value}
                   style={[
@@ -530,7 +540,7 @@ export default function JournalFormScreen({ navigation, route }: any) {
                     harvestQuality === quality.value &&
                       styles.qualityButtonActive,
                   ]}
-                  onPress={() => setHarvestQuality(quality.value as any)}
+                  onPress={() => setHarvestQuality(quality.value)}
                 >
                   <Text style={styles.qualityEmoji}>{quality.emoji}</Text>
                   <Text

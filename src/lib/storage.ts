@@ -1,6 +1,7 @@
 import { safeGetData, safeSetData } from '../utils/safeStorage';
 import { logStorageError } from '../utils/errorLogging';
 import { invalidateAll } from './dataCache';
+import { logger } from '../utils/logger';
 
 const STORAGE_KEYS = {
   PLANTS: '@garden_plants',
@@ -46,7 +47,7 @@ export const clearAllData = async (): Promise<void> => {
     for (const key of keys) {
       await safeSetData(key, []);
     }
-    console.log('Local cache cleared successfully');
+    logger.info('Local cache cleared successfully');
   } catch (e) {
     logStorageError('Error clearing cache', e as Error);
     throw e;

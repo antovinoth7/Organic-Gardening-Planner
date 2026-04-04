@@ -28,7 +28,7 @@ if (Platform.OS === "android" && !isNewArchitectureEnabled) {
 
 interface CollapsibleSectionProps {
   title: string;
-  icon?: string;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
   fieldCount?: number;
   children: React.ReactNode;
   defaultExpanded?: boolean;
@@ -36,6 +36,7 @@ interface CollapsibleSectionProps {
   onExpandedChange?: (expanded: boolean) => void;
   hasError?: boolean;
   autoFilled?: boolean;
+  sectionStatus?: "required_incomplete" | "complete" | "optional";
 }
 
 export default function CollapsibleSection({
@@ -48,10 +49,11 @@ export default function CollapsibleSection({
   onExpandedChange,
   hasError = false,
   autoFilled = false,
+  sectionStatus,
 }: CollapsibleSectionProps) {
   const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
   const isControlled = typeof expanded === "boolean";
   const isExpanded = isControlled ? !!expanded : internalExpanded;
 
@@ -65,7 +67,12 @@ export default function CollapsibleSection({
   };
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        !hasError && sectionStatus === "complete" && styles.containerComplete,
+      ]}
+    >
       <TouchableOpacity
         style={[styles.header, hasError && styles.headerError]}
         onPress={toggleExpanded}
@@ -74,7 +81,7 @@ export default function CollapsibleSection({
         <View style={styles.headerLeft}>
           {icon && (
             <Ionicons
-              name={icon as any}
+              name={icon}
               size={20}
               color={hasError ? "#FF6B6B" : theme.primary}
               style={styles.headerIcon}
@@ -91,6 +98,22 @@ export default function CollapsibleSection({
           {autoFilled && (
             <View style={styles.autoFilledBadge}>
               <Text style={styles.autoFilledText}>✨ Auto</Text>
+            </View>
+          )}
+          {!hasError && sectionStatus === "complete" && (
+            <View style={styles.statusCompleteBadge}>
+              <Ionicons name="checkmark-circle" size={14} color="#fff" />
+            </View>
+          )}
+          {!hasError && sectionStatus === "optional" && (
+            <View style={styles.statusOptionalBadge}>
+              <Text style={styles.statusOptionalText}>Optional</Text>
+            </View>
+          )}
+          {!hasError && sectionStatus === "required_incomplete" && (
+            <View style={styles.statusRequired}>
+              <View style={styles.statusRequiredDot} />
+              <Text style={styles.statusRequiredText}>Required</Text>
             </View>
           )}
           {hasError && <View style={styles.errorDot} />}

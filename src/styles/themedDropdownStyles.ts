@@ -7,6 +7,7 @@ function getScreenHeight() {
 
 export const createStyles = (theme: Theme, compact: boolean) =>
   StyleSheet.create({
+    // Option A: iOS Settings row — label left, value right
     trigger: {
       flexDirection: "row",
       alignItems: "center",
@@ -15,32 +16,32 @@ export const createStyles = (theme: Theme, compact: boolean) =>
       borderWidth: 1,
       borderColor: theme.pickerBorder,
       paddingHorizontal: 16,
-      minHeight: compact ? 44 : 52,
-      marginBottom: compact ? 8 : 12,
-    },
-    triggerWithLabel: {
-      paddingTop: 18,
-      paddingBottom: 6,
+      minHeight: compact ? 40 : 44,
+      marginBottom: compact ? 8 : 10,
     },
     triggerDisabled: {
-      opacity: 0.5,
+      opacity: 0.45,
     },
-    floatingLabel: {
-      position: "absolute",
-      top: -9,
-      left: 12,
-      paddingHorizontal: 4,
-      fontSize: 12,
+    // Left-side label (always visible)
+    triggerLabel: {
+      fontSize: 14,
       fontWeight: "500",
-      color: theme.textSecondary,
-      backgroundColor: theme.pickerBackground,
-    },
-    triggerText: {
+      color: theme.textTertiary,
       flex: 1,
-      fontSize: 15,
-      fontWeight: "500",
+      marginRight: 8,
+    },
+    triggerLabelDisabled: {
+      color: theme.textTertiary,
+    },
+    // Right-side selected value
+    triggerText: {
+      fontSize: 14,
+      fontWeight: "600",
       color: theme.text,
-      letterSpacing: 0.1,
+      textAlign: "right" as const,
+      flexShrink: 1,
+      maxWidth: "58%",
+      marginRight: 6,
     },
     triggerPlaceholder: {
       color: theme.inputPlaceholder,
@@ -48,6 +49,18 @@ export const createStyles = (theme: Theme, compact: boolean) =>
     },
     triggerTextDisabled: {
       color: theme.textTertiary,
+    },
+    // Kept for backward compat — no longer used visually
+    triggerWithLabel: {},
+    floatingLabel: {
+      position: "absolute" as const,
+      top: -9,
+      left: 12,
+      paddingHorizontal: 4,
+      fontSize: 12,
+      fontWeight: "500",
+      color: theme.textSecondary,
+      backgroundColor: theme.pickerBackground,
     },
     overlay: {
       ...StyleSheet.absoluteFillObject,
@@ -76,13 +89,26 @@ export const createStyles = (theme: Theme, compact: boolean) =>
         },
       }),
     },
+    sheetCloseRow: {
+      width: "100%",
+      alignItems: "center" as const,
+      paddingTop: 10,
+      paddingBottom: 4,
+    },
+    sheetCloseRowPressed: {
+      backgroundColor: theme.borderLight,
+    },
+    sheetHandleArea: {
+      alignSelf: "center",
+      paddingTop: 12,
+      paddingBottom: 8,
+      paddingHorizontal: 40,
+    },
     sheetHandle: {
       width: 40,
       height: 4,
       borderRadius: 2,
       backgroundColor: theme.border,
-      alignSelf: "center",
-      marginTop: 10,
       marginBottom: 4,
     },
     sheetTitle: {
@@ -92,7 +118,7 @@ export const createStyles = (theme: Theme, compact: boolean) =>
       textTransform: "uppercase",
       letterSpacing: 0.8,
       paddingHorizontal: 16,
-      paddingVertical: 10,
+      paddingVertical: 8,
     },
     searchContainer: {
       flexDirection: "row",
@@ -133,6 +159,10 @@ export const createStyles = (theme: Theme, compact: boolean) =>
     },
     optionRowSelected: {
       backgroundColor: theme.primaryLight,
+    },
+    optionRowPressed: {
+      backgroundColor: theme.primaryLight,
+      opacity: 0.75,
     },
     optionText: {
       flex: 1,

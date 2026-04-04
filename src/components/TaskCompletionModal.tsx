@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import FloatingLabelInput from "./FloatingLabelInput";
 import { TaskTemplate } from "../types/database.types";
+import { createStyles } from "../styles/calendarStyles";
 
 interface TaskCompletionModalProps {
   visible: boolean;
@@ -11,7 +12,7 @@ interface TaskCompletionModalProps {
   productUsed: string;
   isCompleting: boolean;
   plantName: string;
-  styles: any;
+  styles: ReturnType<typeof createStyles>;
   bottomInset: number;
   onChangeNotes: (text: string) => void;
   onChangeProduct: (text: string) => void;

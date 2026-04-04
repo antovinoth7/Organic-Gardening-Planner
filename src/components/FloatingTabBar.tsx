@@ -168,7 +168,7 @@ export function FloatingTabBar({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const translateY = useContext(AnimatedTranslateContext);
-  const styles = createStyles(theme);
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
 
   // Hide tab bar when a nested stack is showing a non-root screen
   const focusedRoute = state.routes[state.index];

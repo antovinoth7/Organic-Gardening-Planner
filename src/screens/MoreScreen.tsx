@@ -8,17 +8,20 @@ import { auth } from "../lib/firebase";
 import { signOut } from "@firebase/auth";
 import { invalidateAll } from "../lib/dataCache";
 import { createStyles } from "../styles/moreStyles";
+import { useNavigation, NavigationProp, ParamListBase } from "@react-navigation/native";
+import { getErrorMessage } from "../utils/errorLogging";
 
-export default function MoreScreen({ navigation }: any) {
+export default function MoreScreen() {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const handleSignOut = async () => {
     try {
       invalidateAll();
       await signOut(auth);
-    } catch (error: any) {
-      Alert.alert("Error", error?.message || "Failed to sign out");
+    } catch (error: unknown) {
+      Alert.alert("Error", getErrorMessage(error) || "Failed to sign out");
     }
   };
 

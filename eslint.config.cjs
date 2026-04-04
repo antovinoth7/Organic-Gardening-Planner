@@ -23,13 +23,6 @@ module.exports = defineConfig([
   {
     files: ["**/*.{js,jsx,ts,tsx}"],
     rules: {
-      "import/no-unused-modules": [
-        "error",
-        {
-          unusedExports: true,
-          missingExports: false,
-        },
-      ],
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": [
         "warn",

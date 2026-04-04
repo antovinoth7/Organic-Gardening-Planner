@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -14,14 +14,15 @@ import {
   getImagesOnlyStorageSize,
 } from "../services/backup";
 import { useTheme } from "../theme";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { clearAllData } from "../lib/storage";
-import { createStyles } from "../styles/settingsStyles";
-
-export default function SettingsScreen({ navigation }: any) {
+import { createStyles } from "../styles/settingsStyles";import { logger } from '../utils/logger';
+import { getErrorMessage } from '../utils/errorLogging';
+export default function SettingsScreen() {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   const [loadingAction, setLoadingAction] = useState<
@@ -35,7 +36,7 @@ export default function SettingsScreen({ navigation }: any) {
       const imageSize = await getImagesOnlyStorageSize();
       setImageStorageSize(imageSize);
     } catch (error) {
-      console.error("Error loading stats:", error);
+      logger.error("Error loading stats", error as Error);
     }
   }, []);
 
@@ -74,8 +75,8 @@ export default function SettingsScreen({ navigation }: any) {
                 "Your garden images have been exported as a ZIP file. This contains only photos, no data.",
                 [{ text: "OK", onPress: loadStats }],
               );
-            } catch (error: any) {
-              Alert.alert("Export Failed", error.message);
+            } catch (error: unknown) {
+              Alert.alert("Export Failed", getErrorMessage(error));
             } finally {
               setLoadingAction(null);
             }
@@ -102,9 +103,9 @@ export default function SettingsScreen({ navigation }: any) {
                 `Successfully imported ${count} image(s). Your data remains unchanged.`,
                 [{ text: "OK", onPress: loadStats }],
               );
-            } catch (error: any) {
-              if (error.message !== "Import cancelled") {
-                Alert.alert("Import Failed", error.message);
+            } catch (error: unknown) {
+              if (getErrorMessage(error) !== "Import cancelled") {
+                Alert.alert("Import Failed", getErrorMessage(error));
               }
             } finally {
               setLoadingAction(null);
@@ -133,8 +134,8 @@ export default function SettingsScreen({ navigation }: any) {
                 "Success",
                 "Local cache cleared. Data will be re-synced from Firebase.",
               );
-            } catch (error: any) {
-              Alert.alert("Error", error?.message || "Failed to clear cache");
+            } catch (error: unknown) {
+              Alert.alert("Error", getErrorMessage(error) || "Failed to clear cache");
             } finally {
               setLoadingAction(null);
             }

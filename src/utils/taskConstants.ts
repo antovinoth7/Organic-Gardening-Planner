@@ -1,6 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { TaskType } from "../types/database.types";
 
+export const TASK_DUE_TIME_HOUR = 18; // 6:00 PM
+export const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
 export const TASK_EMOJIS: Record<TaskType, string> = {
   water: "💧",
   fertilise: "🌿",
