@@ -20,7 +20,9 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  Animated,
 } from "react-native";
+import Swipeable from "react-native-gesture-handler/Swipeable";
 import { getAllPlants, deletePlant } from "../services/plants";
 import {
   DEFAULT_CHILD_LOCATIONS,
@@ -95,6 +97,10 @@ export default function PlantsScreen() {
   const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE);
   const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
   const [loadingMore, setLoadingMore] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; plant: Plant; index: number } | null>(null);
+  const undoProgress = useRef(new Animated.Value(1)).current;
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openSwipeableRef = useRef<Swipeable | null>(null);
 
   // searchInput: raw controlled value; searchQuery: debounced, drives filtering
   const [searchInput, setSearchInput] = useState("");
@@ -182,6 +188,7 @@ export default function PlantsScreen() {
       unsubscribe();
       if (loadMoreTimeoutRef.current) clearTimeout(loadMoreTimeoutRef.current);
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     };
   }, [navigation, loadPlants, loadLocations, resetTabBar]);
 
@@ -214,24 +221,60 @@ export default function PlantsScreen() {
     }
   }, [route.params, navigation]);
 
-  const handleDelete = useCallback(async (id: string) => {
-    Alert.alert("Delete Plant", "Are you sure you want to delete this plant?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await deletePlant(id);
-            loadPlants();
-            Alert.alert("Deleted", "Plant removed successfully.");
-          } catch (error: unknown) {
-            Alert.alert("Error", getErrorMessage(error));
-          }
-        },
-      },
-    ]);
+  const commitDelete = useCallback(async (id: string) => {
+    try {
+      await deletePlant(id);
+    } catch (error: unknown) {
+      Alert.alert("Error", getErrorMessage(error));
+      void loadPlants();
+    }
   }, [loadPlants]);
+
+  const handleDelete = useCallback((id: string) => {
+    const index = plants.findIndex((p) => p.id === id);
+    if (index === -1) return;
+    const plant = plants[index];
+
+    // Cancel any in-flight undo for the previous pending delete
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+      if (pendingDelete) {
+        void commitDelete(pendingDelete.id);
+      }
+    }
+
+    // Optimistic remove
+    setPlants((prev) => prev.filter((p) => p.id !== id));
+    setPendingDelete({ id, plant, index });
+
+    // Animate progress bar from full → empty over 4 seconds
+    undoProgress.setValue(1);
+    Animated.timing(undoProgress, {
+      toValue: 0,
+      duration: 4000,
+      useNativeDriver: false,
+    }).start();
+
+    undoTimerRef.current = setTimeout(() => {
+      setPendingDelete(null);
+      undoTimerRef.current = null;
+      void commitDelete(id);
+    }, 4000);
+  }, [plants, pendingDelete, commitDelete, undoProgress]);
+
+  const handleUndo = useCallback(() => {
+    if (!pendingDelete) return;
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = null;
+    undoProgress.stopAnimation();
+    // Restore plant at original index
+    setPlants((prev) => {
+      const next = [...prev];
+      next.splice(pendingDelete.index, 0, pendingDelete.plant);
+      return next;
+    });
+    setPendingDelete(null);
+  }, [pendingDelete, undoProgress]);
 
   // Per-category counts from unfiltered plants for chip display
   const plantCounts = useMemo(() => {
@@ -436,19 +479,74 @@ export default function PlantsScreen() {
 
   const plantKeyExtractor = useCallback((item: Plant) => item.id, []);
 
+  const handleSwipeableOpen = useCallback((ref: Swipeable) => {
+    if (openSwipeableRef.current && openSwipeableRef.current !== ref) {
+      openSwipeableRef.current.close();
+    }
+    openSwipeableRef.current = ref;
+  }, []);
+
   const renderPlantItem = useCallback(
     ({ item }: { item: Plant }) => (
       <PlantCard
         plant={item}
         compact={viewMode === "grid"}
         searchQuery={searchQuery}
+        onSwipeableOpen={handleSwipeableOpen}
         onPress={() => navigation.navigate("PlantDetail", { plantId: item.id })}
         onEdit={() => navigation.navigate("PlantForm", { plantId: item.id })}
         onDelete={() => handleDelete(item.id)}
       />
     ),
-    [viewMode, navigation, handleDelete, searchQuery],
+    [viewMode, navigation, handleDelete, searchQuery, handleSwipeableOpen],
   );
+
+  const renderUndoToast = () => {
+    if (!pendingDelete) return null;
+    const progressWidth = undoProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: ["0%", "100%"],
+    });
+    return (
+      <View
+        style={{
+          position: "absolute",
+          bottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 16) + 8,
+          left: 16,
+          right: 16,
+          backgroundColor: theme.backgroundSecondary,
+          borderRadius: 12,
+          paddingHorizontal: 16,
+          paddingTop: 12,
+          paddingBottom: 4,
+          elevation: 6,
+          shadowColor: theme.shadow,
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.16,
+          shadowRadius: 8,
+          zIndex: 100,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Ionicons name="trash-outline" size={16} color={theme.textSecondary} />
+            <Text style={{ fontSize: 14, color: theme.text, fontWeight: "500" }}>
+              {pendingDelete.plant.name} deleted
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={handleUndo}
+            hitSlop={{ top: 8, bottom: 8, left: 12, right: 4 }}
+          >
+            <Text style={{ fontSize: 14, fontWeight: "700", color: theme.primary }}>Undo</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={{ height: 3, backgroundColor: theme.border, borderRadius: 2, overflow: "hidden", marginBottom: 8 }}>
+          <Animated.View style={{ height: 3, width: progressWidth, backgroundColor: theme.primary, borderRadius: 2 }} />
+        </View>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -929,6 +1027,7 @@ export default function PlantsScreen() {
       />
 
       <AnimatedFAB onPress={() => navigation.navigate("PlantForm")} />
+      {renderUndoToast()}
     </View>
   );
 }

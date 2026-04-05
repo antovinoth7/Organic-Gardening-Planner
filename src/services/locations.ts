@@ -109,6 +109,7 @@ const normalizeConfig = (config?: LocationConfig | null): LocationConfig => {
       config?.parentLocationShortNames,
       parents,
     ),
+    parentLocationProfiles: config?.parentLocationProfiles ?? {},
   };
 };
 

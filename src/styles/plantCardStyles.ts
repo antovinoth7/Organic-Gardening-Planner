@@ -277,11 +277,40 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
     marginTop: 2,
   },
 
-  // ── Plant action menu modal ──
+  // ── Swipe action buttons (list mode only) ──
+  swipeActions: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    marginBottom: 8,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  swipeEditAction: {
+    width: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#1976D2',
+  },
+  swipeDeleteAction: {
+    width: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#f44336',
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
+  },
+  swipeActionText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
+  },
+
+  // ── Plant action menu (bottom sheet) ──
   menuOverlay: {
     flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
+    justifyContent: 'flex-end',
   },
   menuBackdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -289,13 +318,26 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
   },
   menuSheet: {
     backgroundColor: theme.backgroundSecondary,
-    borderRadius: 18,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     overflow: 'hidden',
     shadowColor: theme.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
     shadowRadius: 16,
     elevation: 12,
+    paddingBottom: 8,
+  },
+  menuHandle: {
+    alignItems: 'center',
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  menuHandlePill: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.border,
   },
   menuHeader: {
     flexDirection: 'row',
@@ -372,5 +414,39 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
     fontSize: 15,
     fontWeight: '600',
     color: theme.textSecondary,
+  },
+
+  // ── Grid card long-press action overlay ──
+  cardActionOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    justifyContent: 'flex-end',
+    padding: 8,
+    zIndex: 10,
+  },
+  cardActionBtnRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  cardActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  cardActionBtnEdit: {
+    backgroundColor: '#1976D2',
+  },
+  cardActionBtnDelete: {
+    backgroundColor: '#f44336',
+  },
+  cardActionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
   },
 });

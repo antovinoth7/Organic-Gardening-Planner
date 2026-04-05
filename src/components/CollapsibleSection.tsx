@@ -29,7 +29,6 @@ if (Platform.OS === "android" && !isNewArchitectureEnabled) {
 interface CollapsibleSectionProps {
   title: string;
   icon?: React.ComponentProps<typeof Ionicons>['name'];
-  fieldCount?: number;
   children: React.ReactNode;
   defaultExpanded?: boolean;
   expanded?: boolean;
@@ -42,7 +41,6 @@ interface CollapsibleSectionProps {
 export default function CollapsibleSection({
   title,
   icon,
-  fieldCount,
   children,
   defaultExpanded = true,
   expanded,
@@ -92,9 +90,6 @@ export default function CollapsibleSection({
           >
             {title}
           </Text>
-          {fieldCount !== undefined && (
-            <Text style={styles.fieldCount}>({fieldCount})</Text>
-          )}
           {autoFilled && (
             <View style={styles.autoFilledBadge}>
               <Text style={styles.autoFilledText}>✨ Auto</Text>

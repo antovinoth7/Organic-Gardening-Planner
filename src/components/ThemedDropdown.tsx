@@ -6,15 +6,13 @@ import {
   TouchableOpacity,
   Pressable,
   Modal,
-  FlatList,
   StyleSheet,
   Platform,
   Dimensions,
   Animated,
   Keyboard,
 } from "react-native";
-// TouchableOpacity kept for search clear button only; trigger + overlay use Pressable
-// to avoid responder conflicts with parent ScrollView (fixes double-tap issue)
+import { FlatList, GestureHandlerRootView, RectButton } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
@@ -66,6 +64,7 @@ export default function ThemedDropdown({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(getScreenHeight())).current;
   const isClosing = useRef(false);
+  const [sheetTouchEnabled, setSheetTouchEnabled] = useState(false);
 
   // Track keyboard height so the list shrinks to always stay above the keyboard
   useEffect(() => {
@@ -95,6 +94,7 @@ export default function ThemedDropdown({
     slideAnim.setValue(getScreenHeight());
     fadeAnim.setValue(0);
     setSearchQuery("");
+    setSheetTouchEnabled(false);
     setVisible(true);
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -108,7 +108,11 @@ export default function ThemedDropdown({
         stiffness: 200,
         useNativeDriver,
       }),
-    ]).start();
+    ]).start(() => {
+      if (!isClosing.current) {
+        setSheetTouchEnabled(true);
+      }
+    });
   }, [enabled, fadeAnim, slideAnim]);
 
   const close = useCallback(() => {
@@ -157,13 +161,14 @@ export default function ThemedDropdown({
     ({ item }: { item: DropdownItem }) => {
       const isSelected = item.value === selectedValue;
       return (
-        <Pressable
-          style={({ pressed }) => [
+        <RectButton
+          style={[
             styles.optionRow,
             isSelected && styles.optionRowSelected,
-            pressed && styles.optionRowPressed,
           ]}
           onPress={() => handleSelect(item.value)}
+          activeOpacity={0.12}
+          underlayColor={theme.primaryLight}
         >
           <Text
             style={[styles.optionText, isSelected && styles.optionTextSelected]}
@@ -178,10 +183,10 @@ export default function ThemedDropdown({
               color={theme.primary}
             />
           )}
-        </Pressable>
+        </RectButton>
       );
     },
-    [selectedValue, handleSelect, styles, theme.primary],
+    [selectedValue, handleSelect, styles, theme.primary, theme.primaryLight],
   );
 
   const keyExtractor = useCallback(
@@ -245,68 +250,83 @@ export default function ThemedDropdown({
         animationType="none"
         onRequestClose={close}
         statusBarTranslucent
+        hardwareAccelerated
+        onShow={() => {
+          setTimeout(() => setSheetTouchEnabled(true), Platform.OS === 'android' ? 50 : 0);
+        }}
       >
-        <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={close}
-          />
-        </Animated.View>
-        <Animated.View
-          style={[
-            styles.sheet,
-            {
-              paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 34 : 16),
-              transform: [{ translateY: slideAnim }],
-              marginBottom: keyboardHeight,
-            },
-          ]}
+        <GestureHandlerRootView style={styles.gestureRoot}>
+        {/* Single flex root — backdrop and sheet are parent-child, not siblings */}
+        <Pressable
+          style={styles.backdropPressable}
+          onPress={close}
         >
-          <Pressable
-            style={({ pressed }) => [styles.sheetCloseRow, pressed && styles.sheetCloseRowPressed]}
-            onPress={close}
-          >
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>{placeholder}</Text>
-          </Pressable>
-          {searchable && (
-            <View style={styles.searchContainer}>
-              <Ionicons name="search" size={18} color={theme.textTertiary} style={styles.searchIcon} />
-              <TextInput
-                ref={searchInputRef}
-                style={styles.searchInput}
-                placeholder={`Search ${placeholder.toLowerCase()}...`}
-                placeholderTextColor={theme.inputPlaceholder}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoCorrect={false}
-                autoCapitalize="none"
-                returnKeyType="search"
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery("")} hitSlop={8}>
-                  <Ionicons name="close-circle" size={18} color={theme.textTertiary} />
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-          {searchable && filteredItems.length === 0 && (
-            <Text style={styles.emptyText}>No matches found</Text>
-          )}
-          <FlatList
-            data={filteredItems}
-            renderItem={renderItem}
-            keyExtractor={keyExtractor}
-            style={{ maxHeight: listMaxHeight }}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="always"
-            getItemLayout={(_, index) => ({
-              length: 52,
-              offset: 52 * index,
-              index,
-            })}
+          <Animated.View
+            style={[styles.overlay, { opacity: fadeAnim }]}
+            pointerEvents="none"
           />
-        </Animated.View>
+        </Pressable>
+        <View style={styles.sheetContainer} pointerEvents="box-none">
+          <Animated.View
+            style={[
+              styles.sheet,
+              {
+                paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 34 : 16),
+                transform: [{ translateY: slideAnim }],
+                marginBottom: keyboardHeight,
+              },
+            ]}
+            collapsable={false}
+          >
+            <View pointerEvents={sheetTouchEnabled ? "box-none" : "none"}>
+              <Pressable
+                style={({ pressed }) => [styles.sheetCloseRow, pressed && styles.sheetCloseRowPressed]}
+                onPress={close}
+              >
+                <View style={styles.sheetHandle} />
+                <Text style={styles.sheetTitle}>{placeholder}</Text>
+              </Pressable>
+              {searchable && (
+                <View style={styles.searchContainer}>
+                  <Ionicons name="search" size={18} color={theme.textTertiary} style={styles.searchIcon} />
+                  <TextInput
+                    ref={searchInputRef}
+                    style={styles.searchInput}
+                    placeholder={`Search ${placeholder.toLowerCase()}...`}
+                    placeholderTextColor={theme.inputPlaceholder}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                    returnKeyType="search"
+                  />
+                  {searchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchQuery("")} hitSlop={8}>
+                      <Ionicons name="close-circle" size={18} color={theme.textTertiary} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+              {searchable && filteredItems.length === 0 && (
+                <Text style={styles.emptyText}>No matches found</Text>
+              )}
+              <FlatList
+                data={filteredItems}
+                renderItem={renderItem}
+                keyExtractor={keyExtractor}
+                style={{ maxHeight: listMaxHeight }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="always"
+                getItemLayout={(_, index) => ({
+                  length: 52,
+                  offset: 52 * index,
+                  index,
+                })}
+              />
+            </View>
+          </Animated.View>
+        </View>
+        </GestureHandlerRootView>
       </Modal>
     </>
   );

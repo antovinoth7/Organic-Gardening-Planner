@@ -8,10 +8,13 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
+  Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import FloatingLabelInput from "../components/FloatingLabelInput";
 import { Ionicons } from "@expo/vector-icons";
 import ThemedDropdown from "../components/ThemedDropdown";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, NavigationProp, ParamListBase } from "@react-navigation/native";
 import { useTheme } from "../theme";
@@ -24,16 +27,29 @@ import {
   saveLocationConfig,
 } from "../services/locations";
 import { getAllPlants, updatePlantLocation } from "../services/plants";
-import { Plant } from "../types/database.types";
+import {
+  DrainageQuality,
+  LocationProfile,
+  MoistureRetention,
+  NutrientLevel,
+  Plant,
+  WindExposure,
+  WaterSource,
+} from "../types/database.types";
 import { sanitizeLandmarkText } from "../utils/textSanitizer";
 import { createStyles } from "../styles/manageLocationsStyles";
 import { getErrorMessage } from "../utils/errorLogging";
+import { LOCATION_SOIL_TYPES, SOIL_LABELS } from "../utils/plantLabels";
+import { toLocalDateString } from "../utils/dateHelpers";
 
 type EditModalState = {
   type: "parent" | "child";
   original: string;
   value: string;
   shortName?: string;
+  profile?: LocationProfile;
+  activeTab?: "name" | "soil";
+  showDatePicker?: boolean;
 };
 
 type ReassignModalState = {
@@ -67,6 +83,86 @@ const isDuplicate = (list: string[], value: string, ignore?: string) => {
   });
 };
 
+const formatDateDisplay = (isoDate: string) => {
+  const d = new Date(isoDate);
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+};
+
+const isSoilTestStale = (isoDate?: string | null): boolean => {
+  if (!isoDate) return false;
+  const tested = new Date(isoDate).getTime();
+  const oneYear = 365 * 24 * 60 * 60 * 1000;
+  return Date.now() - tested > oneYear;
+};
+
+const deriveNpkColor = (level?: NutrientLevel | null): string => {
+  if (level === "high") return "#4CAF50";
+  if (level === "medium") return "#FFC107";
+  if (level === "low") return "#F44336";
+  return "transparent";
+};
+
+const deriveDrainageColor = (level?: DrainageQuality | null): string => {
+  if (level === "excellent") return "#4CAF50";
+  if (level === "good") return "#8BC34A";
+  if (level === "fair") return "#FFC107";
+  if (level === "poor") return "#F44336";
+  return "#9E9E9E";
+};
+
+const hasProfileData = (profile?: LocationProfile): boolean => {
+  if (!profile) return false;
+  return !!(
+    profile.soilPH != null ||
+    profile.soilType ||
+    profile.drainageQuality ||
+    profile.moistureRetention ||
+    profile.nitrogenLevel ||
+    profile.phosphorusLevel ||
+    profile.potassiumLevel ||
+    profile.windExposure ||
+    profile.waterSource ||
+    profile.lastSoilTestDate ||
+    profile.notes
+  );
+};
+
+const PH_VALUES = [4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0];
+
+const DRAINAGE_OPTIONS: { value: DrainageQuality; label: string }[] = [
+  { value: "poor", label: "Poor" },
+  { value: "fair", label: "Fair" },
+  { value: "good", label: "Good" },
+  { value: "excellent", label: "Excellent" },
+];
+
+const MOISTURE_OPTIONS: { value: MoistureRetention; label: string }[] = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+];
+
+const NPK_OPTIONS: { value: NutrientLevel; label: string }[] = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Med" },
+  { value: "high", label: "High" },
+];
+
+const WIND_OPTIONS: { value: WindExposure; label: string }[] = [
+  { value: "sheltered", label: "Sheltered" },
+  { value: "moderate", label: "Moderate" },
+  { value: "exposed", label: "Exposed" },
+];
+
+const WATER_SOURCE_OPTIONS: { value: WaterSource; label: string }[] = [
+  { value: "rain_fed", label: "Rain-fed" },
+  { value: "borewell", label: "Borewell" },
+  { value: "tap", label: "Tap" },
+  { value: "pond_canal", label: "Pond/Canal" },
+  { value: "drip", label: "Drip" },
+  { value: "mixed", label: "Mixed" },
+];
+
 export default function ManageLocationsScreen() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const theme = useTheme();
@@ -82,12 +178,10 @@ export default function ManageLocationsScreen() {
   const [shortNames, setShortNames] = useState<Record<string, string>>(
     DEFAULT_PARENT_LOCATION_SHORT_NAMES,
   );
+  const [locationProfiles, setLocationProfiles] = useState<Record<string, LocationProfile>>({});
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [newParentName, setNewParentName] = useState("");
-  const [newParentShortName, setNewParentShortName] = useState("");
-  const [newChildName, setNewChildName] = useState("");
   const [editModal, setEditModal] = useState<EditModalState | null>(null);
   const [reassignModal, setReassignModal] = useState<ReassignModalState | null>(
     null,
@@ -103,6 +197,7 @@ export default function ManageLocationsScreen() {
       setParentLocations(config.parentLocations);
       setChildLocations(config.childLocations);
       setShortNames(config.parentLocationShortNames ?? {});
+      setLocationProfiles(config.parentLocationProfiles ?? {});
       setPlants(allPlants);
     } catch (error: unknown) {
       Alert.alert(
@@ -117,10 +212,6 @@ export default function ManageLocationsScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  // Note: Data reloads automatically after save operations
-  // Users navigating back from other screens don't need fresh data
-  // This prevents unnecessary API calls and improves performance
 
   const parentCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -193,87 +284,83 @@ export default function ManageLocationsScreen() {
     parents: string[],
     children: string[],
     updatedShortNames?: Record<string, string>,
+    updatedProfiles?: Record<string, LocationProfile>,
   ) => {
     const names = updatedShortNames ?? shortNames;
+    const profiles = updatedProfiles ?? locationProfiles;
     const saved = await saveLocationConfig({
       parentLocations: parents,
       childLocations: children,
       parentLocationShortNames: names,
+      parentLocationProfiles: profiles,
     });
     setParentLocations(saved.parentLocations);
     setChildLocations(saved.childLocations);
     setShortNames(saved.parentLocationShortNames ?? {});
+    setLocationProfiles(saved.parentLocationProfiles ?? {});
   };
 
-  const handleAddParent = async () => {
-    const name = sanitizeLocationName(newParentName);
-    if (!name) {
-      Alert.alert("Name Required", "Enter a main location name.");
-      return;
-    }
-    if (name.includes(" - ")) {
-      Alert.alert(
-        "Invalid Name",
-        "Please avoid using ' - ' in location names.",
-      );
-      return;
-    }
-    if (isDuplicate(parentLocations, name)) {
-      Alert.alert("Already Exists", "That main location already exists.");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const sn = sanitizeLocationName(newParentShortName).toUpperCase().slice(0, 5) || generateShortName(name);
-      const updatedShortNames = { ...shortNames, [name]: sn };
-      await saveConfig([...parentLocations, name], childLocations, updatedShortNames);
-      setNewParentName("");
-      setNewParentShortName("");
-    } catch (error: unknown) {
-      Alert.alert(
-        "Error",
-        getErrorMessage(error) || "Failed to add location. Please try again.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAddChild = async () => {
-    const name = sanitizeLocationName(newChildName);
-    if (!name) {
-      Alert.alert("Name Required", "Enter a section/direction name.");
-      return;
-    }
-    if (name.includes(" - ")) {
-      Alert.alert(
-        "Invalid Name",
-        "Please avoid using ' - ' in location names.",
-      );
-      return;
-    }
-    if (isDuplicate(childLocations, name)) {
-      Alert.alert("Already Exists", "That section already exists.");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await saveConfig(parentLocations, [...childLocations, name]);
-      setNewChildName("");
-    } catch (error: unknown) {
-      Alert.alert(
-        "Error",
-        getErrorMessage(error) || "Failed to add section. Please try again.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleRename = async () => {
     if (!editModal) return;
+
+    if (editModal.type === "child" && editModal.original === "") {
+      const name = sanitizeLocationName(editModal.value);
+      if (!name) {
+        Alert.alert("Name Required", "Enter a section/direction name.");
+        return;
+      }
+      if (name.includes(" - ")) {
+        Alert.alert("Invalid Name", "Please avoid using ' - ' in location names.");
+        return;
+      }
+      if (isDuplicate(childLocations, name)) {
+        Alert.alert("Already Exists", `"${name}" already exists.`);
+        return;
+      }
+      setSaving(true);
+      try {
+        await saveConfig(parentLocations, [...childLocations, name]);
+        setEditModal(null);
+      } catch (error: unknown) {
+        Alert.alert("Error", getErrorMessage(error) || "Failed to add section. Please try again.");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    if (editModal.type === "parent" && editModal.original === "") {
+      const name = sanitizeLocationName(editModal.value);
+      if (!name) {
+        Alert.alert("Name Required", "Enter a garden location name.");
+        return;
+      }
+      if (name.includes(" - ")) {
+        Alert.alert("Invalid Name", "Please avoid using ' - ' in location names.");
+        return;
+      }
+      if (isDuplicate(parentLocations, name)) {
+        Alert.alert("Already Exists", `"${name}" already exists.`);
+        return;
+      }
+      setSaving(true);
+      try {
+        const sn = editModal.shortName?.trim().toUpperCase().slice(0, 5) || generateShortName(name);
+        const updatedShortNames = { ...shortNames, [name]: sn };
+        const updatedProfiles = hasProfileData(editModal.profile)
+          ? { ...locationProfiles, [name]: editModal.profile! }
+          : { ...locationProfiles };
+        await saveConfig([...parentLocations, name], childLocations, updatedShortNames, updatedProfiles);
+        setEditModal(null);
+      } catch (error: unknown) {
+        Alert.alert("Error", getErrorMessage(error) || "Failed to add area. Please try again.");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     const name = sanitizeLocationName(editModal.value);
     const list = editModal.type === "parent" ? parentLocations : childLocations;
     const count =
@@ -296,7 +383,7 @@ export default function ManageLocationsScreen() {
       Alert.alert("Already Exists", "That name is already in use.");
       return;
     }
-    if (name === editModal.original) {
+    if (name === editModal.original && editModal.type === "child") {
       setEditModal(null);
       return;
     }
@@ -311,12 +398,21 @@ export default function ManageLocationsScreen() {
           const updatedParents = parentLocations.map((item) =>
             item === editModal.original ? name : item,
           );
-          // Update short name: carry over or use new value from modal
           const updatedShortNames = { ...shortNames };
           delete updatedShortNames[editModal.original];
           const sn = editModal.shortName?.trim().toUpperCase().slice(0, 5);
           updatedShortNames[name] = (sn && sn.length >= 2) ? sn : generateShortName(name);
-          await saveConfig(updatedParents, childLocations, updatedShortNames);
+
+          const updatedProfiles = { ...locationProfiles };
+          if (updatedProfiles[editModal.original]) {
+            updatedProfiles[name] = updatedProfiles[editModal.original];
+            delete updatedProfiles[editModal.original];
+          }
+          if (editModal.profile) {
+            updatedProfiles[name] = editModal.profile;
+          }
+
+          await saveConfig(updatedParents, childLocations, updatedShortNames, updatedProfiles);
         } else {
           if (count > 0) {
             await updatePlantsForChild(editModal.original, name);
@@ -403,7 +499,9 @@ export default function ManageLocationsScreen() {
         const updatedParents = parentLocations.filter((item) => item !== name);
         const updatedShortNames = { ...shortNames };
         delete updatedShortNames[name];
-        await saveConfig(updatedParents, childLocations, updatedShortNames);
+        const updatedProfiles = { ...locationProfiles };
+        delete updatedProfiles[name];
+        await saveConfig(updatedParents, childLocations, updatedShortNames, updatedProfiles);
       } else {
         if (replacement) {
           await updatePlantsForChild(name, replacement);
@@ -452,6 +550,256 @@ export default function ManageLocationsScreen() {
       : childCounts[reassignModal.target] || 0;
   }, [reassignModal, parentCounts, childCounts]);
 
+  const updateProfile = useCallback(
+    (patch: Partial<LocationProfile>) => {
+      setEditModal((prev) =>
+        prev ? { ...prev, profile: { ...(prev.profile ?? {}), ...patch } } : prev,
+      );
+    },
+    [],
+  );
+
+  const renderProfileEditor = () => {
+    if (!editModal || editModal.type !== "parent") return null;
+    const profile = editModal.profile ?? {};
+    const isStale = isSoilTestStale(profile.lastSoilTestDate);
+
+    return (
+      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {/* pH */}
+        <View style={styles.profileSection}>
+          <Text style={styles.profileSectionTitle}>Soil pH</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.profileChipScroll}>
+            <View style={styles.profileChipRow}>
+              {PH_VALUES.map((ph) => {
+                const selected = profile.soilPH === ph;
+                return (
+                  <TouchableOpacity
+                    key={ph}
+                    style={[styles.profileChip, selected && styles.profileChipSelected]}
+                    onPress={() => updateProfile({ soilPH: selected ? null : ph })}
+                  >
+                    <Text style={[styles.profileChipText, selected && styles.profileChipTextSelected]}>
+                      {ph.toFixed(1)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </View>
+
+        <View style={styles.profileSectionDivider} />
+
+        {/* Soil Type */}
+        <View style={styles.profileSection}>
+          <Text style={styles.profileSectionTitle}>Soil Type</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.profileChipScroll}>
+            <View style={styles.profileChipRow}>
+              {LOCATION_SOIL_TYPES.map((st) => {
+                const selected = profile.soilType === st;
+                return (
+                  <TouchableOpacity
+                    key={st}
+                    style={[styles.profileChip, selected && styles.profileChipSelected]}
+                    onPress={() => updateProfile({ soilType: selected ? null : st })}
+                  >
+                    <Text style={[styles.profileChipText, selected && styles.profileChipTextSelected]}>
+                      {SOIL_LABELS[st]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </View>
+
+        <View style={styles.profileSectionDivider} />
+
+        {/* Drainage & Moisture */}
+        <View style={styles.profileSection}>
+          <Text style={styles.profileSectionTitle}>Drainage</Text>
+          <View style={styles.profileChipRow}>
+            {DRAINAGE_OPTIONS.map(({ value, label }) => {
+              const selected = profile.drainageQuality === value;
+              return (
+                <TouchableOpacity
+                  key={value}
+                  style={[styles.profileChip, selected && styles.profileChipSelected]}
+                  onPress={() => updateProfile({ drainageQuality: selected ? null : value })}
+                >
+                  <Text style={[styles.profileChipText, selected && styles.profileChipTextSelected]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.profileSection}>
+          <Text style={styles.profileSectionTitle}>Moisture Retention</Text>
+          <View style={styles.profileChipRow}>
+            {MOISTURE_OPTIONS.map(({ value, label }) => {
+              const selected = profile.moistureRetention === value;
+              return (
+                <TouchableOpacity
+                  key={value}
+                  style={[styles.profileChip, selected && styles.profileChipSelected]}
+                  onPress={() => updateProfile({ moistureRetention: selected ? null : value })}
+                >
+                  <Text style={[styles.profileChipText, selected && styles.profileChipTextSelected]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.profileSectionDivider} />
+
+        {/* NPK */}
+        <View style={styles.profileSection}>
+          <Text style={styles.profileSectionTitle}>NPK Levels</Text>
+          {(["nitrogenLevel", "phosphorusLevel", "potassiumLevel"] as const).map((field, i) => {
+            const letter = ["N", "P", "K"][i];
+            return (
+              <View key={field} style={styles.profileNpkRow}>
+                <Text style={styles.profileNpkLabel}>{letter}</Text>
+                <View style={styles.profileNpkChips}>
+                  {NPK_OPTIONS.map(({ value, label }) => {
+                    const selected = profile[field] === value;
+                    return (
+                      <TouchableOpacity
+                        key={value}
+                        style={[styles.profileNpkChip, selected && styles.profileNpkChipSelected]}
+                        onPress={() => updateProfile({ [field]: selected ? null : value })}
+                      >
+                        <Text style={[styles.profileNpkChipText, selected && styles.profileNpkChipTextSelected]}>
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
+        <View style={styles.profileSectionDivider} />
+
+        {/* Wind & Water Source */}
+        <View style={styles.profileSection}>
+          <Text style={styles.profileSectionTitle}>Wind Exposure</Text>
+          <View style={styles.profileChipRow}>
+            {WIND_OPTIONS.map(({ value, label }) => {
+              const selected = profile.windExposure === value;
+              return (
+                <TouchableOpacity
+                  key={value}
+                  style={[styles.profileChip, selected && styles.profileChipSelected]}
+                  onPress={() => updateProfile({ windExposure: selected ? null : value })}
+                >
+                  <Text style={[styles.profileChipText, selected && styles.profileChipTextSelected]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.profileSection}>
+          <Text style={styles.profileSectionTitle}>Water Source</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.profileChipScroll}>
+            <View style={styles.profileChipRow}>
+              {WATER_SOURCE_OPTIONS.map(({ value, label }) => {
+                const selected = profile.waterSource === value;
+                return (
+                  <TouchableOpacity
+                    key={value}
+                    style={[styles.profileChip, selected && styles.profileChipSelected]}
+                    onPress={() => updateProfile({ waterSource: selected ? null : value })}
+                  >
+                    <Text style={[styles.profileChipText, selected && styles.profileChipTextSelected]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </View>
+
+        <View style={styles.profileSectionDivider} />
+
+        {/* Last Soil Test Date */}
+        <View style={styles.profileSection}>
+          <View style={styles.profileDateCard}>
+            <TouchableOpacity
+              style={styles.profileDateCardTouchable}
+              onPress={() => setEditModal((prev) => prev ? { ...prev, showDatePicker: true } : prev)}
+            >
+              <View style={styles.profileDateCardIconWrap}>
+                <Ionicons name="calendar" size={18} color={theme.primary} />
+              </View>
+              <View style={styles.profileDateCardContent}>
+                <Text style={styles.profileDateCardLabel}>Last Soil Test Date</Text>
+                <Text style={profile.lastSoilTestDate ? styles.profileDateCardValue : styles.profileDateCardPlaceholder}>
+                  {profile.lastSoilTestDate ? formatDateDisplay(profile.lastSoilTestDate) : "Tap to select date"}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
+            </TouchableOpacity>
+          </View>
+          {isStale && (
+            <Text style={styles.profileStaleDateHint}>
+              Soil test is over 1 year old — consider retesting.
+            </Text>
+          )}
+          {editModal?.showDatePicker && (
+            <DateTimePicker
+              value={profile.lastSoilTestDate ? new Date(profile.lastSoilTestDate) : new Date()}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              maximumDate={new Date()}
+              onChange={(_, selectedDate) => {
+                setEditModal((prev) => {
+                  if (!prev) return prev;
+                  return {
+                    ...prev,
+                    showDatePicker: Platform.OS === "ios",
+                    profile: {
+                      ...(prev.profile ?? {}),
+                      lastSoilTestDate: selectedDate ? toLocalDateString(selectedDate) : prev.profile?.lastSoilTestDate ?? null,
+                    },
+                  };
+                });
+              }}
+            />
+          )}
+        </View>
+
+        {/* Notes */}
+        <View style={styles.profileSection}>
+          <Text style={styles.profileSectionTitle}>Notes</Text>
+          <TextInput
+            style={styles.profileNotesInput}
+            placeholder="e.g. Floods during heavy rain, coconut shade after 2pm..."
+            placeholderTextColor={theme.textTertiary}
+            value={profile.notes ?? ""}
+            onChangeText={(text) => updateProfile({ notes: text.slice(0, 200) })}
+            multiline
+            maxLength={200}
+            selectionColor={theme.primary}
+          />
+        </View>
+      </ScrollView>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -480,131 +828,129 @@ export default function ManageLocationsScreen() {
           <View style={styles.infoCard}>
             <Ionicons name="map-outline" size={20} color={theme.primary} />
             <View style={styles.infoContent}>
-              <Text style={styles.infoTitle}>How it works</Text>
+              <Text style={styles.infoTitle}>Set up your garden locations</Text>
               <Text style={styles.infoText}>
-                Plants use a main location plus a section/direction. Example:
-                {"\n"}
-                <Text style={styles.infoHighlight}>Mangarai - North</Text>
+                Each location has a name, short code, and an optional soil profile — pH, soil type, drainage, NPK levels, and more. {"\n"}
+                Example: <Text style={styles.infoHighlight}>Kanyakumari - South</Text>
               </Text>
             </View>
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Main Locations</Text>
-            <Text style={styles.sectionDescription}>
-              These are the primary places where plants are located.
-            </Text>
-
-            <View style={styles.addRow}>
-              <TextInput
-                style={styles.input}
-                placeholder="Add main location"
-                value={newParentName}
-                onChangeText={(text) => setNewParentName(text)}
-                placeholderTextColor={theme.textTertiary}
-                selectionColor={theme.primary}
-                cursorColor={theme.primary}
-                underlineColorAndroid="transparent"
-              />
-              <TextInput
-                style={styles.shortNameInput}
-                placeholder="ABC"
-                value={newParentShortName}
-                onChangeText={(text) => setNewParentShortName(text.replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, 5))}
-                placeholderTextColor={theme.textTertiary}
-                selectionColor={theme.primary}
-                cursorColor={theme.primary}
-                underlineColorAndroid="transparent"
-                maxLength={5}
-                autoCapitalize="characters"
-              />
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionHeaderText}>
+                <Text style={styles.sectionTitle}>Garden Locations</Text>
+                <Text style={styles.sectionDescription}>
+                  The main locations of your garden.
+                </Text>
+              </View>
               <TouchableOpacity
-                style={styles.addButton}
-                onPress={handleAddParent}
+                style={styles.sectionAddButton}
+                onPress={() => setEditModal({ type: "parent", original: "", value: "", shortName: "", profile: {}, activeTab: "name" })}
                 disabled={saving}
               >
-                <Ionicons name="add" size={18} color="#fff" />
-                <Text style={styles.addButtonText}>Add</Text>
+                <Ionicons name="add" size={22} color="#fff" />
               </TouchableOpacity>
             </View>
 
             {parentLocations.length === 0 ? (
-              <Text style={styles.emptyText}>No main locations yet.</Text>
+              <Text style={styles.emptyText}>No garden locations yet.</Text>
             ) : (
-              parentLocations.map((location) => (
-                <View key={location} style={styles.locationRow}>
-                  <View style={styles.locationInfo}>
-                    <View style={styles.locationNameRow}>
-                      <Text style={styles.locationName}>{location}</Text>
-                      {shortNames[location] ? (
-                        <View style={styles.shortNameBadge}>
-                          <Text style={styles.shortNameBadgeText}>{shortNames[location]}</Text>
+              parentLocations.map((location) => {
+                const profile = locationProfiles[location];
+                const showStrip = hasProfileData(profile);
+                return (
+                  <View key={location} style={styles.locationRow}>
+                    <View style={styles.locationInfo}>
+                      <View style={styles.locationNameRow}>
+                        <Text style={styles.locationName}>{location}</Text>
+                        {shortNames[location] ? (
+                          <View style={styles.shortNameBadge}>
+                            <Text style={styles.shortNameBadgeText}>{shortNames[location]}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={styles.locationMeta}>
+                        {parentCounts[location] || 0} plant
+                        {(parentCounts[location] || 0) === 1 ? "" : "s"}
+                      </Text>
+                      {showStrip && (
+                        <View style={styles.profileSummaryStrip}>
+                          {profile?.soilPH != null && (
+                            <View style={styles.profileBadge}>
+                              <Text style={styles.profileBadgeText}>pH {profile.soilPH.toFixed(1)}</Text>
+                            </View>
+                          )}
+                          {profile?.drainageQuality && (
+                            <View style={styles.profileBadge}>
+                              <Ionicons name="water-outline" size={10} color={deriveDrainageColor(profile.drainageQuality)} />
+                              <Text style={styles.profileBadgeText}>{profile.drainageQuality}</Text>
+                            </View>
+                          )}
+                          {(profile?.nitrogenLevel || profile?.phosphorusLevel || profile?.potassiumLevel) && (
+                            <View style={styles.profileBadge}>
+                              <View style={styles.npkDotRow}>
+                                <View style={[styles.npkDot, { backgroundColor: deriveNpkColor(profile?.nitrogenLevel) }]} />
+                                <View style={[styles.npkDot, { backgroundColor: deriveNpkColor(profile?.phosphorusLevel) }]} />
+                                <View style={[styles.npkDot, { backgroundColor: deriveNpkColor(profile?.potassiumLevel) }]} />
+                              </View>
+                              <Text style={styles.profileBadgeText}>NPK</Text>
+                            </View>
+                          )}
                         </View>
-                      ) : null}
+                      )}
                     </View>
-                    <Text style={styles.locationMeta}>
-                      {parentCounts[location] || 0} plant
-                      {(parentCounts[location] || 0) === 1 ? "" : "s"}
-                    </Text>
+                    <View style={styles.locationActions}>
+                      <TouchableOpacity
+                        style={styles.iconButton}
+                        onPress={() =>
+                          setEditModal({
+                            type: "parent",
+                            original: location,
+                            value: location,
+                            shortName: shortNames[location] ?? "",
+                            profile: locationProfiles[location] ?? {},
+                            activeTab: "name",
+                          })
+                        }
+                      >
+                        <Ionicons
+                          name="create-outline"
+                          size={18}
+                          color={theme.primary}
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.iconButton}
+                        onPress={() => handleDeleteRequest("parent", location)}
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={18}
+                          color={theme.error}
+                        />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <View style={styles.locationActions}>
-                    <TouchableOpacity
-                      style={styles.iconButton}
-                      onPress={() =>
-                        setEditModal({
-                          type: "parent",
-                          original: location,
-                          value: location,
-                          shortName: shortNames[location] ?? "",
-                        })
-                      }
-                    >
-                      <Ionicons
-                        name="create-outline"
-                        size={18}
-                        color={theme.primary}
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.iconButton}
-                      onPress={() => handleDeleteRequest("parent", location)}
-                    >
-                      <Ionicons
-                        name="trash-outline"
-                        size={18}
-                        color={theme.error}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))
+                );
+              })
             )}
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Sections / Directions</Text>
-            <Text style={styles.sectionDescription}>
-              These sections apply to all main locations.
-            </Text>
-
-            <View style={styles.addRow}>
-              <TextInput
-                style={styles.input}
-                placeholder="Add section (e.g., North-East)"
-                value={newChildName}
-                onChangeText={(text) => setNewChildName(text)}
-                placeholderTextColor={theme.textTertiary}
-                selectionColor={theme.primary}
-                cursorColor={theme.primary}
-                underlineColorAndroid="transparent"
-              />
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionHeaderText}>
+                <Text style={styles.sectionTitle}>Sections / Directions</Text>
+                <Text style={styles.sectionDescription}>
+                  Directions or zones within each location — North, South, etc.
+                </Text>
+              </View>
               <TouchableOpacity
-                style={styles.addButton}
-                onPress={handleAddChild}
+                style={styles.sectionAddButton}
+                onPress={() => setEditModal({ type: "child", original: "", value: "" })}
                 disabled={saving}
               >
-                <Ionicons name="add" size={18} color="#fff" />
-                <Text style={styles.addButtonText}>Add</Text>
+                <Ionicons name="add" size={22} color="#fff" />
               </TouchableOpacity>
             </View>
 
@@ -662,69 +1008,101 @@ export default function ManageLocationsScreen() {
         hardwareAccelerated
         onRequestClose={() => setEditModal(null)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <View style={[styles.modalContent, { maxHeight: "88%" }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                Rename {editModal?.type === "parent" ? "Location" : "Section"}
+                {editModal?.type === "parent"
+                  ? editModal.original === "" ? "New Garden Location" : "Edit Garden Location"
+                  : "Rename Section"}
               </Text>
               <TouchableOpacity onPress={() => setEditModal(null)}>
                 <Ionicons name="close" size={20} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <FloatingLabelInput
-              label="New name"
-              value={editModal?.value ?? ""}
-              onChangeText={(text) =>
-                setEditModal((prev) => (prev ? { ...prev, value: text } : prev))
-              }
-              autoFocus
-              autoCorrect={false}
-            />
-
             {editModal?.type === "parent" && (
-              <View style={{ marginTop: 8 }}>
-                <FloatingLabelInput
-                  label="Short name (3–5 letters)"
-                  value={editModal?.shortName ?? ""}
-                  onChangeText={(text) =>
-                    setEditModal((prev) =>
-                      prev ? { ...prev, shortName: text.replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, 5) } : prev,
-                    )
-                  }
-                  autoCorrect={false}
-                  maxLength={5}
-                  autoCapitalize="characters"
-                />
-                <Text style={styles.modalHint}>
-                  Used in auto-generated plant names, e.g. Tomato ({editModal?.shortName || "ABC"})
-                </Text>
+              <View style={styles.modalTabRow}>
+                <TouchableOpacity
+                  style={[styles.modalTab, editModal.activeTab !== "soil" && styles.modalTabActive]}
+                  onPress={() => setEditModal((prev) => prev ? { ...prev, activeTab: "name" } : prev)}
+                >
+                  <Text style={[styles.modalTabText, editModal.activeTab !== "soil" && styles.modalTabTextActive]}>
+                    Name
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalTab, editModal.activeTab === "soil" && styles.modalTabActive]}
+                  onPress={() => setEditModal((prev) => prev ? { ...prev, activeTab: "soil" } : prev)}
+                >
+                  <Text style={[styles.modalTabText, editModal.activeTab === "soil" && styles.modalTabTextActive]}>
+                    Soil & Environment
+                  </Text>
+                </TouchableOpacity>
               </View>
             )}
 
-            {editModal && (
-              <Text style={styles.modalHint}>
-                Used by {editCount} plant{editCount === 1 ? "" : "s"}.
-              </Text>
-            )}
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingTop: 10, paddingBottom: 4 }}
+            >
+              {editModal?.activeTab !== "soil" ? (
+                <>
+                  <FloatingLabelInput
+                    label="Name"
+                    value={editModal?.value ?? ""}
+                    onChangeText={(text) =>
+                      setEditModal((prev) => (prev ? { ...prev, value: text } : prev))
+                    }
+                    autoFocus
+                    autoCorrect={false}
+                  />
 
-            <View style={styles.modalActions}>
+                  {editModal?.type === "parent" && (
+                    <View style={{ marginTop: 8 }}>
+                      <FloatingLabelInput
+                        label="Short name (3–5 letters)"
+                        value={editModal?.shortName ?? ""}
+                        onChangeText={(text) =>
+                          setEditModal((prev) =>
+                            prev ? { ...prev, shortName: text.replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, 5) } : prev,
+                          )
+                        }
+                        autoCorrect={false}
+                        maxLength={5}
+                        autoCapitalize="characters"
+                      />
+                      <Text style={styles.modalHint}>
+                        Used in auto-generated plant names, e.g. Tomato ({editModal?.shortName || "ABC"})
+                      </Text>
+                    </View>
+                  )}
+
+                  {editModal && (
+                    <Text style={styles.modalHint}>
+                      Used by {editCount} plant{editCount === 1 ? "" : "s"}.
+                    </Text>
+                  )}
+                </>
+              ) : (
+                renderProfileEditor()
+              )}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSecondary]}
-                onPress={() => setEditModal(null)}
-              >
-                <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonPrimary]}
+                style={[styles.modalFooterButton, styles.modalFooterButtonPrimary]}
                 onPress={handleRename}
               >
-                <Text style={styles.modalButtonTextPrimary}>Save</Text>
+                <Text style={styles.modalFooterButtonTextPrimary}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -792,4 +1170,3 @@ export default function ManageLocationsScreen() {
     </View>
   );
 }
-

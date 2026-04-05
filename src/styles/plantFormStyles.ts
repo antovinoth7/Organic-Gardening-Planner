@@ -77,58 +77,6 @@ export const createStyles = (theme: Theme) =>
     scrollContent: {
       paddingBottom: 100,
     },
-    segmentedRow: {
-      flexDirection: "row" as const,
-      alignItems: "center" as const,
-      justifyContent: "center" as const,
-      gap: 10,
-      marginBottom: 12,
-    },
-    segmentedControl: {
-      flexDirection: "row" as const,
-      alignSelf: "center" as const,
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: theme.borderLight,
-      padding: 3,
-    },
-    segmentedItem: {
-      paddingHorizontal: 20,
-      paddingVertical: 7,
-      borderRadius: 17,
-    },
-    segmentedItemActive: {
-      backgroundColor: theme.primary,
-    },
-    segmentedLabel: {
-      fontSize: 13,
-      fontWeight: "600" as const,
-      color: theme.textSecondary,
-    },
-    segmentedLabelActive: {
-      color: "#fff",
-    },
-    progressPill: {
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 12,
-      backgroundColor: theme.backgroundSecondary,
-      borderWidth: 1,
-      borderColor: theme.borderLight,
-    },
-    progressPillComplete: {
-      backgroundColor: "#e8f5e9",
-      borderColor: "#4CAF50",
-    },
-    progressPillText: {
-      fontSize: 12,
-      fontWeight: "700" as const,
-      color: theme.textSecondary,
-    },
-    progressPillTextComplete: {
-      color: "#4CAF50",
-    },
     photoButton: {
       alignSelf: "center",
       marginTop: 8,
@@ -278,6 +226,14 @@ export const createStyles = (theme: Theme) =>
       fontSize: 14,
       color: theme.primary,
       fontWeight: "600",
+    },
+    locationDefaultsHint: {
+      fontSize: 12,
+      color: theme.primary,
+      marginTop: 6,
+      marginBottom: 4,
+      marginHorizontal: 2,
+      fontStyle: "italic",
     },
     sectionHeader: {
       fontSize: 18,
@@ -508,7 +464,7 @@ export const createStyles = (theme: Theme) =>
       fontSize: 12,
       fontWeight: "500" as const,
       color: theme.textSecondary,
-      backgroundColor: theme.inputBackground,
+      backgroundColor: theme.backgroundSecondary,
     },
     directionChipsContainer: {
       flexDirection: "row",
@@ -627,6 +583,20 @@ export const createStyles = (theme: Theme) =>
     dateCardPlaceholder: {
       fontSize: 15,
       color: theme.inputPlaceholder,
+    },
+    optionalBadge: {
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 6,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderWidth: 1,
+      borderColor: theme.borderLight,
+    },
+    optionalBadgeText: {
+      fontSize: 10,
+      fontWeight: "600" as const,
+      color: theme.textTertiary,
+      letterSpacing: 0.3,
     },
     // --- Frequency Row (Water/Feed/Prune inline cards) ---
     frequencyRow: {
@@ -1383,7 +1353,7 @@ export const createStyles = (theme: Theme) =>
       fontSize: 12,
       fontWeight: "500" as const,
       color: theme.textSecondary,
-      backgroundColor: theme.inputBackground,
+      backgroundColor: theme.backgroundSecondary,
     },
     namePreviewLabel: {
       fontSize: 12,
@@ -1723,12 +1693,12 @@ export const createStyles = (theme: Theme) =>
     smartDefaultsBanner: {
       flexDirection: "row" as const,
       alignItems: "center",
-      backgroundColor: theme.primaryLight,
+      backgroundColor: `${theme.info}18`,
       borderRadius: 12,
       padding: 12,
       marginBottom: 12,
       borderWidth: 1,
-      borderColor: theme.primary,
+      borderColor: `${theme.info}55`,
       gap: 10,
     },
     smartDefaultsBannerLeft: {
@@ -1743,7 +1713,7 @@ export const createStyles = (theme: Theme) =>
     smartDefaultsBannerTitle: {
       fontSize: 13,
       fontWeight: "700" as const,
-      color: theme.primary,
+      color: theme.info,
       marginBottom: 2,
     },
     smartDefaultsBannerSummary: {

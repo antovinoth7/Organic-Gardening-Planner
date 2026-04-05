@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { getAllPlants } from "../services/plants";
 import {
+  LocationProfile,
   Plant,
   PlantType,
   PlantCatalog,
@@ -14,6 +15,7 @@ export interface UsePlantFormDataReturn {
   plantCareProfiles: Partial<PlantCareProfiles>;
   careProfilesLoaded: boolean;
   locationShortNames: Record<string, string>;
+  locationProfiles: Record<string, LocationProfile>;
   parentLocationOptions: string[];
   childLocationOptions: string[];
   specificPlantOptions: string[];
@@ -69,6 +71,7 @@ export function usePlantFormData({
     DEFAULT_CHILD_LOCATIONS,
   );
   const [locationShortNames, setLocationShortNames] = useState<Record<string, string>>({});
+  const [locationProfiles, setLocationProfiles] = useState<Record<string, LocationProfile>>({});
 
   const loadLocations = async () => {
     try {
@@ -76,6 +79,7 @@ export function usePlantFormData({
       setParentLocations(config.parentLocations);
       setChildLocations(config.childLocations);
       setLocationShortNames(config.parentLocationShortNames ?? {});
+      setLocationProfiles(config.parentLocationProfiles ?? {});
     } catch (error) {
       logger.error("Error loading locations", error as Error);
     }
@@ -210,6 +214,7 @@ export function usePlantFormData({
     plantCareProfiles,
     careProfilesLoaded,
     locationShortNames,
+    locationProfiles,
     // Option lists
     parentLocationOptions,
     childLocationOptions,

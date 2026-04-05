@@ -61,6 +61,11 @@ export default function FloatingLabelInput({
     outputRange: [multiline ? 14 : 16, -9],
   });
 
+  const labelBackground = anim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: ["transparent", "transparent", theme.backgroundSecondary],
+  });
+
   const labelFontSize = anim.interpolate({
     inputRange: [0, 1],
     outputRange: [16, 12],
@@ -69,11 +74,9 @@ export default function FloatingLabelInput({
   const borderColor =
     isFocused && accentBorder ? theme.primary : theme.inputBorder;
 
-  const labelColor = isFocused
-    ? theme.primary
-    : isFloated
-      ? theme.textSecondary
-      : theme.inputPlaceholder;
+  const labelColor = isFloated
+    ? theme.textSecondary
+    : theme.inputPlaceholder;
 
   return (
     <View
@@ -91,7 +94,7 @@ export default function FloatingLabelInput({
             top: labelTop,
             fontSize: labelFontSize,
             color: labelColor,
-            backgroundColor: isFloated ? theme.inputBackground : "transparent",
+            backgroundColor: labelBackground,
           },
         ]}
         numberOfLines={1}

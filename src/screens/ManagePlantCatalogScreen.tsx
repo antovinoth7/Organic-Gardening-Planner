@@ -13,7 +13,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import ThemedDropdown from "../components/ThemedDropdown";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation, NavigationProp, ParamListBase } from "@react-navigation/native";
+import {
+  useNavigation,
+  NavigationProp,
+  ParamListBase,
+} from "@react-navigation/native";
 import { useTheme } from "../theme";
 import { createStyles } from "../styles/managePlantCatalogStyles";
 import {
@@ -38,7 +42,18 @@ import {
   SunlightLevel,
   WaterRequirement,
 } from "../types/database.types";
-import { getPlantCareProfile, getStaticPruningDefaults } from "../utils/plantCareDefaults";
+import {
+  getPlantCareProfile,
+  getStaticPruningDefaults,
+} from "../utils/plantCareDefaults";
+import {
+  CATEGORY_LABELS,
+  FERTILISER_LABELS,
+  GROWTH_STAGE_LABELS,
+  SOIL_LABELS,
+  SUNLIGHT_LABELS,
+  WATER_REQUIREMENT_LABELS,
+} from "../utils/plantLabels";
 import { sanitizeLandmarkText } from "../utils/textSanitizer";
 import { getErrorMessage } from "../utils/errorLogging";
 
@@ -76,61 +91,6 @@ type CareFormState = {
   flowerPruningMonths: string;
 };
 
-const CATEGORY_LABELS: Record<PlantType, string> = {
-  vegetable: "🥬 Vegetable",
-  fruit_tree: "🍇 Fruit",
-  coconut_tree: "🥥 Coconut Tree",
-  herb: "🌿 Herb",
-  timber_tree: "🌲 Timber Tree",
-  flower: "🌸 Flower",
-  shrub: "🌱 Shrub",
-};
-
-const WATER_REQUIREMENT_LABELS: Record<WaterRequirement, string> = {
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-};
-
-const SUNLIGHT_LABELS: Record<SunlightLevel, string> = {
-  full_sun: "Full Sun",
-  partial_sun: "Partial Sun",
-  shade: "Shade",
-};
-
-const SOIL_LABELS: Record<SoilType, string> = {
-  garden_soil: "Garden Soil",
-  potting_mix: "Potting Mix",
-  coco_peat: "Coco Peat",
-  red_laterite: "Red Laterite (Seivaal)",
-  coastal_sandy: "Coastal Sandy Soil",
-  black_cotton: "Black Cotton Soil",
-  alluvial: "Alluvial Soil",
-  custom: "Custom",
-};
-
-const FERTILISER_LABELS: Record<FertiliserType, string> = {
-  compost: "Compost",
-  vermicompost: "Vermicompost",
-  cow_dung_slurry: "Cow Dung Slurry",
-  neem_cake: "Neem Cake",
-  panchagavya: "Panchagavya",
-  jeevamrutham: "Jeevamrutham",
-  groundnut_cake: "Groundnut Cake",
-  fish_emulsion: "Fish Emulsion",
-  seaweed: "Seaweed",
-  other: "Other",
-};
-
-const GROWTH_STAGE_LABELS: Record<GrowthStage, string> = {
-  seedling: "Seedling",
-  vegetative: "Vegetative",
-  flowering: "Flowering",
-  fruiting: "Fruiting",
-  dormant: "Dormant",
-  mature: "Mature",
-};
-
 const sanitizePlantName = (value: string) => sanitizeLandmarkText(value).trim();
 const sanitizeNumberInput = (value: string) => value.replace(/[^0-9]/g, "");
 
@@ -150,12 +110,15 @@ export default function ManagePlantCatalogScreen() {
   const insets = useSafeAreaInsets();
 
   const [catalog, setCatalog] = useState<PlantCatalog>(DEFAULT_PLANT_CATALOG);
-  const [careProfiles, setCareProfiles] = useState<Partial<PlantCareProfiles>>({});
+  const [careProfiles, setCareProfiles] = useState<Partial<PlantCareProfiles>>(
+    {},
+  );
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeCategory, setActiveCategory] = useState<PlantType>("vegetable");
   const [newPlantName, setNewPlantName] = useState("");
+  const [showAddInput, setShowAddInput] = useState(false);
   const [editPlant, setEditPlant] = useState<EditPlantState | null>(null);
   const [reassignPlant, setReassignPlant] = useState<ReassignPlantState | null>(
     null,
@@ -181,7 +144,8 @@ export default function ManagePlantCatalogScreen() {
     } catch (error: unknown) {
       Alert.alert(
         "Error",
-        getErrorMessage(error) || "Failed to load plant catalog. Please try again.",
+        getErrorMessage(error) ||
+          "Failed to load plant catalog. Please try again.",
       );
     } finally {
       setLoading(false);
@@ -191,6 +155,11 @@ export default function ManagePlantCatalogScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    setShowAddInput(false);
+    setNewPlantName("");
+  }, [activeCategory]);
 
   // Note: Data reloads automatically after save operations
   // Users navigating back from other screens don't need fresh data
@@ -242,7 +211,8 @@ export default function ManagePlantCatalogScreen() {
     } catch (error: unknown) {
       Alert.alert(
         "Error",
-        getErrorMessage(error) || "Failed to save plant catalog. Please try again.",
+        getErrorMessage(error) ||
+          "Failed to save plant catalog. Please try again.",
       );
     } finally {
       setSaving(false);
@@ -298,17 +268,17 @@ export default function ManagePlantCatalogScreen() {
       ? (override?.pruningTips ?? []).join("\n")
       : staticPruning.tips.join("\n");
     const shapeTip = hasUserPruning
-      ? override?.shapePruningTip ?? ""
-      : staticPruning.shapePruning?.tip ?? "";
+      ? (override?.shapePruningTip ?? "")
+      : (staticPruning.shapePruning?.tip ?? "");
     const shapeMonths = hasUserPruning
-      ? override?.shapePruningMonths ?? ""
-      : staticPruning.shapePruning?.months ?? "";
+      ? (override?.shapePruningMonths ?? "")
+      : (staticPruning.shapePruning?.months ?? "");
     const flowerTip = hasUserPruning
-      ? override?.flowerPruningTip ?? ""
-      : staticPruning.flowerPruning?.tip ?? "";
+      ? (override?.flowerPruningTip ?? "")
+      : (staticPruning.flowerPruning?.tip ?? "");
     const flowerMonths = hasUserPruning
-      ? override?.flowerPruningMonths ?? ""
-      : staticPruning.flowerPruning?.months ?? "";
+      ? (override?.flowerPruningMonths ?? "")
+      : (staticPruning.flowerPruning?.months ?? "");
 
     return {
       waterRequirement: merged.waterRequirement,
@@ -404,7 +374,8 @@ export default function ManagePlantCatalogScreen() {
     } catch (error: unknown) {
       Alert.alert(
         "Error",
-        getErrorMessage(error) || "Failed to save care defaults. Please try again.",
+        getErrorMessage(error) ||
+          "Failed to save care defaults. Please try again.",
       );
     } finally {
       setSaving(false);
@@ -769,12 +740,27 @@ export default function ManagePlantCatalogScreen() {
         </View>
       ) : (
         <>
-          <View style={styles.categoryBar}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.categoryBarContent}
-            >
+          <ScrollView
+            style={styles.content}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingBottom: Math.max(insets.bottom, 48) + 16,
+            }}
+          >
+            <View style={styles.infoCard}>
+              <Ionicons name="map-outline" size={20} color={theme.primary} />
+              <View style={styles.infoContent}>
+                <Text style={styles.infoTitle}>Your plant catalog</Text>
+                <Text style={styles.infoText}>
+                  Add specific plants per category — they appear as options when
+                  adding a new plant. Each plant can have variety suggestions
+                  and custom care defaults.
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.categoryBar}>
               {PLANT_CATEGORIES.map((category) => (
                 <TouchableOpacity
                   key={category}
@@ -795,55 +781,62 @@ export default function ManagePlantCatalogScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
-          </View>
-
-          <ScrollView
-            style={styles.content}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 48) + 16 }}
-          >
-            <View style={styles.infoCard}>
-              <Ionicons name="leaf-outline" size={20} color={theme.primary} />
-              <View style={styles.infoContent}>
-                <Text style={styles.infoTitle}>Specific plants</Text>
-                <Text style={styles.infoText}>
-                  These appear under “Specific Plant” when adding a plant. You
-                  can also store optional variety suggestions.
-                </Text>
-              </View>
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                {CATEGORY_LABELS[activeCategory]}
-              </Text>
-              <Text style={styles.sectionDescription}>
-                {categoryPlants.length} option
-                {categoryPlants.length === 1 ? "" : "s"} available.
-              </Text>
-
-              <View style={styles.addRow}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Add specific plant"
-                  value={newPlantName}
-                  onChangeText={(text) => setNewPlantName(text)}
-                  placeholderTextColor={theme.textTertiary}
-                  selectionColor={theme.primary}
-                  cursorColor={theme.primary}
-                  underlineColorAndroid="transparent"
-                />
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionHeaderText}>
+                  <Text style={styles.sectionTitle}>
+                    {CATEGORY_LABELS[activeCategory]}
+                  </Text>
+                  <Text style={styles.sectionDescription}>
+                    {categoryPlants.length} option
+                    {categoryPlants.length === 1 ? "" : "s"} available
+                  </Text>
+                </View>
                 <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={handleAddPlant}
+                  style={styles.sectionAddButton}
+                  onPress={() => setShowAddInput(true)}
                   disabled={saving}
                 >
-                  <Ionicons name="add" size={18} color="#fff" />
-                  <Text style={styles.addButtonText}>Add</Text>
+                  <Ionicons name="add" size={22} color="#fff" />
                 </TouchableOpacity>
               </View>
+
+              {showAddInput && (
+                <View style={styles.addInputRow}>
+                  <FloatingLabelInput
+                    label="Plant name"
+                    value={newPlantName}
+                    onChangeText={(text) => setNewPlantName(text)}
+                    autoFocus
+                    autoCorrect={false}
+                  />
+                  <View style={styles.addInputActions}>
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.modalButtonSecondary]}
+                      onPress={() => {
+                        setNewPlantName("");
+                        setShowAddInput(false);
+                      }}
+                    >
+                      <Text style={styles.modalButtonTextSecondary}>
+                        Cancel
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.modalButtonPrimary]}
+                      onPress={() => {
+                        handleAddPlant();
+                        setShowAddInput(false);
+                      }}
+                      disabled={saving}
+                    >
+                      <Text style={styles.modalButtonTextPrimary}>Add</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
 
               {categoryPlants.length === 0 ? (
                 <Text style={styles.emptyText}>
@@ -1266,10 +1259,18 @@ export default function ManagePlantCatalogScreen() {
               </View>
 
               <View style={styles.formSection}>
-                <Text style={styles.formSectionTitle}>✂️ Pruning Techniques</Text>
+                <Text style={styles.formSectionTitle}>
+                  ✂️ Pruning Techniques
+                </Text>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={{ fontSize: 12, color: theme.textTertiary, marginBottom: 6 }}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: theme.textTertiary,
+                      marginBottom: 6,
+                    }}
+                  >
                     Tips (one per line)
                   </Text>
                   <TextInput
@@ -1381,9 +1382,7 @@ export default function ManagePlantCatalogScreen() {
                     selectedValue={careForm?.soilType ?? ""}
                     onValueChange={(value) =>
                       setCareForm((prev) =>
-                        prev
-                          ? { ...prev, soilType: value as SoilType }
-                          : prev,
+                        prev ? { ...prev, soilType: value as SoilType } : prev,
                       )
                     }
                     label="Soil type"
@@ -1486,4 +1485,3 @@ export default function ManagePlantCatalogScreen() {
     </View>
   );
 }
-

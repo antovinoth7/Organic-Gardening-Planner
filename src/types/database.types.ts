@@ -54,11 +54,39 @@ export type GrowthStage =
   | "dormant"
   | "mature";
 
+export type DrainageQuality = "poor" | "fair" | "good" | "excellent";
+export type MoistureRetention = "low" | "medium" | "high";
+export type NutrientLevel = "low" | "medium" | "high";
+export type WindExposure = "sheltered" | "moderate" | "exposed";
+export type WaterSource =
+  | "rain_fed"
+  | "borewell"
+  | "tap"
+  | "pond_canal"
+  | "drip"
+  | "mixed";
+
+export interface LocationProfile {
+  soilPH?: number | null;
+  soilType?: SoilType | null;
+  drainageQuality?: DrainageQuality | null;
+  moistureRetention?: MoistureRetention | null;
+  nitrogenLevel?: NutrientLevel | null;
+  phosphorusLevel?: NutrientLevel | null;
+  potassiumLevel?: NutrientLevel | null;
+  windExposure?: WindExposure | null;
+  waterSource?: WaterSource | null;
+  lastSoilTestDate?: string | null;
+  notes?: string | null;
+}
+
 export interface LocationConfig {
   parentLocations: string[];
   childLocations: string[];
   /** Short names (3–5 chars) keyed by parent location name, used in auto-generated plant names. */
   parentLocationShortNames?: Record<string, string>;
+  /** Soil & environment profile keyed by parent location name. */
+  parentLocationProfiles?: Record<string, LocationProfile>;
 }
 
 export interface PlantCatalogCategory {

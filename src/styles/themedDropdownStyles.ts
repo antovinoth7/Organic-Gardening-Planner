@@ -60,17 +60,23 @@ export const createStyles = (theme: Theme, compact: boolean) =>
       fontSize: 12,
       fontWeight: "500",
       color: theme.textSecondary,
-      backgroundColor: theme.pickerBackground,
+      backgroundColor: theme.backgroundSecondary,
+    },
+    gestureRoot: {
+      flex: 1,
     },
     overlay: {
       ...StyleSheet.absoluteFillObject,
       backgroundColor: theme.overlay,
     },
+    backdropPressable: {
+      ...StyleSheet.absoluteFillObject,
+    },
+    sheetContainer: {
+      ...StyleSheet.absoluteFillObject,
+      justifyContent: "flex-end" as const,
+    },
     sheet: {
-      position: "absolute",
-      bottom: 0,
-      left: 0,
-      right: 0,
       backgroundColor: theme.card,
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,

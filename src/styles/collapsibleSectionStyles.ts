@@ -43,11 +43,6 @@ export const createStyles = (theme: Theme) =>
     headerTitleError: {
       color: "#FF6B6B",
     },
-    fieldCount: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      marginLeft: 6,
-    },
     autoFilledBadge: {
       backgroundColor: "#E8F5E9",
       paddingHorizontal: 8,
