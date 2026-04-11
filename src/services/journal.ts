@@ -193,9 +193,24 @@ export const updateJournalEntry = async (
   id: string,
   updates: Partial<JournalEntry>
 ): Promise<JournalEntry> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+
   await refreshAuthToken();
 
+  // Verify ownership before updating
   const docRef = doc(db, JOURNAL_COLLECTION, id);
+  const existingSnap = await withTimeoutAndRetry(
+    () => getDoc(docRef),
+    { timeoutMs: FIRESTORE_READ_TIMEOUT_MS }
+  );
+
+  if (!existingSnap.exists()) throw new Error('Journal entry not found');
+
+  const existingData = existingSnap.data();
+  if (existingData.user_id !== user.uid) {
+    throw new Error('Not authorized to update this entry');
+  }
   
   // CRITICAL: photo_filenames should already be set for local images
   const firestoreUpdates: Partial<JournalEntry> = { ...updates };
@@ -216,7 +231,7 @@ export const updateJournalEntry = async (
       .filter((filename): filename is string => !!filename);
   }
   await withTimeoutAndRetry(
-    () => updateDoc(docRef, firestoreUpdates as any),
+    () => updateDoc(docRef, firestoreUpdates as Record<string, unknown>),
     { timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS }
   );
   

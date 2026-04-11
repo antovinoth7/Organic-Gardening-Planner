@@ -1,7 +1,7 @@
 import { StyleSheet } from "react-native";
 import type { Theme } from "../theme/colors";
 
-export const createStyles = (theme: Theme) =>
+export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create> =>
   StyleSheet.create({
     container: {
       backgroundColor: theme.card,
@@ -13,7 +13,7 @@ export const createStyles = (theme: Theme) =>
     },
     containerComplete: {
       borderLeftWidth: 3,
-      borderLeftColor: "#4caf50",
+      borderLeftColor: theme.success,
     },
     header: {
       flexDirection: "row",
@@ -23,9 +23,9 @@ export const createStyles = (theme: Theme) =>
       backgroundColor: theme.card,
     },
     headerError: {
-      backgroundColor: "#FFF5F5",
+      backgroundColor: theme.errorLight,
       borderLeftWidth: 4,
-      borderLeftColor: "#FF6B6B",
+      borderLeftColor: theme.error,
     },
     headerLeft: {
       flexDirection: "row",
@@ -41,10 +41,10 @@ export const createStyles = (theme: Theme) =>
       color: theme.text,
     },
     headerTitleError: {
-      color: "#FF6B6B",
+      color: theme.error,
     },
     autoFilledBadge: {
-      backgroundColor: "#E8F5E9",
+      backgroundColor: theme.success + "20",
       paddingHorizontal: 8,
       paddingVertical: 2,
       borderRadius: 10,
@@ -52,14 +52,14 @@ export const createStyles = (theme: Theme) =>
     },
     autoFilledText: {
       fontSize: 11,
-      color: "#2E7D32",
+      color: theme.success,
       fontWeight: "600",
     },
     errorDot: {
       width: 8,
       height: 8,
       borderRadius: 4,
-      backgroundColor: "#FF6B6B",
+      backgroundColor: theme.error,
       marginLeft: 8,
     },
     content: {
@@ -71,7 +71,7 @@ export const createStyles = (theme: Theme) =>
       width: 22,
       height: 22,
       borderRadius: 11,
-      backgroundColor: "#4caf50",
+      backgroundColor: theme.success,
       alignItems: "center" as const,
       justifyContent: "center" as const,
       marginLeft: 8,
@@ -81,7 +81,7 @@ export const createStyles = (theme: Theme) =>
       alignItems: "center",
       gap: 4,
       marginLeft: 8,
-      backgroundColor: "#ffebee",
+      backgroundColor: theme.errorLight,
       paddingHorizontal: 8,
       paddingVertical: 3,
       borderRadius: 10,
@@ -90,11 +90,11 @@ export const createStyles = (theme: Theme) =>
       width: 6,
       height: 6,
       borderRadius: 3,
-      backgroundColor: "#FF6B6B",
+      backgroundColor: theme.error,
     },
     statusRequiredText: {
       fontSize: 11,
-      color: "#FF6B6B",
+      color: theme.error,
       fontWeight: "700" as const,
     },
     statusOptionalBadge: {

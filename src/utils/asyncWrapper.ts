@@ -106,7 +106,7 @@ const _safePromiseAll = async <T>(
  *   300
  * );
  */
-const _createDebouncedAsync = <Args extends any[]>(
+const _createDebouncedAsync = <Args extends unknown[]>(
   fn: (...args: Args) => Promise<void>,
   delayMs: number
 ): ((...args: Args) => void) => {

@@ -17,7 +17,7 @@ React Native + Expo application for personal organic garden management. Targets 
 
 ## Directory Structure
 
-```
+```text
 src/
 ├── components/     # Reusable UI components (.tsx, PascalCase filenames)
 ├── hooks/          # Custom React hooks (use*.ts)
@@ -35,7 +35,7 @@ src/
 ## Naming Conventions
 
 | Artifact | Convention | Example |
-|---|---|---|
+| --- | --- | --- |
 | Components | PascalCase `.tsx` | `PlantCard.tsx` |
 | Screens | PascalCase + `Screen` suffix | `PlantDetailScreen.tsx` |
 | Hooks | `use` prefix, camelCase | `useCalendarData.ts` |
@@ -49,13 +49,15 @@ src/
 
 ## TypeScript Standards
 
-- `strict: true` is enforced. Never add `// @ts-ignore` or `// @ts-expect-error` unless unavoidable, and always document why.
+- `strict: true` and `noUncheckedIndexedAccess: true` are enforced. Array/object index access returns `T | undefined` — use `!` when the index is provably valid (e.g. inside `if (index !== -1)` or after a length guard), or `?? fallback` when a default is appropriate.
+- Never add `// @ts-ignore` or `// @ts-expect-error` unless unavoidable, and always document why.
 - Prefer `interface` for object shapes, `type` for unions/aliases.
 - Use enums for closed, stable sets (e.g. `JournalEntryType`). Use union string literals for flexible/open sets (e.g. `TaskType`).
 - Never use `any`. If a third-party type is missing, extend or wrap it. If ESLint `no-explicit-any` is suppressed, it is intentional for interop only.
 - Use `Partial<T>`, `Pick<T, K>`, `Record<K, V>` generics rather than duplicating shapes.
 - Type all hook return values explicitly; don't rely on inference for public-facing hook contracts.
 - Avoid `as` casts; use type guards instead.
+- Path alias `@/` maps to `src/` — use `import { Foo } from '@/components/Foo'` instead of relative `../../` imports.
 
 ---
 
@@ -181,8 +183,12 @@ export function MyComponent({ value, onPress }: Props) {
 ## Navigation Standards
 
 - Navigation lives in the root `App.tsx` navigator definitions.
-- Screen components do not import navigation types directly — use `useNavigation()` and `useRoute()` hooks.
+- All param lists are defined in `src/types/navigation.types.ts` — add new screens there first.
+- Screen components use typed hooks: `useNavigation<ScreenNavigationProp>()` and `useRoute<ScreenRouteProp>()`. Import the convenience types from `src/types/navigation.types.ts`.
+- Never use `useNavigation()` untyped or cast `route.params as Record<string, unknown>`.
+- For screens that navigate across stack boundaries (e.g. PlantsStack → Journal tab), use `CompositeNavigationProp`.
 - Pass only primitive or serialisable params via route params. Load full objects inside the screen.
+- Use `refresh?: number` (set to `Date.now()`) to trigger re-fetch when navigating back to a list screen.
 - `FloatingTabBar` hides on scroll — coordinate via `TabBarScrollContext`; do not re-implement scroll detection in individual screens.
 
 ---
@@ -201,6 +207,7 @@ export function MyComponent({ value, onPress }: Props) {
 ## File Creation Checklist
 
 Before creating a new file, verify:
+
 1. Does an existing file already handle this concern?
 2. Is the file in the correct directory per the structure above?
 3. Does it follow the naming convention?
@@ -218,3 +225,131 @@ Before creating a new file, verify:
 - Do not hardcode colours, spacing, or font sizes outside the theme/styles system.
 - Do not use Firebase Storage (images go to MediaLibrary).
 - Do not mock the database in tests — integration tests must hit a real or emulated backend.
+
+---
+
+## Testing Standards
+
+- Test files live in `src/__tests__/` with `*.test.ts` or `*.test.tsx` extensions.
+- Every new service function must have a corresponding unit test.
+- Every new utility function must have a unit test.
+- Component tests use `@testing-library/react-native`.
+- Do NOT mock Firestore — use the Firebase emulator for integration tests.
+- Test fixtures live in `src/__tests__/fixtures/` as exported factory functions.
+- Coverage targets: 30% on first merge, growing to 70% over sprints.
+- Run `npm test` before pushing.
+
+### Fixture Factory Pattern
+
+```typescript
+// src/__tests__/fixtures/plant.fixtures.ts
+import { Plant } from '../../types/database.types';
+
+export function makePlant(overrides: Partial<Plant> = {}): Plant {
+  return {
+    id: 'test-plant-id',
+    name: 'Test Tomato',
+    type: 'Vegetable',
+    user_id: 'test-user-id',
+    created_at: new Date().toISOString(),
+    ...overrides,
+  };
+}
+```
+
+---
+
+## Commit Message Standards
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): description`
+
+| Type | When to use |
+| --- | --- |
+| `feat` | New user-visible feature |
+| `fix` | Bug fix |
+| `refactor` | Code restructuring without behaviour change |
+| `chore` | Tooling, deps, config |
+| `test` | Adding or fixing tests |
+| `docs` | Documentation only |
+| `style` | Formatting, no logic change |
+| `perf` | Performance improvement |
+
+**Scope** = affected module: `plants`, `tasks`, `journal`, `auth`, `calendar`, `theme`, `nav`
+
+Examples:
+
+- `feat(plants): add water schedule reminder`
+- `fix(auth): handle expired token on app resume`
+
+`commitlint` enforces this on every commit. Do not bypass with `--no-verify`.
+
+---
+
+## AI Assistant Checklist (Claude Code / GitHub Copilot)
+
+Before generating any code for this project, verify each item:
+
+### Architecture
+
+- [ ] New code is in the correct directory (`components/`, `screens/`, `hooks/`, `services/`, `utils/`)
+- [ ] File follows the naming convention for its type (see Naming Conventions table)
+- [ ] New component has a colocated `*Styles.ts` file in `src/styles/`
+- [ ] New service implements cache → auth → Firestore → AsyncStorage fallback
+- [ ] Reuses existing utilities: `withTimeoutAndRetry`, `dataCache`, `refreshAuthToken`, `logger`, `asyncWrapper`
+
+### TypeScript
+
+- [ ] No `any` types without an inline justifying comment
+- [ ] `Props` interface defined at the top of every component file
+- [ ] Hook return type is explicitly typed as a named interface
+- [ ] No `as` casts — use type guards
+- [ ] Index access (`arr[i]`, `obj[key]`) guarded with `!` (when provably non-null) or `?? fallback` — `noUncheckedIndexedAccess` is enabled
+- [ ] Imports use `@/` path alias, not `../../` relative paths
+
+### Styling
+
+- [ ] No inline style objects in JSX
+- [ ] All colors reference `theme.*` — zero hardcoded hex values
+- [ ] Spacing is a multiple of 4 or 8
+- [ ] Components use `styles = useMemo(() => createStyles(theme), [theme])`
+
+### State & Performance
+
+- [ ] Every function passed as a prop is wrapped in `useCallback`
+- [ ] Derived data passed as props is wrapped in `useMemo`
+- [ ] Lists >20 items use `FlatList`, not `ScrollView + .map()`
+
+### Quality
+
+- [ ] Zero `console.log` calls — use `src/utils/logger.ts` or remove
+- [ ] No TODO comments without an issue number
+- [ ] Functions are ≤ 50 lines; helpers extracted if exceeded
+- [ ] Magic numbers are named `UPPER_SNAKE_CASE` constants
+- [ ] `npm run lint` passes with zero errors after code generation
+
+---
+
+## New Feature Implementation Checklist
+
+Follow this order for every new feature:
+
+**Before starting:**
+
+1. Identify affected files in the existing `src/` structure
+2. Check if an existing service, hook, or utility can be reused
+3. Define all new TypeScript interfaces/types in `src/types/database.types.ts` first
+
+**During implementation:**
+
+1. Create service functions following cache → auth → Firestore → AsyncStorage pattern
+2. Create a custom hook that wraps the service calls with `loading` / `error` states
+3. Create the screen component that calls the hook — screens never call services directly
+4. Create components with colocated styles files
+
+**After implementation:**
+
+1. Write unit tests for all new service functions and utilities in `src/__tests__/`
+2. Run `npm run lint` — zero errors
+3. Run `npx tsc --noEmit` — zero errors
+4. Run `npm test` — all tests pass
+5. Commit with conventional commit format (`feat(scope): description`)

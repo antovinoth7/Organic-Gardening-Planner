@@ -222,9 +222,20 @@ export const updateTaskTemplate = async (
   id: string,
   updates: Partial<TaskTemplate>,
 ): Promise<TaskTemplate> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+
   const docRef = doc(db, TASKS_COLLECTION, id);
 
-  const firestoreUpdates: Record<string, any> = { ...updates };
+  // Verify ownership before updating
+  const existingSnap = await withTimeoutAndRetry(() => getDoc(docRef), {
+    timeoutMs: FIRESTORE_READ_TIMEOUT_MS,
+  });
+  if (!existingSnap.exists() || existingSnap.data().user_id !== user.uid) {
+    throw new Error('Not authorized to update this task');
+  }
+
+  const firestoreUpdates: Record<string, unknown> = { ...updates };
   if (updates.next_due_at) {
     const parsedDate = new Date(updates.next_due_at);
     if (Number.isNaN(parsedDate.getTime())) {
@@ -335,6 +346,11 @@ export const markTaskDone = async (
   const user = auth.currentUser;
   if (!user) throw new Error("Not authenticated");
 
+  // Verify the task belongs to the current user
+  if (template.user_id !== user.uid) {
+    throw new Error('Not authorized to complete this task');
+  }
+
   const doneAt = new Date();
   const frequencyDays = Number.isFinite(template.frequency_days)
     ? template.frequency_days
@@ -437,7 +453,7 @@ export const markTaskDone = async (
     const taskIndex = cachedTasks.findIndex((task) => task.id === template.id);
     if (taskIndex !== -1) {
       cachedTasks[taskIndex] = {
-        ...cachedTasks[taskIndex],
+        ...cachedTasks[taskIndex]!,
         ...(typeof updates.enabled === "boolean"
           ? { enabled: updates.enabled }
           : {}),
@@ -461,7 +477,7 @@ export const markTaskDone = async (
       );
       if (plantIndex !== -1) {
         cachedPlants[plantIndex] = {
-          ...cachedPlants[plantIndex],
+          ...cachedPlants[plantIndex]!,
           [plantLastCareField]: doneAtIso,
         };
         await setData(KEYS.PLANTS, cachedPlants);

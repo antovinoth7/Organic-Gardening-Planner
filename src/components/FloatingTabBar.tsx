@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../theme";
 import { createStyles, fabStyles } from "../styles/floatingTabBarStyles";
 
@@ -38,10 +39,10 @@ const TabBarScrollContext = createContext<TabBarScrollContextValue>({
   resetTabBar: () => undefined,
 });
 
-export const useTabBarScroll = () => useContext(TabBarScrollContext);
+export const useTabBarScroll = (): TabBarScrollContextValue => useContext(TabBarScrollContext);
 
 /** Access the tab bar's translateY for coordinating other elements (e.g. FAB) */
-export const useTabBarTranslateY = () => useContext(AnimatedTranslateContext);
+export const useTabBarTranslateY = (): Animated.Value => useContext(AnimatedTranslateContext);
 
 // ─── Provider ───────────────────────────────────────────────
 
@@ -61,7 +62,7 @@ export const FloatingTabBarProvider: React.FC<{
   const screenReaderRef = useRef(false);
 
   useEffect(() => {
-    const check = async () => {
+    const check = async (): Promise<void> => {
       screenReaderRef.current = await AccessibilityInfo.isScreenReaderEnabled();
     };
     check();
@@ -164,14 +165,14 @@ export function FloatingTabBar({
   state,
   descriptors,
   navigation,
-}: BottomTabBarProps) {
+}: BottomTabBarProps): React.JSX.Element | null {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const translateY = useContext(AnimatedTranslateContext);
   const styles = React.useMemo(() => createStyles(theme), [theme]);
 
   // Hide tab bar when a nested stack is showing a non-root screen
-  const focusedRoute = state.routes[state.index];
+  const focusedRoute = state.routes[state.index]!;
   const nestedState = focusedRoute.state;
   if (nestedState && nestedState.index !== undefined && nestedState.index > 0) {
     return null;
@@ -190,10 +191,10 @@ export function FloatingTabBar({
       ]}
     >
       {state.routes.map((route, index) => {
-        const { options } = descriptors[route.key];
+        const { options } = descriptors[route.key]!;
         const isFocused = state.index === index;
 
-        const onPress = () => {
+        const onPress = (): void => {
           const event = navigation.emit({
             type: "tabPress",
             target: route.key,
@@ -205,7 +206,7 @@ export function FloatingTabBar({
           }
         };
 
-        const onLongPress = () => {
+        const onLongPress = (): void => {
           navigation.emit({
             type: "tabLongPress",
             target: route.key,
@@ -237,7 +238,7 @@ export function FloatingTabBar({
             style={styles.tab}
           >
             {icon}
-            <View style={{ height: 2 }} />
+            <View style={styles.iconLabelSpacer} />
             <Animated.Text
               style={[
                 styles.label,
@@ -264,7 +265,7 @@ interface AnimatedFABProps {
   iconName?: keyof typeof import("@expo/vector-icons").Ionicons.glyphMap;
 }
 
-export function AnimatedFAB({ onPress, iconName = "add" }: AnimatedFABProps) {
+export function AnimatedFAB({ onPress, iconName = "add" }: AnimatedFABProps): React.JSX.Element {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const translateY = useTabBarTranslateY();
@@ -279,8 +280,6 @@ export function AnimatedFAB({ onPress, iconName = "add" }: AnimatedFABProps) {
     outputRange: [0, TAB_BAR_HEIGHT + 8],
     extrapolate: "clamp",
   });
-
-  const Ionicons = require("@expo/vector-icons").Ionicons;
 
   return (
     <Animated.View

@@ -58,7 +58,7 @@ type ReassignModalState = {
   replacement: string;
 };
 
-const parseLocation = (value?: string | null) => {
+const parseLocation = (value?: string | null): { parent: string; child: string } => {
   if (!value) return { parent: "", child: "" };
   const parts = value.split(" - ");
   const parent = parts[0]?.trim() ?? "";
@@ -66,15 +66,15 @@ const parseLocation = (value?: string | null) => {
   return { parent, child };
 };
 
-const buildLocation = (parent: string, child: string) => {
+const buildLocation = (parent: string, child: string): string => {
   if (parent && child) return `${parent} - ${child}`;
   return parent || child || "";
 };
 
-const sanitizeLocationName = (value: string) =>
+const sanitizeLocationName = (value: string): string =>
   sanitizeLandmarkText(value).trim();
 
-const isDuplicate = (list: string[], value: string, ignore?: string) => {
+const isDuplicate = (list: string[], value: string, ignore?: string): boolean => {
   const needle = value.toLowerCase();
   return list.some((item) => {
     const key = item.toLowerCase();
@@ -83,7 +83,7 @@ const isDuplicate = (list: string[], value: string, ignore?: string) => {
   });
 };
 
-const formatDateDisplay = (isoDate: string) => {
+const formatDateDisplay = (isoDate: string): string => {
   const d = new Date(isoDate);
   return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 };
@@ -163,7 +163,7 @@ const WATER_SOURCE_OPTIONS: { value: WaterSource; label: string }[] = [
   { value: "mixed", label: "Mixed" },
 ];
 
-export default function ManageLocationsScreen() {
+export default function ManageLocationsScreen(): React.JSX.Element {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const theme = useTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
@@ -236,7 +236,7 @@ export default function ManageLocationsScreen() {
   const updatePlantsForParent = async (
     fromParent: string,
     toParent: string,
-  ) => {
+  ): Promise<number> => {
     const targets = plants.filter(
       (plant) => parseLocation(plant.location).parent === fromParent,
     );
@@ -258,7 +258,7 @@ export default function ManageLocationsScreen() {
     return targets.length;
   };
 
-  const updatePlantsForChild = async (fromChild: string, toChild: string) => {
+  const updatePlantsForChild = async (fromChild: string, toChild: string): Promise<number> => {
     const targets = plants.filter(
       (plant) => parseLocation(plant.location).child === fromChild,
     );
@@ -285,7 +285,7 @@ export default function ManageLocationsScreen() {
     children: string[],
     updatedShortNames?: Record<string, string>,
     updatedProfiles?: Record<string, LocationProfile>,
-  ) => {
+  ): Promise<void> => {
     const names = updatedShortNames ?? shortNames;
     const profiles = updatedProfiles ?? locationProfiles;
     const saved = await saveLocationConfig({
@@ -301,7 +301,7 @@ export default function ManageLocationsScreen() {
   };
 
 
-  const handleRename = async () => {
+  const handleRename = async (): Promise<void> => {
     if (!editModal) return;
 
     if (editModal.type === "child" && editModal.original === "") {
@@ -388,7 +388,7 @@ export default function ManageLocationsScreen() {
       return;
     }
 
-    const performRename = async () => {
+    const performRename = async (): Promise<void> => {
       setSaving(true);
       try {
         if (editModal.type === "parent") {
@@ -405,7 +405,7 @@ export default function ManageLocationsScreen() {
 
           const updatedProfiles = { ...locationProfiles };
           if (updatedProfiles[editModal.original]) {
-            updatedProfiles[name] = updatedProfiles[editModal.original];
+            updatedProfiles[name] = updatedProfiles[editModal.original]!;
             delete updatedProfiles[editModal.original];
           }
           if (editModal.profile) {
@@ -447,7 +447,7 @@ export default function ManageLocationsScreen() {
     }
   };
 
-  const handleDeleteRequest = (type: "parent" | "child", name: string) => {
+  const handleDeleteRequest = (type: "parent" | "child", name: string): void => {
     const list = type === "parent" ? parentLocations : childLocations;
     const count =
       type === "parent" ? parentCounts[name] || 0 : childCounts[name] || 0;
@@ -481,7 +481,7 @@ export default function ManageLocationsScreen() {
     setReassignModal({
       type,
       target: name,
-      replacement: options[0],
+      replacement: options[0]!,
     });
   };
 
@@ -489,7 +489,7 @@ export default function ManageLocationsScreen() {
     type: "parent" | "child",
     name: string,
     replacement?: string,
-  ) => {
+  ): Promise<void> => {
     setSaving(true);
     try {
       if (type === "parent") {
@@ -520,7 +520,7 @@ export default function ManageLocationsScreen() {
     }
   };
 
-  const handleReassignConfirm = () => {
+  const handleReassignConfirm = (): void => {
     if (!reassignModal) return;
     handleDelete(
       reassignModal.type,
@@ -559,7 +559,7 @@ export default function ManageLocationsScreen() {
     [],
   );
 
-  const renderProfileEditor = () => {
+  const renderProfileEditor = (): React.JSX.Element | null => {
     if (!editModal || editModal.type !== "parent") return null;
     const profile = editModal.profile ?? {};
     const isStale = isSoilTestStale(profile.lastSoilTestDate);
@@ -1012,7 +1012,7 @@ export default function ManageLocationsScreen() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
         >
-          <View style={[styles.modalContent, { maxHeight: "88%" }]}>
+          <View style={[styles.modalContent, styles.modalContentTall]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {editModal?.type === "parent"
@@ -1048,7 +1048,7 @@ export default function ManageLocationsScreen() {
             <ScrollView
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingTop: 10, paddingBottom: 4 }}
+              contentContainerStyle={styles.scrollContentPadding}
             >
               {editModal?.activeTab !== "soil" ? (
                 <>
@@ -1063,7 +1063,7 @@ export default function ManageLocationsScreen() {
                   />
 
                   {editModal?.type === "parent" && (
-                    <View style={{ marginTop: 8 }}>
+                    <View style={styles.shortNameWrap}>
                       <FloatingLabelInput
                         label="Short name (3–5 letters)"
                         value={editModal?.shortName ?? ""}

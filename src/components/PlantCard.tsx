@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
+import type { ImageStyle } from 'react-native';
 import { Image } from 'expo-image';
 import { Plant } from '../types/database.types';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +19,7 @@ interface PlantCardProps {
   onSwipeableOpen?: (ref: Swipeable) => void;
 }
 
-export default function PlantCard({ plant, onPress, onEdit, onDelete, compact = false, searchQuery = "", onSwipeableOpen }: PlantCardProps) {
+export default function PlantCard({ plant, onPress, onEdit, onDelete, compact = false, searchQuery = "", onSwipeableOpen }: PlantCardProps): React.JSX.Element {
   const theme = useTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const [imageError, setImageError] = useState(false);
@@ -32,7 +33,7 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete, compact = 
     return () => { isMountedRef.current = false; };
   }, [plant.photo_url]);
 
-  const getPlantTypeIcon = () => {
+  const getPlantTypeIcon = (): string => {
     const icons: Record<string, string> = {
       vegetable: '🥬',
       herb: '🌿',
@@ -45,7 +46,7 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete, compact = 
     return icons[plant.plant_type] || '🌱';
   };
 
-  const getPlantTypeLabel = () => {
+  const getPlantTypeLabel = (): string => {
     const labels: Record<string, string> = {
       vegetable: 'Vegetable',
       herb: 'Herb',
@@ -74,14 +75,14 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete, compact = 
   const isTree = ['fruit_tree', 'timber_tree', 'coconut_tree'].includes(plant.plant_type);
   const age = getYearsOld(plant.planting_date ?? null);
 
-  const getHealthColor = () => {
+  const getHealthColor = (): string => {
     const colors: Record<string, string> = {
       healthy: '#4caf50',
       stressed: '#ff9800',
       recovering: '#2196f3',
       sick: '#f44336',
     };
-    return plant.health_status ? colors[plant.health_status] : '#4caf50';
+    return (plant.health_status ? colors[plant.health_status] : undefined) ?? '#4caf50';
   };
 
   const getDaysSinceWatered = (): number | null => {
@@ -90,7 +91,7 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete, compact = 
     return Math.floor(diff / (1000 * 60 * 60 * 24));
   };
 
-  const handleImageError = () => {
+  const handleImageError = (): void => {
     if (isMountedRef.current) setImageError(true);
   };
 
@@ -159,7 +160,7 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete, compact = 
         {plant.photo_url && !imageError ? (
           <Image
             source={{ uri: plant.photo_url }}
-            style={styles.compactImage}
+            style={styles.compactImage as ImageStyle}
             contentFit="cover"
             transition={200}
             onError={handleImageError}
@@ -258,7 +259,7 @@ export default function PlantCard({ plant, onPress, onEdit, onDelete, compact = 
           {plant.photo_url && !imageError ? (
             <Image
               source={{ uri: plant.photo_url }}
-              style={styles.image}
+              style={styles.image as ImageStyle}
               contentFit="cover"
               transition={200}
               onError={handleImageError}

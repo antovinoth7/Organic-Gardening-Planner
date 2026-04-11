@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import type { ImageStyle } from "react-native";
 import {
   View,
   Text,
@@ -30,9 +31,11 @@ import {
 } from "../utils/plantHelpers";
 import { saveImageLocallyWithFilename } from "../lib/imageStorage";
 import { createTaskTemplate } from "../services/tasks";
+import { createStyles as createPlantFormStyles } from "../styles/plantFormStyles";
 import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 import { toLocalDateString, formatDateDisplay } from "../utils/dateHelpers";
 import { logger } from "../utils/logger";
+import type { Theme } from "../theme/colors";
 
 const ISSUE_SEVERITY_OPTIONS: { value: IssueSeverity; label: string }[] = [
   { value: "low", label: "Low" },
@@ -51,8 +54,8 @@ interface PestDiseaseModalProps {
   plantVariety: string;
   plantId: string | undefined;
   healthStatus: HealthStatus;
-  styles: any;
-  theme: any;
+  styles: ReturnType<typeof createPlantFormStyles>;
+  theme: Theme;
   bottomInset: number;
   onClose: () => void;
   onSave: (updatedHistory: PestDiseaseRecord[]) => void;
@@ -83,7 +86,7 @@ export default function PestDiseaseModal({
   onClose,
   onSave,
   onHealthStatusChange,
-}: PestDiseaseModalProps) {
+}: PestDiseaseModalProps): React.JSX.Element {
   const [currentRecord, setCurrentRecord] =
     useState<PestDiseaseRecord>(DEFAULT_RECORD);
   const [pestPhotoUri, setPestPhotoUri] = useState<string | null>(null);
@@ -108,12 +111,12 @@ export default function PestDiseaseModal({
     }
   }, [visible, editingRecord, initialPhotoUri]);
 
-  const handleClose = () => {
+  const handleClose = (): void => {
     setShowDatePicker(false);
     onClose();
   };
 
-  const openCamera = async () => {
+  const openCamera = async (): Promise<void> => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
       Alert.alert("Permission required", "Please allow access to your camera");
@@ -126,14 +129,14 @@ export default function PestDiseaseModal({
         quality: 0.7,
         cameraType: ImagePicker.CameraType.back,
       });
-      if (!result.canceled) setPestPhotoUri(result.assets[0].uri);
+      if (!result.canceled) setPestPhotoUri(result.assets[0]!.uri);
     } catch (error) {
       logger.warn("Camera launch failed", error as Error);
       Alert.alert("Camera Error", "Failed to open camera. Please try again.");
     }
   };
 
-  const openLibrary = async () => {
+  const openLibrary = async (): Promise<void> => {
     const { status } =
       await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
@@ -145,10 +148,10 @@ export default function PestDiseaseModal({
       allowsEditing: false,
       quality: 0.7,
     });
-    if (!result.canceled) setPestPhotoUri(result.assets[0].uri);
+    if (!result.canceled) setPestPhotoUri(result.assets[0]!.uri);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<void> => {
     if (!currentRecord.name.trim()) {
       Alert.alert("Validation Error", "Please enter a name");
       return;
@@ -703,7 +706,7 @@ export default function PestDiseaseModal({
                   <View style={styles.pestPhotoPreviewWrap}>
                     <Image
                       source={{ uri: pestPhotoUri }}
-                      style={styles.pestPhotoPreview}
+                      style={styles.pestPhotoPreview as ImageStyle}
                       contentFit="cover"
                       transition={200}
                       cachePolicy="memory-disk"

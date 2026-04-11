@@ -1,7 +1,7 @@
 import { StyleSheet } from "react-native";
-import { useTheme } from "../theme";
+import type { Theme } from "../theme/colors";
 
-export const createStyles = (theme: ReturnType<typeof useTheme>) =>
+export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create> =>
   StyleSheet.create({
     card: {
       flexDirection: "row",
@@ -12,7 +12,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       alignItems: "center",
       borderWidth: 1,
       borderColor: theme.border,
-      shadowColor: "#000",
+      shadowColor: theme.shadow,
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.1,
       shadowRadius: 4,

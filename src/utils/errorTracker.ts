@@ -16,7 +16,7 @@ export interface ErrorLog {
   message: string;
   error?: string;
   stack?: string;
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
   userAgent?: string;
   appVersion?: string;
 }
@@ -28,7 +28,7 @@ class ErrorTracker {
   /**
    * Initialize the error tracker
    */
-  async initialize() {
+  async initialize(): Promise<void> {
     if (this.initialized) return;
 
     try {
@@ -46,7 +46,7 @@ class ErrorTracker {
   /**
    * Track an error
    */
-  async trackError(message: string, error?: Error, context?: Record<string, any>) {
+  async trackError(message: string, error?: Error, context?: Record<string, unknown>): Promise<void> {
     const normalizedContext = context || {};
     const type = typeof normalizedContext.type === 'string' ? normalizedContext.type : 'error';
     const level: 'warning' | 'error' | 'fatal' = type === 'warning' ? 'warning' : type === 'crash' ? 'fatal' : 'error';
@@ -97,7 +97,7 @@ class ErrorTracker {
   /**
    * Track a non-fatal error (warning)
    */
-  async trackWarning(message: string, context?: Record<string, any>) {
+  async trackWarning(message: string, context?: Record<string, unknown>): Promise<void> {
     logger.warn(message, undefined, { metadata: context });
 
     // In production, you might want to track warnings too
@@ -115,7 +115,7 @@ class ErrorTracker {
   /**
    * Clear all error logs
    */
-  async clearErrorLogs() {
+  async clearErrorLogs(): Promise<void> {
     this.errorLogs = [];
     try {
       await AsyncStorage.removeItem(ERROR_LOG_KEY);

@@ -1,7 +1,7 @@
 import { StyleSheet } from "react-native";
 import type { Theme } from "../theme/colors";
 
-export const createStyles = (theme: Theme) =>
+export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create> =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -21,11 +21,11 @@ export const createStyles = (theme: Theme) =>
     heroGreeting: {
       fontSize: 28,
       fontWeight: "bold",
-      color: "#fff",
+      color: theme.textInverse,
     },
     heroDate: {
       fontSize: 14,
-      color: "rgba(255,255,255,0.8)",
+      color: theme.textInverse + "CC",
       marginTop: 4,
     },
     heroThemeToggle: {
@@ -34,7 +34,7 @@ export const createStyles = (theme: Theme) =>
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: "rgba(255,255,255,0.2)",
+      backgroundColor: theme.textInverse + "33",
     },
     // Task Donut Card
     donutCard: {
@@ -84,7 +84,7 @@ export const createStyles = (theme: Theme) =>
     donutOverdueBadgeText: {
       fontSize: 11,
       fontWeight: "700",
-      color: "#fff",
+      color: theme.textInverse,
     },
     // Tile grid beside donut (2 per row)
     chipColumn: {
@@ -274,5 +274,18 @@ export const createStyles = (theme: Theme) =>
       color: theme.textInverse,
       fontSize: 15,
       fontWeight: "600",
+    },
+    containerCentered: {
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    flexOne: {
+      flex: 1,
+    },
+    sectionTitleMarginBottom: {
+      marginBottom: 10,
+    },
+    attentionListContent: {
+      paddingRight: 8,
     },
   });

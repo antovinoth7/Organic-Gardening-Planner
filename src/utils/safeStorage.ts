@@ -8,9 +8,10 @@ import { logger } from './logger';
  */
 
 interface QueueItem {
-  operation: () => Promise<any>;
+  operation: () => Promise<unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic resolve/reject for queue interop
   resolve: (value: any) => void;
-  reject: (error: any) => void;
+  reject: (error: unknown) => void;
 }
 
 const MAX_QUEUE_SIZE = 100; // Prevent memory overflow
@@ -37,7 +38,7 @@ class StorageQueue {
     return this.queue.length;
   }
 
-  private async process() {
+  private async process(): Promise<void> {
     if (this.isProcessing || this.queue.length === 0) return;
 
     this.isProcessing = true;
@@ -84,11 +85,11 @@ export const safeGetData = async <T>(key: string, retries = 2): Promise<T[]> => 
         }
         
         return parsed;
-      } catch (e: any) {
+      } catch (e: unknown) {
         logger.error(`Error reading ${key} (attempt ${i + 1}/${retries + 1}):`, e as Error);
         
         // If JSON parse error, data is corrupted - clear it
-        if (e instanceof SyntaxError || e?.message?.includes('JSON')) {
+        if (e instanceof SyntaxError || (e instanceof Error && e.message?.includes('JSON'))) {
           logger.warn(`Corrupted data at ${key}, clearing...`);
           try {
             await AsyncStorage.removeItem(key);
@@ -119,7 +120,7 @@ export const safeGetData = async <T>(key: string, retries = 2): Promise<T[]> => 
  */
 export const safeSetData = async <T>(key: string, value: T[], retries = 2): Promise<boolean> => {
   return storageQueue.add(async () => {
-    let lastError: any;
+    let lastError: unknown;
 
     // Validate input
     if (!Array.isArray(value)) {
@@ -132,7 +133,7 @@ export const safeSetData = async <T>(key: string, value: T[], retries = 2): Prom
         const jsonValue = JSON.stringify(value);
         await AsyncStorage.setItem(key, jsonValue);
         return true;
-      } catch (e: any) {
+      } catch (e: unknown) {
         lastError = e;
         logger.error(`Error saving ${key} (attempt ${i + 1}/${retries + 1}):`, e as Error);
         
@@ -156,7 +157,7 @@ export const safeGetItem = async (key: string, retries = 2): Promise<string | nu
     for (let i = 0; i <= retries; i++) {
       try {
         return await AsyncStorage.getItem(key);
-      } catch (e: any) {
+      } catch (e: unknown) {
         logger.error(`Error reading item ${key} (attempt ${i + 1}/${retries + 1}):`, e as Error);
         
         if (i < retries) {
@@ -179,7 +180,7 @@ export const safeSetItem = async (key: string, value: string, retries = 2): Prom
       try {
         await AsyncStorage.setItem(key, value);
         return true;
-      } catch (e: any) {
+      } catch (e: unknown) {
         logger.error(`Error saving item ${key} (attempt ${i + 1}/${retries + 1}):`, e as Error);
         
         if (i < retries) {

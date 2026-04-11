@@ -1,11 +1,11 @@
 import { Dimensions, Platform, StyleSheet } from "react-native";
 import type { Theme } from "../theme/colors";
 
-function getScreenHeight() {
+function getScreenHeight(): number {
   return Dimensions.get("window").height;
 }
 
-export const createStyles = (theme: Theme, compact: boolean) =>
+export const createStyles = (theme: Theme, compact: boolean): ReturnType<typeof StyleSheet.create> =>
   StyleSheet.create({
     // Option A: iOS Settings row — label left, value right
     trigger: {
@@ -49,6 +49,11 @@ export const createStyles = (theme: Theme, compact: boolean) =>
     },
     triggerTextDisabled: {
       color: theme.textTertiary,
+    },
+    triggerTextNoLabel: {
+      flex: 1,
+      textAlign: "left" as const,
+      maxWidth: "100%" as const,
     },
     // Kept for backward compat — no longer used visually
     triggerWithLabel: {},

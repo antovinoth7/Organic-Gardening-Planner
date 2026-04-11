@@ -312,3 +312,82 @@ Before creating a new file:
 ## When You Change Behavior
 - Update this file if contributor guidance changes.
 - Keep `README.md` as the primary architecture and usage document, and update any remaining docs only if you also bring them in line with the code.
+
+## Commit Message Standards
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): description`
+
+| Type | When to use |
+|---|---|
+| `feat` | New user-visible feature |
+| `fix` | Bug fix |
+| `refactor` | Code restructuring without behaviour change |
+| `chore` | Tooling, deps, config |
+| `test` | Adding or fixing tests |
+| `docs` | Documentation only |
+| `style` | Formatting, no logic change |
+| `perf` | Performance improvement |
+
+**Scope** = affected module: `plants`, `tasks`, `journal`, `auth`, `calendar`, `theme`, `nav`
+
+`commitlint` enforces this on every commit. Do not bypass with `--no-verify`.
+
+## Testing Standards
+
+- Test files live in `src/__tests__/` with `*.test.ts` or `*.test.tsx` extensions.
+- Every new service function must have a unit test. Every new utility function must have a unit test.
+- Do NOT mock Firestore — use the Firebase emulator for integration tests.
+- Test fixtures live in `src/__tests__/fixtures/` as exported factory functions.
+- Coverage target: 30% minimum, growing to 70% over sprints.
+- Run `npm test` before pushing.
+
+## AI Code Generation Checklist
+
+Before generating any code for this project, verify each item:
+
+**Architecture**
+
+- New code is in the correct `src/` subdirectory
+- File follows the naming convention for its type (see Naming Conventions table)
+- New component has a colocated `*Styles.ts` in `src/styles/`
+- New service implements cache → auth → Firestore → AsyncStorage fallback
+- Reuses existing utilities: `withTimeoutAndRetry`, `dataCache`, `refreshAuthToken`, `logger`, `asyncWrapper`
+
+**TypeScript**
+
+- No `any` types without an inline justifying comment
+- `Props` interface defined at the top of every component file
+- Hook return type is explicitly typed as a named interface
+- No `as` casts — use type guards
+
+**Styling**
+
+- No inline style objects in JSX
+- All colors reference `theme.*` — zero hardcoded hex values
+- Spacing is a multiple of 4 or 8
+- Components use `styles = useMemo(() => createStyles(theme), [theme])`
+
+**State & Performance**
+
+- Every function passed as a prop is wrapped in `useCallback`
+- Derived data passed as props is wrapped in `useMemo`
+- Lists >20 items use `FlatList`, not `ScrollView + .map()`
+
+**Quality**
+
+- Zero `console.log` calls — use `src/utils/logger.ts` or remove
+- No TODO comments without an issue number
+- Functions are ≤ 50 lines; helpers extracted if exceeded
+- Magic numbers are named `UPPER_SNAKE_CASE` constants
+- `npm run lint` passes with zero errors after code generation
+
+## New Feature Implementation Order
+
+1. Define new TypeScript interfaces/types in `src/types/database.types.ts` first
+2. Create service functions (cache → auth → Firestore → AsyncStorage pattern)
+3. Create custom hook wrapping the service calls with `loading` / `error` states
+4. Create screen component calling the hook — screens never call services directly
+5. Create components with colocated styles files
+6. Write unit tests for new service functions and utilities
+7. Run `npm run lint` and `npm test` — both must pass
+8. Commit with conventional commit format

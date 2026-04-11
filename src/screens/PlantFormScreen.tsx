@@ -9,7 +9,7 @@ import { useTheme } from "../theme";
 import { createStyles } from "../styles/plantFormStyles";
 
 
-export default function PlantFormScreen() {
+export default function PlantFormScreen(): React.JSX.Element {
   const formState = usePlantFormState();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);

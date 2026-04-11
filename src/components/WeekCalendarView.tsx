@@ -21,7 +21,7 @@ export default function WeekCalendarView({
   getTasksForDate,
   onSelectDate,
   onNavigateWeek,
-}: WeekCalendarViewProps) {
+}: WeekCalendarViewProps): React.JSX.Element {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 

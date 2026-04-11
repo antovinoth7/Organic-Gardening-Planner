@@ -437,7 +437,7 @@ export const getPlantCatalog = async (): Promise<PlantCatalog> => {
 
     const data = snapshot.data();
     const remoteCatalog = normalizeCatalog(
-      (data as Record<string, any>)[PLANT_CATALOG_FIELD] ?? data,
+      ((data as Record<string, unknown>)[PLANT_CATALOG_FIELD] ?? data) as PlantCatalog,
     );
     await setData(KEYS.PLANT_CATALOG, [remoteCatalog]);
     return remoteCatalog;

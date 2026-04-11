@@ -18,6 +18,8 @@ import {
   RefreshControl,
   LayoutAnimation,
   UIManager,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
   Modal,
 } from "react-native";
 import {
@@ -36,12 +38,13 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { TASK_EMOJIS, TASK_COLORS, TASK_LABELS } from "../utils/taskConstants";
 import { useFocusEffect, useRoute } from "@react-navigation/native";
+import { CalendarScreenRouteProp } from "../types/navigation.types";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import { createStyles, getStartOfWeek } from "../styles/calendarStyles";
 import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 import { safeGetItem, safeSetItem } from "../utils/safeStorage";
-import { useCalendarData } from "../hooks/useCalendarData";
+import { useCalendarData, HarvestReadyItem } from "../hooks/useCalendarData";
 import { useTabBarScroll, TAB_BAR_HEIGHT, AnimatedFAB } from "../components/FloatingTabBar";
 import CreateTaskModal from "../components/CreateTaskModal";
 import TaskCompletionModal from "../components/TaskCompletionModal";
@@ -67,8 +70,8 @@ const GROUP_OPTIONS: {
   { value: "plant", label: "Plant", icon: "leaf-outline" },
 ];
 
-export default function CalendarScreen() {
-  const route = useRoute();
+export default function CalendarScreen(): React.JSX.Element {
+  const route = useRoute<CalendarScreenRouteProp>();
   const theme = useTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -111,7 +114,7 @@ export default function CalendarScreen() {
   const calendarCollapsed = useRef(false);
   const lastScrollY = useRef(0);
   const searchInputRef = React.useRef<TextInput>(null);
-  const normalizeSearchText = (value: string) =>
+  const normalizeSearchText = (value: string): string =>
     sanitizeAlphaNumericSpaces(value).trim().toLowerCase();
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
 
@@ -222,7 +225,7 @@ export default function CalendarScreen() {
     safeSetItem("swipeHintViewCount", "3"); // permanently dismiss
   }, []);
 
-  const handleContentScroll = useCallback((event: any) => {
+  const handleContentScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     onTabBarScroll(event);
     const y = event.nativeEvent.contentOffset.y;
     const delta = y - lastScrollY.current;
@@ -271,15 +274,12 @@ export default function CalendarScreen() {
       setCurrentWeekStart(getStartOfWeek(today));
       setCurrentMonth(today);
       setSessionCompletedCount(0);
-      const params = route.params as Record<string, unknown> | undefined;
-      if (params?.resetFilters) {
+      if (route.params?.resetFilters) {
         setFilterTaskTypes(new Set());
         setFilterOverdueOnly(false);
         setGroupBy("none");
-        params.resetFilters = undefined;
-      } else if (params?.filterOverdue) {
+      } else if (route.params?.filterOverdue) {
         setFilterOverdueOnly(true);
-        params.filterOverdue = undefined;
       }
       void loadData(); // debounced — skips if loaded recently
     }, [loadData, resetTabBar, route, calendarHeight]),
@@ -295,7 +295,7 @@ export default function CalendarScreen() {
     setShowNotesModal(true);
   }, []);
 
-  const confirmTaskComplete = async () => {
+  const confirmTaskComplete = async (): Promise<void> => {
     if (!selectedTask || isCompletingTask) return;
 
     setIsCompletingTask(true);
@@ -485,7 +485,7 @@ export default function CalendarScreen() {
     setShowSkipModal(true);
   }, []);
 
-  const handleConfirmSkip = async () => {
+  const handleConfirmSkip = async (): Promise<void> => {
     if (!skipTask || skippingTask) return;
     setSkippingTask(true);
     try {
@@ -532,7 +532,7 @@ export default function CalendarScreen() {
     handleOpenSkipModal(detailTask);
   }, [detailTask, handleOpenSkipModal]);
 
-  const renderSwipeableTask = (task: TaskTemplate) => {
+  const renderSwipeableTask = (task: TaskTemplate): React.JSX.Element | null => {
     if (!task || !task.next_due_at) return null;
     const plantDetails = getPlantDetails(task.plant_id);
     const dueDate = new Date(task.next_due_at);
@@ -554,7 +554,7 @@ export default function CalendarScreen() {
     const renderRightActions = (
       progress: Animated.AnimatedInterpolation<number>,
       _dragX: Animated.AnimatedInterpolation<number>,
-    ) => {
+    ): React.JSX.Element => {
       const scale = progress.interpolate({
         inputRange: [0, 1],
         outputRange: [0.5, 1],
@@ -587,7 +587,7 @@ export default function CalendarScreen() {
     const renderLeftActions = (
       progress: Animated.AnimatedInterpolation<number>,
       _dragX: Animated.AnimatedInterpolation<number>,
-    ) => {
+    ): React.JSX.Element => {
       const scale = progress.interpolate({
         inputRange: [0, 1],
         outputRange: [0.5, 1],
@@ -666,7 +666,7 @@ export default function CalendarScreen() {
             ]}
           />
           <TouchableOpacity
-            style={{ flex: 1 }}
+            style={styles.flexOne}
             onPress={() => {
               setDetailTask(task);
               setShowTaskDetail(true);
@@ -686,7 +686,7 @@ export default function CalendarScreen() {
                   </Text>
                 </View>
                 <View style={styles.taskInfo}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <View style={styles.rowCenter}>
                     <Text style={styles.taskTitle}>
                       {TASK_LABELS[task.task_type]}
                     </Text>
@@ -769,7 +769,7 @@ export default function CalendarScreen() {
   }, [selectedView, currentWeekStart, currentMonth]);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={styles.flexOne}>
       <View style={styles.container}>
         <View style={styles.header}>
           <View style={[styles.headerTop, { paddingTop: insets.top + 12 }]}>
@@ -871,8 +871,7 @@ export default function CalendarScreen() {
 
 
         {/* Week or Month View — collapses on scroll */}
-        <Animated.View style={{
-          overflow: "hidden",
+        <Animated.View style={[styles.animatedCalendarWrap, {
           maxHeight: calendarHeight.interpolate({
             inputRange: [0, 1],
             outputRange: [0, 500],
@@ -881,7 +880,7 @@ export default function CalendarScreen() {
             inputRange: [0, 0.3, 1],
             outputRange: [0, 0.5, 1],
           }),
-        }}>
+        }]}>
           {selectedView === "week" ? (
             <WeekCalendarView
               currentWeekStart={currentWeekStart}
@@ -910,8 +909,7 @@ export default function CalendarScreen() {
         </Animated.View>
 
         {/* Collapsed date strip — visible when calendar is collapsed */}
-        <Animated.View style={{
-          overflow: "hidden",
+        <Animated.View style={[styles.animatedCalendarWrap, {
           maxHeight: calendarHeight.interpolate({
             inputRange: [0, 0.3, 1],
             outputRange: [44, 20, 0],
@@ -920,7 +918,7 @@ export default function CalendarScreen() {
             inputRange: [0, 0.3, 1],
             outputRange: [1, 0.5, 0],
           }),
-        }}>
+        }]}>
           <TouchableOpacity
             style={styles.collapsedStrip}
             onPress={expandCalendar}
@@ -987,7 +985,7 @@ export default function CalendarScreen() {
                   <>
                     <View style={styles.sectionHeaderRow}>
                       {renderSectionCheckbox(selectedDateTasks)}
-                      <Text style={[styles.sectionTitle, { flex: 1 }]}>
+                      <Text style={[styles.sectionTitle, styles.sectionTitleFlex]}>
                         {isToday ? "Today" : selectedDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
                       </Text>
                       <Text style={styles.sectionCount}>{selectedDateTasks.length}</Text>
@@ -1068,7 +1066,7 @@ export default function CalendarScreen() {
                 <Text style={styles.sectionCount}>{filteredHarvestsReady.length}</Text>
               </View>
               {filteredHarvestsReady.map(
-                (item: any) =>
+                (item: HarvestReadyItem) =>
                   item && (
                     <View
                       key={item.plant.id}
@@ -1105,7 +1103,7 @@ export default function CalendarScreen() {
             <View style={styles.section}>
               <View style={styles.sectionHeaderRow}>
                 {renderSectionCheckbox(overdueTasks)}
-                <Text style={[styles.sectionTitle, { color: theme.error, flex: 1 }]}>⚠️ Overdue</Text>
+                <Text style={[styles.sectionTitle, styles.sectionTitleOverdue]}>⚠️ Overdue</Text>
                 <Text style={[styles.sectionCount, { backgroundColor: theme.errorLight, color: theme.error }]}>
                   {overdueTasks.length}
                 </Text>
@@ -1120,8 +1118,8 @@ export default function CalendarScreen() {
             <View style={styles.section}>
               <View style={styles.sectionHeaderRow}>
                 {renderSectionCheckbox(todayTasks)}
-                <Text style={[styles.sectionTitle, { flex: 1 }]}>Today</Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text style={[styles.sectionTitle, styles.sectionTitleFlex]}>Today</Text>
+                <View style={styles.rowCenterGap8}>
                   {sessionCompletedCount > 0 && (
                     <View style={styles.weekDoneChip}>
                       <Text style={styles.weekDoneChipText}>✓ {sessionCompletedCount} done</Text>
@@ -1149,11 +1147,11 @@ export default function CalendarScreen() {
                   return (
                     <View key={dateKey} style={styles.section}>
                       <View style={styles.sectionHeaderRow}>
-                        {renderSectionCheckbox(dayTasks)}
-                        <Text style={[styles.sectionTitle, { flex: 1 }]}>{label}</Text>
-                        <Text style={styles.sectionCount}>{dayTasks.length}</Text>
+                        {renderSectionCheckbox(dayTasks ?? [])}
+                        <Text style={[styles.sectionTitle, styles.sectionTitleFlex]}>{label}</Text>
+                        <Text style={styles.sectionCount}>{(dayTasks ?? []).length}</Text>
                       </View>
-                      {dayTasks.map(renderSwipeableTask)}
+                      {(dayTasks ?? []).map(renderSwipeableTask)}
                     </View>
                   );
                 })
@@ -1186,14 +1184,14 @@ export default function CalendarScreen() {
             : Object.keys(groupedTasks).length > 0 &&
               Object.values(groupedTasks).some((arr) => arr.length > 0)
               ? Object.keys(groupedTasks).map((groupName) => {
-                  const nonOverdue = groupedTasks[groupName].filter((t) => !overdueIdSet.has(t.id));
+                  const nonOverdue = (groupedTasks[groupName] ?? []).filter((t) => !overdueIdSet.has(t.id));
                   if (nonOverdue.length === 0) return null;
                   return (
                     <View key={groupName} style={styles.section}>
                       {groupName ? (
                         <View style={styles.sectionHeaderRow}>
                           {renderSectionCheckbox(nonOverdue)}
-                          <Text style={[styles.sectionTitle, { flex: 1 }]}>
+                          <Text style={[styles.sectionTitle, styles.sectionTitleFlex]}>
                             {groupBy === "location"
                               ? `📍 ${groupName}`
                               : groupBy === "type"
@@ -1207,12 +1205,12 @@ export default function CalendarScreen() {
                       ) : (
                         <View style={styles.sectionHeaderRow}>
                           {renderSectionCheckbox(nonOverdue)}
-                          <Text style={[styles.sectionTitle, { flex: 1 }]}>
+                          <Text style={[styles.sectionTitle, styles.sectionTitleFlex]}>
                             {isSearching
                               ? "Search Results"
                               : selectedView === "month" ? "This Month" : "This Week"}
                           </Text>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          <View style={styles.rowCenterGap8}>
                             {sessionCompletedCount > 0 && !isSearching && (
                               <View style={styles.weekDoneChip}>
                                 <Text style={styles.weekDoneChipText}>✓ {sessionCompletedCount} done</Text>
@@ -1360,7 +1358,7 @@ export default function CalendarScreen() {
                     </Text>
                   </TouchableOpacity>
                 </View>
-                <View style={[styles.sheetChipWrap, { marginTop: 8 }]}>
+                <View style={[styles.sheetChipWrap, styles.chipWrapMarginTop]}>
                   {(Object.keys(TASK_LABELS) as TaskType[]).map((type) => {
                     const isActive = filterTaskTypes.has(type);
                     return (
@@ -1389,7 +1387,7 @@ export default function CalendarScreen() {
                 </View>
 
                 {/* Group By Section */}
-                <Text style={[styles.sheetSectionTitle, { marginTop: 20 }]}>Group By</Text>
+                <Text style={[styles.sheetSectionTitle, styles.sheetSectionTitleMarginTop]}>Group By</Text>
                 <View style={styles.sheetChipWrap}>
                   {GROUP_OPTIONS.map((option) => {
                     const isActive = groupBy === option.value;
@@ -1489,7 +1487,7 @@ export default function CalendarScreen() {
           const effPriority = detailTask.priority_level || calculateTaskPriority(detailTask, plantObj || null);
           const priorityLabels: Record<string, string> = { critical: "⚠ Critical", high: "↑ High", medium: "• Medium", low: "↓ Low" };
           const priorityColorMap: Record<string, string> = { critical: theme.error, high: theme.warning, medium: theme.info, low: theme.border };
-          const closeDetail = () => { setShowTaskDetail(false); setDetailTask(null); };
+          const closeDetail = (): void => { setShowTaskDetail(false); setDetailTask(null); };
           return (
             <View style={[StyleSheet.absoluteFill, styles.sheetOverlay]}>
               <Pressable style={StyleSheet.absoluteFill} onPress={closeDetail} />

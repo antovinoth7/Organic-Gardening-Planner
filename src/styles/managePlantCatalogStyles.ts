@@ -1,7 +1,7 @@
 import { StyleSheet } from "react-native";
-import { useTheme } from "../theme";
+import type { Theme } from "../theme/colors";
 
-export const createStyles = (theme: ReturnType<typeof useTheme>) =>
+export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create> =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -131,7 +131,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       backgroundColor: theme.primary,
       alignItems: "center",
       justifyContent: "center",
-      shadowColor: "#000",
+      shadowColor: theme.shadow,
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.18,
       shadowRadius: 4,
@@ -429,7 +429,23 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     savingText: {
       fontSize: 14,
-      color: "#fff",
+      color: theme.textInverse,
       fontWeight: "600",
+    },
+    pruningTipsLabel: {
+      fontSize: 12,
+      color: theme.textTertiary,
+      marginBottom: 6,
+    },
+    pruningTipsInput: {
+      borderWidth: 1,
+      borderColor: theme.borderLight,
+      borderRadius: 8,
+      padding: 10,
+      minHeight: 80,
+      color: theme.text,
+      fontSize: 14,
+      textAlignVertical: "top",
+      backgroundColor: theme.backgroundSecondary,
     },
   });

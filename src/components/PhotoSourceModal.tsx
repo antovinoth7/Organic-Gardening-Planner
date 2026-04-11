@@ -26,11 +26,11 @@ export default function PhotoSourceModal({
   onLibrary,
   title = "Add photo",
   subtitle = "Choose a source",
-}: PhotoSourceModalProps) {
+}: PhotoSourceModalProps): React.JSX.Element {
   const theme = useTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
 
-  const handleAction = (action: () => void) => {
+  const handleAction = (action: () => void): void => {
     onClose();
     setTimeout(action, 150);
   };

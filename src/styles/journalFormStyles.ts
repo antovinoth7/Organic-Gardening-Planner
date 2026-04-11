@@ -1,7 +1,7 @@
 import { StyleSheet } from "react-native";
 import type { Theme } from "../theme/colors";
 
-export const createStyles = (theme: Theme) =>
+export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create> =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -64,7 +64,7 @@ export const createStyles = (theme: Theme) =>
       position: "absolute",
       top: 4,
       right: 4,
-      backgroundColor: "rgba(0, 0, 0, 0.5)",
+      backgroundColor: theme.overlay,
       borderRadius: 12,
     },
     addPhotoButton: {
@@ -225,5 +225,11 @@ export const createStyles = (theme: Theme) =>
       color: theme.textTertiary,
       textAlign: "right",
       marginTop: -6,
+    },
+    notesWrapperMarginTop: {
+      marginTop: 12,
+    },
+    keyboardSpacer: {
+      height: 300,
     },
   });

@@ -1,7 +1,7 @@
 import { StyleSheet } from "react-native";
-import { useTheme } from "../theme";
+import type { Theme } from "../theme/colors";
 
-export const createStyles = (theme: ReturnType<typeof useTheme>) =>
+export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create> =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -160,7 +160,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     resolvedTextDetail: {
       fontSize: 11,
-      color: "#4CAF50",
+      color: theme.success,
       fontWeight: "600",
     },
     pestCardDate: {
@@ -180,21 +180,21 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       marginTop: 4,
     },
     seasonAlertCard: {
-      backgroundColor: "#FFF8E1",
+      backgroundColor: theme.warningLight,
       padding: 10,
       borderRadius: 8,
       marginBottom: 6,
       borderLeftWidth: 3,
-      borderLeftColor: "#FF9800",
+      borderLeftColor: theme.warning,
     },
     seasonAlertName: {
       fontSize: 14,
       fontWeight: "600",
-      color: "#E65100",
+      color: theme.warning,
       flex: 1,
     },
     seasonAlertTypeBadge: {
-      backgroundColor: "#FFF3E0",
+      backgroundColor: theme.warningLight,
       paddingHorizontal: 6,
       paddingVertical: 2,
       borderRadius: 4,
@@ -202,11 +202,11 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     seasonAlertTypeText: {
       fontSize: 10,
       fontWeight: "600",
-      color: "#E65100",
+      color: theme.warning,
     },
     seasonAlertTip: {
       fontSize: 13,
-      color: "#5D4037",
+      color: theme.text,
       marginTop: 4,
       lineHeight: 18,
     },
@@ -385,7 +385,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     // Image zoom modal
     zoomOverlay: {
       flex: 1,
-      backgroundColor: "#000",
+      backgroundColor: theme.shadow,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -396,7 +396,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       width: 44,
       height: 44,
       borderRadius: 22,
-      backgroundColor: "rgba(255,255,255,0.2)",
+      backgroundColor: theme.textInverse + "33",
       alignItems: "center",
       justifyContent: "center",
       zIndex: 10,
@@ -430,7 +430,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     metricWarning: {
       fontSize: 11,
-      color: "#f44336",
+      color: theme.error,
       fontWeight: "600",
       marginTop: 2,
     },
@@ -523,7 +523,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     awarenessChipText: {
       fontSize: 12,
-      color: "#E65100",
+      color: theme.warning,
       fontWeight: "500",
     },
     awarenessRow: {
@@ -539,5 +539,37 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       color: theme.textSecondary,
       marginBottom: 6,
       marginTop: 8,
+    },
+    gestureRoot: {
+      flex: 1,
+    },
+    zoomGestureContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    healthStatusHealthy: {
+      color: theme.success,
+      fontWeight: "600",
+    },
+    healthStatusSick: {
+      color: theme.error,
+      fontWeight: "600",
+    },
+    healthStatusWarning: {
+      color: theme.warning,
+      fontWeight: "600",
+    },
+    infoRowMarginTop: {
+      marginTop: 12,
+    },
+    nutrientCardHigh: {
+      borderLeftColor: theme.error,
+    },
+    nutrientCardMedium: {
+      borderLeftColor: theme.warning,
+    },
+    nutrientCardLow: {
+      borderLeftColor: theme.success,
     },
   });

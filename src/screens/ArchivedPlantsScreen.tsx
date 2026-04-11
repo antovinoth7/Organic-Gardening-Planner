@@ -9,7 +9,7 @@ import { Plant } from '../types/database.types';
 import { createStyles } from '../styles/archivedPlantsStyles';
 import { getErrorMessage } from '../utils/errorLogging';
 
-export default function ArchivedPlantsScreen() {
+export default function ArchivedPlantsScreen(): React.JSX.Element {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -36,7 +36,7 @@ export default function ArchivedPlantsScreen() {
     }, [loadArchivedPlants])
   );
 
-  const handleRestore = (plant: Plant) => {
+  const handleRestore = useCallback((plant: Plant): void => {
     Alert.alert(
       'Restore Plant',
       `Restore ${plant.name}?`,
@@ -60,7 +60,7 @@ export default function ArchivedPlantsScreen() {
         },
       ]
     );
-  };
+  }, [restoringId, loadArchivedPlants]);
 
   const keyExtractor = useCallback((item: Plant) => item.id, []);
 

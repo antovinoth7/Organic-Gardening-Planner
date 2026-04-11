@@ -1,0 +1,40 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+    groups:
+      expo:
+        patterns:
+          - "expo*"
+          - "@expo/*"
+      react-native:
+        patterns:
+          - "react-native*"
+          - "@react-native*"
+      firebase:
+        patterns:
+          - "firebase*"
+          - "@firebase/*"
+      testing:
+        patterns:
+          - "jest*"
+          - "@testing-library/*"
+          - "ts-jest"
+      linting:
+        patterns:
+          - "eslint*"
+          - "@typescript-eslint/*"
+          - "prettier*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - ci

@@ -1,7 +1,7 @@
 import { StyleSheet } from "react-native";
 import type { Theme } from "../theme/colors";
 
-export const createStyles = (theme: Theme) =>
+export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create> =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -21,7 +21,7 @@ export const createStyles = (theme: Theme) =>
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: "rgba(255,255,255,0.2)",
+      backgroundColor: theme.textInverse + "33",
       alignItems: "center",
       justifyContent: "center",
     },
@@ -31,7 +31,7 @@ export const createStyles = (theme: Theme) =>
     accountLabel: {
       fontSize: 12,
       fontWeight: "600",
-      color: "rgba(255,255,255,0.7)",
+      color: theme.textInverse + "B3",
       textTransform: "uppercase",
       letterSpacing: 1,
       marginBottom: 2,
@@ -39,7 +39,7 @@ export const createStyles = (theme: Theme) =>
     accountEmail: {
       fontSize: 18,
       fontWeight: "700",
-      color: "#fff",
+      color: theme.textInverse,
     },
     content: {
       padding: 16,

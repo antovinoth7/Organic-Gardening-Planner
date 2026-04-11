@@ -20,14 +20,30 @@ const errorLogs: ErrorLog[] = [];
 /**
  * Log an error for analytics
  */
+const SENSITIVE_KEYS = ['password', 'token', 'secret', 'email', 'phone', 'credential'];
+
+const sanitizeContext = (context?: Record<string, unknown>): Record<string, unknown> | undefined => {
+  if (!context) return undefined;
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(context)) {
+    if (SENSITIVE_KEYS.some(s => key.toLowerCase().includes(s))) {
+      sanitized[key] = '[REDACTED]';
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+};
+
 export const logError = (
   type: ErrorLog['type'],
   message: string,
   error?: Error | unknown,
   context?: Record<string, unknown>
-) => {
+): void => {
   const userId = currentUserId;
-  const enrichedContext = { ...context, type, userId };
+  const safeContext = sanitizeContext(context);
+  const enrichedContext = { ...safeContext, type, userId };
   const errorLog: ErrorLog = {
     timestamp: new Date().toISOString(),
     type,
@@ -56,14 +72,14 @@ export const logError = (
 /**
  * Log authentication errors
  */
-export const logAuthError = (message: string, error?: Error, context?: Record<string, unknown>) => {
+export const logAuthError = (message: string, error?: Error, context?: Record<string, unknown>): void => {
   logError('auth', message, error, context);
 };
 
 /**
  * Log storage errors
  */
-export const logStorageError = (message: string, error?: Error, context?: Record<string, unknown>) => {
+export const logStorageError = (message: string, error?: Error, context?: Record<string, unknown>): void => {
   logError('storage', message, error, context);
 };
 
@@ -72,7 +88,7 @@ export const logStorageError = (message: string, error?: Error, context?: Record
  */
 let currentUserId: string | undefined;
 
-export const setErrorLogUserId = (userId: string | undefined) => {
+export const setErrorLogUserId = (userId: string | undefined): void => {
   currentUserId = userId;
 };
 

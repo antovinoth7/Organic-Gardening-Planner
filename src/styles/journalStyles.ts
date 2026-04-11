@@ -1,9 +1,9 @@
 import { StyleSheet, Dimensions } from "react-native";
-import { useTheme } from "../theme";
+import type { Theme } from "../theme/colors";
 
 const { width } = Dimensions.get("window");
 
-export const createStyles = (theme: ReturnType<typeof useTheme>) =>
+export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create> =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -148,7 +148,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     sheetOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.4)",
+      backgroundColor: theme.overlay,
       justifyContent: "flex-end",
       zIndex: 1000,
       elevation: 1000,
@@ -449,11 +449,11 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     clearFiltersText: {
       fontSize: 14,
       fontWeight: "600",
-      color: "#FFFFFF",
+      color: theme.textInverse,
     },
     modalContainer: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.9)",
+      backgroundColor: theme.overlay,
       justifyContent: "center",
       alignItems: "center",
     },

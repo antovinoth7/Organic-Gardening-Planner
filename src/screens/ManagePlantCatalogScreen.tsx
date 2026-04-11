@@ -91,10 +91,10 @@ type CareFormState = {
   flowerPruningMonths: string;
 };
 
-const sanitizePlantName = (value: string) => sanitizeLandmarkText(value).trim();
-const sanitizeNumberInput = (value: string) => value.replace(/[^0-9]/g, "");
+const sanitizePlantName = (value: string): string => sanitizeLandmarkText(value).trim();
+const sanitizeNumberInput = (value: string): string => value.replace(/[^0-9]/g, "");
 
-const isDuplicate = (list: string[], value: string, ignore?: string) => {
+const isDuplicate = (list: string[], value: string, ignore?: string): boolean => {
   const needle = value.toLowerCase();
   return list.some((item) => {
     const key = item.toLowerCase();
@@ -103,7 +103,7 @@ const isDuplicate = (list: string[], value: string, ignore?: string) => {
   });
 };
 
-export default function ManagePlantCatalogScreen() {
+export default function ManagePlantCatalogScreen(): React.JSX.Element {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const theme = useTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
@@ -192,19 +192,19 @@ export default function ManagePlantCatalogScreen() {
   const hasCareOverride =
     !!careModal && !!categoryCareProfiles[careModal.plantName];
 
-  const saveCatalog = async (nextCatalog: PlantCatalog) => {
+  const saveCatalog = async (nextCatalog: PlantCatalog): Promise<PlantCatalog> => {
     const saved = await savePlantCatalog(nextCatalog);
     setCatalog(saved);
     return saved;
   };
 
-  const saveCareProfiles = async (nextProfiles: Partial<PlantCareProfiles>) => {
+  const saveCareProfiles = async (nextProfiles: Partial<PlantCareProfiles>): Promise<Partial<PlantCareProfiles>> => {
     const saved = await savePlantCareProfiles(nextProfiles);
     setCareProfiles(saved);
     return saved;
   };
 
-  const handleSaveCatalog = async (nextCatalog: PlantCatalog) => {
+  const handleSaveCatalog = async (nextCatalog: PlantCatalog): Promise<void> => {
     setSaving(true);
     try {
       await saveCatalog(nextCatalog);
@@ -223,7 +223,7 @@ export default function ManagePlantCatalogScreen() {
     category: PlantType,
     fromVariety: string,
     toVariety: string,
-  ) => {
+  ): Promise<number> => {
     const targets = plants.filter(
       (plant) =>
         plant.plant_type === category && plant.plant_variety === fromVariety,
@@ -299,7 +299,7 @@ export default function ManagePlantCatalogScreen() {
     };
   };
 
-  const openCareDefaults = (plantName: string) => {
+  const openCareDefaults = (plantName: string): void => {
     const form = buildCareForm(plantName);
     if (!form) {
       Alert.alert("Missing Defaults", "Unable to load care defaults.");
@@ -309,12 +309,12 @@ export default function ManagePlantCatalogScreen() {
     setCareModal({ plantName });
   };
 
-  const closeCareModal = () => {
+  const closeCareModal = (): void => {
     setCareModal(null);
     setCareForm(null);
   };
 
-  const handleSaveCareDefaults = async () => {
+  const handleSaveCareDefaults = async (): Promise<void> => {
     if (!careModal || !careForm) return;
 
     const wateringDays = parseInt(careForm.wateringFrequencyDays, 10);
@@ -382,7 +382,7 @@ export default function ManagePlantCatalogScreen() {
     }
   };
 
-  const handleResetCareDefaults = () => {
+  const handleResetCareDefaults = (): void => {
     if (!careModal) return;
     const hasOverride = !!categoryCareProfiles[careModal.plantName];
     if (!hasOverride) {
@@ -424,7 +424,7 @@ export default function ManagePlantCatalogScreen() {
     );
   };
 
-  const handleAddPlant = async () => {
+  const handleAddPlant = async (): Promise<void> => {
     const name = sanitizePlantName(newPlantName);
     if (!name) {
       Alert.alert("Name Required", "Enter a plant name.");
@@ -450,7 +450,7 @@ export default function ManagePlantCatalogScreen() {
     setNewPlantName("");
   };
 
-  const handleRenamePlant = async () => {
+  const handleRenamePlant = async (): Promise<void> => {
     if (!editPlant) return;
     const name = sanitizePlantName(editPlant.value);
     if (!name) {
@@ -469,7 +469,7 @@ export default function ManagePlantCatalogScreen() {
 
     const count = plantCounts[activeCategory]?.[editPlant.name] || 0;
 
-    const applyRename = async () => {
+    const applyRename = async (): Promise<void> => {
       setSaving(true);
       try {
         if (count > 0) {
@@ -482,12 +482,12 @@ export default function ManagePlantCatalogScreen() {
 
         const nextVarieties = { ...categoryVarieties };
         if (nextVarieties[editPlant.name]) {
-          const existing = nextVarieties[editPlant.name];
+          const existing = nextVarieties[editPlant.name]!;
           delete nextVarieties[editPlant.name];
-          const merged = nextVarieties[name]
+          const merged: string[] = nextVarieties[name]
             ? Array.from(
                 new Set(
-                  [...nextVarieties[name], ...existing].map((item) =>
+                  [...nextVarieties[name]!, ...existing].map((item) =>
                     item.toLowerCase(),
                   ),
                 ),
@@ -517,7 +517,7 @@ export default function ManagePlantCatalogScreen() {
           ? { ...categoryCareProfiles }
           : categoryCareProfiles;
         if (hasCareOverride) {
-          nextCareCategory[name] = nextCareCategory[editPlant.name];
+          nextCareCategory[name] = nextCareCategory[editPlant.name]!;
           delete nextCareCategory[editPlant.name];
         }
 
@@ -555,7 +555,7 @@ export default function ManagePlantCatalogScreen() {
     }
   };
 
-  const handleDeleteRequest = (name: string) => {
+  const handleDeleteRequest = (name: string): void => {
     const count = plantCounts[activeCategory]?.[name] || 0;
     const remaining = categoryPlants.filter((plant) => plant !== name);
 
@@ -581,11 +581,11 @@ export default function ManagePlantCatalogScreen() {
 
     setReassignPlant({
       name,
-      replacement: remaining[0],
+      replacement: remaining[0]!,
     });
   };
 
-  const handleDeletePlant = async (name: string, replacement?: string) => {
+  const handleDeletePlant = async (name: string, replacement?: string): Promise<void> => {
     setSaving(true);
     try {
       if (replacement) {
@@ -634,7 +634,7 @@ export default function ManagePlantCatalogScreen() {
     }
   };
 
-  const handleSaveVarieties = async () => {
+  const handleSaveVarieties = async (): Promise<void> => {
     if (!varietyModal) return;
 
     const plantName = varietyModal.plantName;
@@ -667,7 +667,7 @@ export default function ManagePlantCatalogScreen() {
     setNewVariety("");
   };
 
-  const handleAddVarietySuggestion = () => {
+  const handleAddVarietySuggestion = (): void => {
     if (!varietyModal) return;
     const name = sanitizePlantName(newVariety);
     if (!name) return;
@@ -696,7 +696,7 @@ export default function ManagePlantCatalogScreen() {
     setNewVariety("");
   };
 
-  const handleRemoveVarietySuggestion = (plantName: string, value: string) => {
+  const handleRemoveVarietySuggestion = (plantName: string, value: string): void => {
     const current = categoryVarieties[plantName] ?? [];
     const filtered = current.filter(
       (item) => item.toLowerCase() !== value.toLowerCase(),
@@ -1265,26 +1265,12 @@ export default function ManagePlantCatalogScreen() {
 
                 <View style={styles.fieldGroup}>
                   <Text
-                    style={{
-                      fontSize: 12,
-                      color: theme.textTertiary,
-                      marginBottom: 6,
-                    }}
+                    style={styles.pruningTipsLabel}
                   >
                     Tips (one per line)
                   </Text>
                   <TextInput
-                    style={{
-                      borderWidth: 1,
-                      borderColor: theme.borderLight,
-                      borderRadius: 8,
-                      padding: 10,
-                      minHeight: 80,
-                      color: theme.text,
-                      fontSize: 14,
-                      textAlignVertical: "top",
-                      backgroundColor: theme.backgroundSecondary,
-                    }}
+                    style={styles.pruningTipsInput}
                     multiline
                     value={careForm?.pruningTips ?? ""}
                     onChangeText={(text) =>

@@ -1,7 +1,7 @@
 import { StyleSheet } from "react-native";
 import type { Theme } from "../theme/colors";
 
-export const createStyles = (theme: Theme) =>
+export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create> =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -104,22 +104,22 @@ export const createStyles = (theme: Theme) =>
       marginTop: 12,
     },
     exportButton: {
-      backgroundColor: "#2e7d32",
+      backgroundColor: theme.success,
     },
     importButton: {
-      backgroundColor: "#fff",
+      backgroundColor: theme.textInverse,
       borderWidth: 2,
-      borderColor: "#2e7d32",
+      borderColor: theme.success,
     },
     backupButtonText: {
       fontSize: 16,
       fontWeight: "600",
-      color: "#fff",
+      color: theme.textInverse,
       marginLeft: 8,
     },
     backupNote: {
       fontSize: 13,
-      color: "#666",
+      color: theme.textSecondary,
       marginTop: 12,
       fontStyle: "italic",
       lineHeight: 18,
@@ -130,5 +130,8 @@ export const createStyles = (theme: Theme) =>
       marginTop: 8,
       marginLeft: 32,
       lineHeight: 18,
+    },
+    backupButtonTextSuccess: {
+      color: theme.success,
     },
   });

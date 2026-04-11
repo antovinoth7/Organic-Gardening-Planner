@@ -33,7 +33,7 @@ export default function TaskCompletionModal({
   onChangeProduct,
   onClose,
   onConfirm,
-}: TaskCompletionModalProps) {
+}: TaskCompletionModalProps): React.JSX.Element {
   return (
     <Modal
       visible={visible}

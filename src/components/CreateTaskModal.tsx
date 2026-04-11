@@ -45,7 +45,7 @@ export default function CreateTaskModal({
   initialStartDate,
   onClose,
   onCreated,
-}: CreateTaskModalProps) {
+}: CreateTaskModalProps): React.JSX.Element {
   const [taskType, setTaskType] = useState<TaskType>("water");
   const [selectedPlant, setSelectedPlant] = useState("");
   const [frequencyDays, setFrequencyDays] = useState("7");
@@ -63,7 +63,7 @@ export default function CreateTaskModal({
     }
   }, [visible, initialStartDate]);
 
-  const resetForm = () => {
+  const resetForm = (): void => {
     setTaskType("water");
     setSelectedPlant("");
     setFrequencyDays("7");
@@ -72,16 +72,16 @@ export default function CreateTaskModal({
     setPreferredTime(null);
   };
 
-  const handleClose = () => {
+  const handleClose = (): void => {
     resetForm();
     onClose();
   };
 
-  const applyFrequencyPreset = (days: number) => {
+  const applyFrequencyPreset = (days: number): void => {
     setFrequencyDays(days.toString());
   };
 
-  const handleCreateTask = async () => {
+  const handleCreateTask = async (): Promise<void> => {
     if (!isOneTimeTask) {
       const frequency = parseInt(frequencyDays);
       if (isNaN(frequency) || frequency < 1) {

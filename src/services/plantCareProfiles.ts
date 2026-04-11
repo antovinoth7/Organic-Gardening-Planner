@@ -185,7 +185,7 @@ export const getPlantCareProfiles = async (): Promise<PlantCareProfiles> => {
 
     const data = snapshot.data();
     const remoteProfiles = normalizeProfiles(
-      (data as Record<string, any>)[CARE_FIELD] ?? data,
+      (data as Record<string, unknown>)[CARE_FIELD] ?? data,
     );
     await setData(KEYS.PLANT_CARE_PROFILES, [remoteProfiles]);
     return remoteProfiles;

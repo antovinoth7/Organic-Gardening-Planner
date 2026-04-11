@@ -1,7 +1,7 @@
 import { StyleSheet } from "react-native";
 import type { Theme } from "../theme/colors";
 
-export const createStyles = (theme: Theme) =>
+export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create> =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -950,7 +950,7 @@ export const createStyles = (theme: Theme) =>
       alignItems: "center",
       width: "100%",
       maxWidth: 340,
-      shadowColor: "#000",
+      shadowColor: theme.shadow,
       shadowOffset: { width: 0, height: 8 },
       shadowOpacity: 0.15,
       shadowRadius: 24,
@@ -1013,7 +1013,7 @@ export const createStyles = (theme: Theme) =>
     discardButtonText: {
       fontSize: 14,
       fontWeight: "600",
-      color: "#fff",
+      color: theme.textInverse,
     },
     modalContent: {
       backgroundColor: theme.backgroundSecondary,
@@ -1104,7 +1104,7 @@ export const createStyles = (theme: Theme) =>
       backgroundColor: theme.primary,
     },
     suggestionChipTextActive: {
-      color: "#fff",
+      color: theme.textInverse,
     },
     treatmentGroupContainer: {
       marginBottom: 8,
@@ -1142,7 +1142,7 @@ export const createStyles = (theme: Theme) =>
       color: theme.textSecondary,
     },
     treatmentChipTextActive: {
-      color: "#fff",
+      color: theme.textInverse,
       fontWeight: "600",
     },
     affectedPartChips: {
@@ -1168,7 +1168,7 @@ export const createStyles = (theme: Theme) =>
       color: theme.textSecondary,
     },
     affectedPartChipTextActive: {
-      color: "#fff",
+      color: theme.textInverse,
       fontWeight: "600",
     },
     pestPhotoButton: {
@@ -1201,7 +1201,7 @@ export const createStyles = (theme: Theme) =>
     },
     pestPhotoPlaceholderText: {
       fontSize: 11,
-      color: "#999",
+      color: theme.textTertiary,
       marginTop: 4,
     },
     modalSaveButton: {
@@ -1253,7 +1253,7 @@ export const createStyles = (theme: Theme) =>
       position: "absolute" as const,
       bottom: 10,
       right: 10,
-      backgroundColor: "rgba(0,0,0,0.55)",
+      backgroundColor: theme.overlay,
       borderRadius: 16,
       paddingHorizontal: 12,
       paddingVertical: 5,
@@ -1264,7 +1264,7 @@ export const createStyles = (theme: Theme) =>
     photoHeroEditBadgeText: {
       fontSize: 12,
       fontWeight: "700",
-      color: "#fff",
+      color: theme.textInverse,
     },
 
     // --- #3 Frequency Presets ---
@@ -1318,10 +1318,10 @@ export const createStyles = (theme: Theme) =>
     stickySaveButtonText: {
       fontSize: 16,
       fontWeight: "700",
-      color: "#fff",
+      color: theme.textInverse,
     },
     stickySaveErrorBadge: {
-      backgroundColor: "#f44336",
+      backgroundColor: theme.error,
       borderRadius: 10,
       paddingHorizontal: 8,
       paddingVertical: 2,
@@ -1329,7 +1329,7 @@ export const createStyles = (theme: Theme) =>
     stickySaveErrorBadgeText: {
       fontSize: 12,
       fontWeight: "700",
-      color: "#fff",
+      color: theme.textInverse,
     },
 
     // --- #9 Auto-Name Preview Inline ---
@@ -1433,7 +1433,7 @@ export const createStyles = (theme: Theme) =>
       padding: 14,
       marginBottom: 12,
       borderLeftWidth: 4,
-      borderLeftColor: "#4caf50",
+      borderLeftColor: theme.success,
       borderWidth: 1,
       borderColor: theme.borderLight,
     },
@@ -1451,7 +1451,7 @@ export const createStyles = (theme: Theme) =>
     careProfileCardTitle: {
       fontSize: 13,
       fontWeight: "700",
-      color: "#2e7d32",
+      color: theme.success,
     },
     careProfileCardRow: {
       flexDirection: "row" as const,

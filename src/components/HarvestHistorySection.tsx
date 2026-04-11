@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { JournalEntry, PlantType } from "../types/database.types";
+import { createStyles as createLocalStyles } from "../styles/harvestHistorySectionStyles";
 import { useTheme } from "../theme";
 import type { Theme } from "../theme/colors";
 
@@ -19,8 +20,9 @@ export default function HarvestHistorySection({
   styles,
   onRecordHarvest,
   onViewAll,
-}: HarvestHistorySectionProps) {
+}: HarvestHistorySectionProps): React.JSX.Element | null {
   const theme = useTheme() as Theme;
+  const localStyles = useMemo(() => createLocalStyles(theme), [theme]);
   if (plantType !== "fruit_tree" && plantType !== "coconut_tree") {
     return null;
   }
@@ -68,7 +70,7 @@ export default function HarvestHistorySection({
               harvestEntries.length > 0 &&
               (() => {
                 const lastHarvestDate = new Date(
-                  harvestEntries[0].created_at,
+                  harvestEntries[0]!.created_at,
                 );
                 const nextHarvestDate = new Date(lastHarvestDate);
                 nextHarvestDate.setMonth(nextHarvestDate.getMonth() + 2);
@@ -81,13 +83,9 @@ export default function HarvestHistorySection({
                     <Text
                       style={[
                         styles.statValue,
-                        {
-                          fontSize: 18,
-                          color:
-                            daysUntil <= 7
-                              ? theme.success
-                              : theme.textSecondary,
-                        },
+                        daysUntil <= 7
+                          ? localStyles.nextHarvestReady
+                          : localStyles.nextHarvestPending,
                       ]}
                     >
                       {daysUntil > 0 ? `${daysUntil}d` : "Ready"}

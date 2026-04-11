@@ -1,5 +1,5 @@
 import { StyleSheet } from "react-native";
-import { useTheme } from "../theme";
+import type { Theme } from "../theme/colors";
 
 export function getStartOfWeek(date: Date): Date {
   const d = new Date(date);
@@ -10,7 +10,7 @@ export function getStartOfWeek(date: Date): Date {
   return d;
 }
 
-export const createStyles = (theme: ReturnType<typeof useTheme>) =>
+export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create> =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -144,7 +144,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     sheetOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.4)",
+      backgroundColor: theme.overlay,
       justifyContent: "flex-end",
       zIndex: 1000,
       elevation: 1000,
@@ -236,7 +236,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       marginHorizontal: 12,
       marginVertical: 6,
       borderRadius: 16,
-      shadowColor: "#000",
+      shadowColor: theme.shadow,
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.08,
       shadowRadius: 8,
@@ -314,7 +314,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderRadius: 16,
       padding: 10,
       paddingBottom: 8,
-      shadowColor: "#000",
+      shadowColor: theme.shadow,
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.08,
       shadowRadius: 8,
@@ -364,7 +364,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       alignItems: "center",
       justifyContent: "center",
       borderRadius: 6,
-      backgroundColor: "transparent",
+      backgroundColor: undefined,
     },
     monthCellToday: {
       backgroundColor: theme.primary + "20",
@@ -389,7 +389,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontWeight: "700",
     },
     monthCellNumberSelected: {
-      color: "#FFFFFF",
+      color: theme.textInverse,
       fontWeight: "700",
     },
     monthCellBar: {
@@ -397,6 +397,12 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       height: 3,
       borderRadius: 1.5,
       marginTop: 1,
+    },
+    monthCellBarDefault: {
+      backgroundColor: theme.primary,
+    },
+    monthCellBarSelected: {
+      backgroundColor: theme.textInverse,
     },
     content: {
       flex: 1,
@@ -475,12 +481,12 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       opacity: 0.6,
     },
     completeAllText: {
-      color: "#fff",
+      color: theme.textInverse,
       fontSize: 12,
       fontWeight: "600",
     },
     completeAllProgress: {
-      color: "#fff",
+      color: theme.textInverse,
       fontSize: 12,
       fontWeight: "700",
     },
@@ -562,7 +568,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     completeAllConfirmText: {
       fontSize: 15,
       fontWeight: "600",
-      color: "#fff",
+      color: theme.textInverse,
     },
     // Complete-all checklist styles
     caSelectAllRow: {
@@ -650,7 +656,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     clearSearchText: {
       fontSize: 14,
       fontWeight: "600",
-      color: "#FFFFFF",
+      color: theme.textInverse,
     },
     addTaskButton: {
       flexDirection: "row",
@@ -673,8 +679,8 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       marginBottom: 12,
       overflow: "hidden",
       borderWidth: 1.5,
-      borderColor: "transparent",
-      shadowColor: "#000",
+      borderColor: theme.card,
+      shadowColor: theme.shadow,
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.08,
       shadowRadius: 8,
@@ -736,7 +742,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontWeight: "600",
     },
     swipeAction: {
-      backgroundColor: "#4CAF50",
+      backgroundColor: theme.success,
       justifyContent: "center",
       alignItems: "center",
       width: 100,
@@ -784,17 +790,17 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       marginBottom: 12,
       borderWidth: 1,
       borderColor: theme.border + "40",
-      shadowColor: "#000",
+      shadowColor: theme.shadow,
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.06,
       shadowRadius: 6,
       elevation: 2,
     },
     harvestCardReady: {
-      borderColor: "#4CAF50",
-      backgroundColor: "#4CAF50" + "10",
+      borderColor: theme.success,
+      backgroundColor: theme.success + "10",
       borderWidth: 2,
-      shadowColor: "#4CAF50",
+      shadowColor: theme.success,
       shadowOpacity: 0.15,
     },
     harvestIcon: {
@@ -1046,7 +1052,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       marginBottom: 12,
     },
     swipeSnoozeAction: {
-      backgroundColor: "#2196F3",
+      backgroundColor: theme.info,
       justifyContent: "center",
       alignItems: "center",
       width: 80,
@@ -1054,7 +1060,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderBottomLeftRadius: 16,
     },
     swipeSkipAction: {
-      backgroundColor: "#FF9800",
+      backgroundColor: theme.warning,
       justifyContent: "center",
       alignItems: "center",
       width: 80,
@@ -1184,7 +1190,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       paddingVertical: 10,
       paddingHorizontal: 14,
       gap: 10,
-      shadowColor: "#000",
+      shadowColor: theme.shadow,
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.15,
       shadowRadius: 12,
@@ -1220,7 +1226,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       opacity: 0.6,
     },
     selectionBarBtnText: {
-      color: "#fff",
+      color: theme.textInverse,
       fontSize: 13,
       fontWeight: "700",
     },
@@ -1260,7 +1266,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     taskDetailOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.45)",
+      backgroundColor: theme.overlay,
       justifyContent: "flex-end",
     },
     taskDetailSheet: {
@@ -1353,7 +1359,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     taskDetailActionBtnText: {
       fontSize: 13,
       fontWeight: "600",
-      color: "#fff",
+      color: theme.textInverse,
     },
     selectionBarSecondaryBtn: {
       flexDirection: "row",
@@ -1401,5 +1407,35 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       paddingHorizontal: 16,
       paddingBottom: 4,
       alignItems: "flex-start",
+    },
+    flexOne: {
+      flex: 1,
+    },
+    rowCenter: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      flexWrap: "wrap",
+    },
+    rowCenterGap8: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    animatedCalendarWrap: {
+      overflow: "hidden",
+    },
+    chipWrapMarginTop: {
+      marginTop: 8,
+    },
+    sheetSectionTitleMarginTop: {
+      marginTop: 20,
+    },
+    sectionTitleOverdue: {
+      color: theme.error,
+      flex: 1,
+    },
+    sectionTitleFlex: {
+      flex: 1,
     },
   });

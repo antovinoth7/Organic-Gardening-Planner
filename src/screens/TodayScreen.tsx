@@ -24,7 +24,11 @@ import { getAllPlants } from "../services/plants";
 import { TaskTemplate, Plant, TaskLog, TaskType } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
 import { TASK_EMOJIS, TASK_COLORS } from "../utils/taskConstants";
-import { useFocusEffect, useNavigation, useRoute, NavigationProp, ParamListBase } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
+import {
+  TodayScreenNavigationProp,
+  TodayScreenRouteProp,
+} from "../types/navigation.types";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, useThemeMode } from "../theme";
 import { createStyles } from "../styles/todayStyles";
@@ -140,9 +144,9 @@ const THEME_ICONS: Record<
   system: { icon: "phone-portrait-outline", label: "Auto" },
 };
 
-export default function TodayScreen() {
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const route = useRoute();
+export default function TodayScreen(): React.JSX.Element {
+  const navigation = useNavigation<TodayScreenNavigationProp>();
+  const route = useRoute<TodayScreenRouteProp>();
   const theme = useTheme();
   const { mode, setMode } = useThemeMode();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -219,8 +223,7 @@ export default function TodayScreen() {
 
   // Listen for refresh param (e.g., after completing tasks)
   useEffect(() => {
-    const params = route.params as Record<string, unknown> | undefined;
-    if (params?.refresh) {
+    if (route.params?.refresh) {
       loadData();
       navigation.setParams({ refresh: undefined });
     }
@@ -275,7 +278,7 @@ export default function TodayScreen() {
     const addPlantAttention = (
       plant: Plant,
       alert: Omit<PlantAttentionItem, "plant" | "reasons"> & { reason: string },
-    ) => {
+    ): void => {
       const existing = attentionByPlant.get(plant.id);
       if (!existing) {
         attentionByPlant.set(plant.id, {
@@ -423,7 +426,7 @@ export default function TodayScreen() {
       "system",
     ];
     const idx = order.indexOf(mode);
-    setMode(order[(idx + 1) % order.length]);
+    setMode(order[(idx + 1) % order.length]!);
   }, [mode, setMode]);
 
   const overdueTasks = useMemo(() => {
@@ -564,7 +567,7 @@ export default function TodayScreen() {
 
   if (loading && tasks.length === 0 && plants.length === 0) {
     return (
-      <View style={[styles.container, { justifyContent: "center", alignItems: "center", paddingTop: insets.top }]}>
+      <View style={[styles.container, styles.containerCentered, { paddingTop: insets.top }]}>
         <ActivityIndicator size="large" color={theme.primary} />
       </View>
     );
@@ -584,7 +587,7 @@ export default function TodayScreen() {
       {/* Hero Header */}
       <View style={[styles.heroHeader, { paddingTop: insets.top + 16 }]}>
         <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
+          <View style={styles.flexOne}>
             <Text style={styles.heroGreeting}>{getGreeting()}</Text>
             <Text style={styles.heroDate}>
               {new Date().toLocaleDateString("en-US", {
@@ -596,7 +599,7 @@ export default function TodayScreen() {
           </View>
           <TouchableOpacity style={styles.heroThemeToggle} onPress={cycleTheme}>
             <Ionicons
-              name={THEME_ICONS[mode].icon}
+              name={THEME_ICONS[mode]!.icon}
               size={20}
               color="#fff"
             />
@@ -792,7 +795,7 @@ export default function TodayScreen() {
       {/* Plant Health Alerts — horizontal cards */}
       {stats.plantAttention.length > 0 && (
         <View style={styles.alertsSection}>
-          <Text style={[styles.sectionTitle, { marginBottom: 10 }]}>
+          <Text style={[styles.sectionTitle, styles.sectionTitleMarginBottom]}>
             ⚠️ Needs Attention ({stats.needsAttentionCount})
           </Text>
           <FlatList
@@ -800,7 +803,7 @@ export default function TodayScreen() {
             showsHorizontalScrollIndicator={false}
             data={stats.plantAttention}
             keyExtractor={attentionKeyExtractor}
-            contentContainerStyle={{ paddingRight: 8 }}
+            contentContainerStyle={styles.attentionListContent}
             renderItem={renderAttentionItem}
           />
         </View>

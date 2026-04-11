@@ -8,11 +8,11 @@ import React, {
 import { BackHandler, Animated, Alert, Platform, ScrollView, useWindowDimensions } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import {
-  useNavigation,
-  useRoute,
-  NavigationProp,
-} from "@react-navigation/native";
+  PlantFormScreenNavigationProp,
+  PlantFormScreenRouteProp,
+} from "../types/navigation.types";
 import {
   getPlant,
   getAllPlants,
@@ -58,7 +58,7 @@ import type { EdgeInsets } from "react-native-safe-area-context";
 
 export const NOTES_MAX_LENGTH = 500;
 
-export const sanitizeNumberText = (value: string) =>
+export const sanitizeNumberText = (value: string): string =>
   value.replace(/[^0-9]/g, "");
 
 export type FormSectionKey =
@@ -111,7 +111,7 @@ export const adjustFrequency = (
   current: string,
   delta: number,
   setter: (value: string) => void,
-) => {
+): void => {
   const n = parseInt(current, 10);
   const next = Math.max(1, (isNaN(n) ? 0 : n) + delta);
   setter(next.toString());
@@ -153,7 +153,7 @@ const buildGeneratedPlantNameBase = (
   const loc = parentLocation?.trim();
   if (loc) {
     const token =
-      locationShortName?.trim() || loc.split(/\s+/)[0].slice(0, 10);
+      locationShortName?.trim() || (loc.split(/\s+/)[0] ?? '').slice(0, 10);
     if (token) base = `${base} (${token})`;
   }
 
@@ -382,10 +382,9 @@ export interface PlantFormStateReturn {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function usePlantFormState(): PlantFormStateReturn {
-  const navigation =
-    useNavigation<NavigationProp<Record<string, object | undefined>>>();
-  const route = useRoute();
-  const { plantId } = (route.params || {}) as { plantId?: string };
+  const navigation = useNavigation<PlantFormScreenNavigationProp>();
+  const route = useRoute<PlantFormScreenRouteProp>();
+  const { plantId } = route.params ?? {};
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
@@ -494,6 +493,8 @@ export function usePlantFormState(): PlantFormStateReturn {
   const autoSuggestApplied = useRef(false);
   const locationDefaultsApplied = useRef(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const formSnapshot = useRef<string>("");
+  const shouldCaptureSnapshot = useRef(false);
 
   // ── Data hook ──────────────────────────────────────────────────────────────
   const {
@@ -733,9 +734,24 @@ export function usePlantFormState(): PlantFormStateReturn {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plantId]);
 
-  // Detect unsaved changes
+  // Detect unsaved changes by comparing current values to a snapshot
   useEffect(() => {
-    if (initialDataLoaded.current) setHasUnsavedChanges(true);
+    const current = JSON.stringify([
+      name, plantType, plantVariety, spaceType, location, parentLocation,
+      childLocation, landmarks, bedName, potSize, variety, plantingDate,
+      harvestSeason, harvestStartDate, harvestEndDate, notes, photoUri, sunlight,
+      soilType, waterRequirement, wateringFrequency, fertilisingFrequency,
+      preferredFertiliser, mulchingUsed, healthStatus, expectedHarvestDate,
+      pestDiseaseHistory, growthStage, pruningFrequency, pruningNotes,
+      coconutFrondsCount, nutsPerMonth, lastClimbingDate,
+    ]);
+    if (!initialDataLoaded.current || shouldCaptureSnapshot.current) {
+      formSnapshot.current = current;
+      shouldCaptureSnapshot.current = false;
+      setHasUnsavedChanges(false);
+      return;
+    }
+    setHasUnsavedChanges(current !== formSnapshot.current);
   }, [
     name, plantType, plantVariety, spaceType, location, parentLocation,
     childLocation, landmarks, bedName, potSize, variety, plantingDate,
@@ -754,7 +770,10 @@ export function usePlantFormState(): PlantFormStateReturn {
         plantingDate,
         plantType,
       );
-      if (calculated) setExpectedHarvestDate(calculated);
+      if (calculated) {
+        setExpectedHarvestDate(calculated);
+        shouldCaptureSnapshot.current = true;
+      }
     }
   }, [plantVariety, plantingDate, plantType]);
 
@@ -768,6 +787,7 @@ export function usePlantFormState(): PlantFormStateReturn {
         setWateringFrequency(info.wateringFrequencyDays.toString());
         setFertilisingFrequency(info.fertilisingFrequencyDays.toString());
         setPruningFrequency(info.pruningFrequencyDays.toString());
+        shouldCaptureSnapshot.current = true;
       }
     } else {
       setCoconutAgeInfo(null);
@@ -797,6 +817,7 @@ export function usePlantFormState(): PlantFormStateReturn {
       setWaterRequirement(wr);
     }
     setLocationDefaultsFired(true);
+    shouldCaptureSnapshot.current = true;
   }, [parentLocation, locationProfiles, plantId]);
 
   // Reset auto-suggest flags when plant variety changes
@@ -839,6 +860,7 @@ export function usePlantFormState(): PlantFormStateReturn {
           plantType,
         );
         if (defaultHarvestSeason) setHarvestSeason(defaultHarvestSeason);
+        shouldCaptureSnapshot.current = true;
       }
     }
   }, [
@@ -861,7 +883,7 @@ export function usePlantFormState(): PlantFormStateReturn {
 
   // Back navigation — shared handler for both wizard and edit
   useEffect(() => {
-    const backAction = () => {
+    const backAction = (): boolean => {
       if (savedSuccessfully.current) return false;
       if (!plantId && wizardStep > 1) {
         runSlideTransition("back", (wizardStep - 1) as 1 | 2 | 3);
@@ -912,8 +934,13 @@ export function usePlantFormState(): PlantFormStateReturn {
 
   const handleBackPress = useCallback(() => {
     if (isSaving.current) return;
-    setShowDiscardModal(true);
-  }, []);
+    if (hasUnsavedChanges) {
+      setShowDiscardModal(true);
+    } else {
+      isDiscarding.current = true;
+      navigation.goBack();
+    }
+  }, [hasUnsavedChanges, navigation]);
 
   const handleDiscard = useCallback(() => {
     setShowDiscardModal(false);
@@ -999,7 +1026,7 @@ export function usePlantFormState(): PlantFormStateReturn {
       quality: 0.8,
     });
     if (!result.canceled) {
-      setPhotoUri(result.assets[0].uri);
+      setPhotoUri(result.assets[0]!.uri);
       setPhotoFilename(null);
     }
   }, []);
@@ -1018,7 +1045,7 @@ export function usePlantFormState(): PlantFormStateReturn {
         cameraType: ImagePicker.CameraType.back,
       });
       if (!result.canceled) {
-        setPhotoUri(result.assets[0].uri);
+        setPhotoUri(result.assets[0]!.uri);
         setPhotoFilename(null);
       }
     } catch (error) {
@@ -1031,7 +1058,7 @@ export function usePlantFormState(): PlantFormStateReturn {
     setShowPhotoSourceModal(true);
   }, []);
 
-  const loadPlant = async () => {
+  const loadPlant = async (): Promise<void> => {
     if (!plantId) return;
     try {
       const plant = await getPlant(plantId);
@@ -1046,7 +1073,7 @@ export function usePlantFormState(): PlantFormStateReturn {
 
         const locationParts = plant.location?.split(" - ") || [];
         const existingParentLoc =
-          locationParts.length >= 1 ? locationParts[0] : "";
+          locationParts.length >= 1 ? (locationParts[0] ?? '') : '';
 
         const richBase = buildGeneratedPlantNameBase(
           plant.plant_type,
@@ -1086,10 +1113,10 @@ export function usePlantFormState(): PlantFormStateReturn {
         setLocation(plant.location);
 
         if (locationParts.length === 2) {
-          setParentLocation(locationParts[0]);
-          setChildLocation(locationParts[1]);
+          setParentLocation(locationParts[0]!);
+          setChildLocation(locationParts[1]!);
         } else if (locationParts.length === 1 && locationParts[0]) {
-          setParentLocation(locationParts[0]);
+          setParentLocation(locationParts[0]!);
           setChildLocation("");
         }
 
@@ -1161,7 +1188,7 @@ export function usePlantFormState(): PlantFormStateReturn {
     }
   };
 
-  const handleSave = async (onSuccessOverride?: () => void) => {
+  const handleSave = async (onSuccessOverride?: () => void): Promise<void> => {
     setShowValidationErrors(true);
     const sectionOrder: FormSectionKey[] = [
       "basic",
@@ -1211,7 +1238,7 @@ export function usePlantFormState(): PlantFormStateReturn {
         resolvedPhotoFilename = null;
       }
 
-      const plantData: any = {
+      const plantData: Partial<Plant> = {
         name: finalPlantName,
         plant_type: plantType,
         plant_variety: plantVariety.trim() || null,
@@ -1268,8 +1295,8 @@ export function usePlantFormState(): PlantFormStateReturn {
       }
 
       const savedPlant = plantId
-        ? await updatePlant(plantId, plantData)
-        : await createPlant(plantData);
+        ? await updatePlant(plantId, plantData as Omit<Plant, 'id' | 'user_id' | 'created_at'>)
+        : await createPlant(plantData as Omit<Plant, 'id' | 'user_id' | 'created_at'>);
 
       setLoadedGeneratedName(nickname ? "" : finalPlantName);
       setExistingPlants((prev) => [

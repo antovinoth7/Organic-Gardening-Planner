@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Pressable,
   Modal,
-  StyleSheet,
   Platform,
   Dimensions,
   Animated,
@@ -27,6 +26,7 @@ export interface DropdownItem {
 interface ThemedDropdownProps {
   items: DropdownItem[];
   selectedValue: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- callers pass setters for various string union types
   onValueChange: (value: any) => void;
   placeholder?: string;
   /** Floating label displayed on the trigger (Material Design style) */
@@ -40,7 +40,7 @@ interface ThemedDropdownProps {
 
 const useNativeDriver = Platform.OS !== "web";
 
-function getScreenHeight() {
+function getScreenHeight(): number {
   return Dimensions.get("window").height;
 }
 
@@ -53,7 +53,7 @@ export default function ThemedDropdown({
   enabled = true,
   compact = false,
   searchable = false,
-}: ThemedDropdownProps) {
+}: ThemedDropdownProps): React.JSX.Element {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(theme, compact), [theme, compact]);
@@ -228,7 +228,7 @@ export default function ThemedDropdown({
           <Text
             style={[
               styles.triggerText,
-              { flex: 1, textAlign: "left", maxWidth: "100%" },
+              styles.triggerTextNoLabel,
               !selectedItem && styles.triggerPlaceholder,
               !enabled && styles.triggerTextDisabled,
             ]}

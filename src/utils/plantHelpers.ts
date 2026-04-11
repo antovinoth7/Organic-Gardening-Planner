@@ -711,7 +711,7 @@ function groupByCategory(
     if (!groups[info.category]) {
       groups[info.category] = { category: info.category, emoji: info.emoji, items: [] };
     }
-    groups[info.category].items.push(item);
+    groups[info.category]!.items.push(item);
   }
   return Object.values(groups);
 }
@@ -952,19 +952,19 @@ export function getGroupedTreatments(issueName: string): TreatmentGroup[] {
     if (!groups[detail.method]) {
       groups[detail.method] = { method: detail.method, emoji: meta.emoji, label: meta.label, items: [] };
     }
-    groups[detail.method].items.push({ name, method: detail.method, effort: detail.effort });
+    groups[detail.method]!.items.push({ name, method: detail.method, effort: detail.effort });
   }
 
   // Sort items within each group by effort (easy first)
   for (const group of Object.values(groups)) {
-    group.items.sort((a, b) => EFFORT_ORDER[a.effort] - EFFORT_ORDER[b.effort]);
+    group.items.sort((a, b) => (EFFORT_ORDER[a.effort] ?? 0) - (EFFORT_ORDER[b.effort] ?? 0));
   }
 
   // Return groups in a meaningful order
   const methodOrder: TreatmentMethod[] = ["spray", "trap", "biocontrol", "soil", "manual", "cultural"];
   return methodOrder
     .filter((m) => groups[m])
-    .map((m) => groups[m]);
+    .map((m) => groups[m]!);
 }
 
 /**

@@ -21,6 +21,8 @@ import {
   Platform,
   UIManager,
   Animated,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from "react-native";
 import Swipeable from "react-native-gesture-handler/Swipeable";
 import { getAllPlants, deletePlant } from "../services/plants";
@@ -40,7 +42,11 @@ import {
 import PlantCard from "../components/PlantCard";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation, useRoute, NavigationProp, ParamListBase } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import {
+  PlantsScreenNavigationProp,
+  PlantsScreenRouteProp,
+} from "../types/navigation.types";
 import { useTheme } from "../theme";
 import { createStyles } from "../styles/plantsStyles";
 import { logger } from "../utils/logger";
@@ -82,9 +88,9 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export default function PlantsScreen() {
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const route = useRoute();
+export default function PlantsScreen(): React.JSX.Element {
+  const navigation = useNavigation<PlantsScreenNavigationProp>();
+  const route = useRoute<PlantsScreenRouteProp>();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -128,7 +134,7 @@ export default function PlantsScreen() {
     DEFAULT_CHILD_LOCATIONS,
   );
 
-  const handleScroll = useCallback((e: any) => {
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     onTabBarScroll(e);
   }, [onTabBarScroll]);
 
@@ -193,8 +199,7 @@ export default function PlantsScreen() {
   }, [navigation, loadPlants, loadLocations, resetTabBar]);
 
   useEffect(() => {
-    const params = route.params as Record<string, unknown> | undefined;
-    if (params?.refresh) {
+    if (route.params?.refresh) {
       flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
       resetTabBar();
       loadPlants();
@@ -203,8 +208,7 @@ export default function PlantsScreen() {
   }, [route.params, navigation, loadPlants, resetTabBar]);
 
   useEffect(() => {
-    const params = route.params as Record<string, unknown> | undefined;
-    const healthFilter = params?.healthFilter;
+    const healthFilter = route.params?.healthFilter;
     if (healthFilter) {
       if (healthFilter === "healthy") {
         setFilters((prev) => ({ ...prev, health: "healthy" as HealthStatus }));
@@ -233,7 +237,7 @@ export default function PlantsScreen() {
   const handleDelete = useCallback((id: string) => {
     const index = plants.findIndex((p) => p.id === id);
     if (index === -1) return;
-    const plant = plants[index];
+    const plant = plants[index]!;
 
     // Cancel any in-flight undo for the previous pending delete
     if (undoTimerRef.current) {
@@ -405,7 +409,7 @@ export default function PlantsScreen() {
   const updateFilter = <K extends keyof ActiveFilters>(
     category: K,
     value: ActiveFilters[K],
-  ) => {
+  ): void => {
     setFilters((prev) => ({ ...prev, [category]: value }));
   };
 
@@ -427,7 +431,7 @@ export default function PlantsScreen() {
     [activeFilterCount, searchQuery],
   );
 
-  const clearAllFilters = () => {
+  const clearAllFilters = (): void => {
     setFilters({
       type: "all",
       health: "all",
@@ -444,7 +448,7 @@ export default function PlantsScreen() {
     setDisplayCount(ITEMS_PER_PAGE);
   };
 
-  const toggleFilters = () => {
+  const toggleFilters = (): void => {
     if (!showFilters) {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     }
@@ -462,7 +466,7 @@ export default function PlantsScreen() {
 
   const hasMore = displayCount < filteredPlants.length;
 
-  const loadMore = () => {
+  const loadMore = (): void => {
     if (loadingMore || !hasMore) return;
     if (loadMoreTimeoutRef.current) clearTimeout(loadMoreTimeoutRef.current);
     setLoadingMore(true);
@@ -501,7 +505,7 @@ export default function PlantsScreen() {
     [viewMode, navigation, handleDelete, searchQuery, handleSwipeableOpen],
   );
 
-  const renderUndoToast = () => {
+  const renderUndoToast = (): React.JSX.Element | null => {
     if (!pendingDelete) return null;
     const progressWidth = undoProgress.interpolate({
       inputRange: [0, 1],
@@ -509,28 +513,14 @@ export default function PlantsScreen() {
     });
     return (
       <View
-        style={{
-          position: "absolute",
+        style={[styles.undoToast, {
           bottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 16) + 8,
-          left: 16,
-          right: 16,
-          backgroundColor: theme.backgroundSecondary,
-          borderRadius: 12,
-          paddingHorizontal: 16,
-          paddingTop: 12,
-          paddingBottom: 4,
-          elevation: 6,
-          shadowColor: theme.shadow,
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.16,
-          shadowRadius: 8,
-          zIndex: 100,
-        }}
+        }]}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <View style={styles.undoToastRow}>
+          <View style={styles.undoToastLeft}>
             <Ionicons name="trash-outline" size={16} color={theme.textSecondary} />
-            <Text style={{ fontSize: 14, color: theme.text, fontWeight: "500" }}>
+            <Text style={styles.undoToastText}>
               {pendingDelete.plant.name} deleted
             </Text>
           </View>
@@ -538,11 +528,11 @@ export default function PlantsScreen() {
             onPress={handleUndo}
             hitSlop={{ top: 8, bottom: 8, left: 12, right: 4 }}
           >
-            <Text style={{ fontSize: 14, fontWeight: "700", color: theme.primary }}>Undo</Text>
+            <Text style={styles.undoToastAction}>Undo</Text>
           </TouchableOpacity>
         </View>
-        <View style={{ height: 3, backgroundColor: theme.border, borderRadius: 2, overflow: "hidden", marginBottom: 8 }}>
-          <Animated.View style={{ height: 3, width: progressWidth, backgroundColor: theme.primary, borderRadius: 2 }} />
+        <View style={styles.undoProgressTrack}>
+          <Animated.View style={[styles.undoProgressBar, { width: progressWidth }]} />
         </View>
       </View>
     );
@@ -874,7 +864,7 @@ export default function PlantsScreen() {
                 </>
               )}
 
-              <View style={{ height: 12 }} />
+              <View style={styles.filterBottomSpacer} />
             </ScrollView>
           </View>
         </View>

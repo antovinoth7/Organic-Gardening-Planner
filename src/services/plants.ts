@@ -343,7 +343,20 @@ export const updatePlant = async (
   id: string,
   updates: Partial<Plant>,
 ): Promise<Plant> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+
+  await refreshAuthToken();
+
   const docRef = doc(db, PLANTS_COLLECTION, id);
+
+  // Verify ownership before updating
+  const existingSnap = await withTimeoutAndRetry(() => getDoc(docRef), {
+    timeoutMs: FIRESTORE_READ_TIMEOUT_MS,
+  });
+  if (!existingSnap.exists() || existingSnap.data().user_id !== user.uid) {
+    throw new Error('Not authorized to update this plant');
+  }
 
   // CRITICAL: photo_filename should already be set for local images
   // Only the filename (not the image data) is stored in Firestore
@@ -351,7 +364,7 @@ export const updatePlant = async (
   if ("photo_url" in firestoreUpdates) {
     delete (firestoreUpdates as Partial<Plant>).photo_url;
   }
-  await withTimeoutAndRetry(() => updateDoc(docRef, firestoreUpdates as any), {
+  await withTimeoutAndRetry(() => updateDoc(docRef, firestoreUpdates as Record<string, unknown>), {
     timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS,
   });
 
@@ -376,7 +389,19 @@ export const updatePlantLocation = async (
   id: string,
   location: string,
 ): Promise<void> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+
   const docRef = doc(db, PLANTS_COLLECTION, id);
+
+  // Verify ownership before updating
+  const existingSnap = await withTimeoutAndRetry(() => getDoc(docRef), {
+    timeoutMs: FIRESTORE_READ_TIMEOUT_MS,
+  });
+  if (!existingSnap.exists() || existingSnap.data().user_id !== user.uid) {
+    throw new Error('Not authorized to update this plant');
+  }
+
   await withTimeoutAndRetry(() => updateDoc(docRef, { location }), {
     timeoutMs: FIRESTORE_READ_TIMEOUT_MS,
   });
@@ -386,7 +411,7 @@ export const updatePlantLocation = async (
   const cachedPlants = await getData<Plant>(KEYS.PLANTS);
   const index = cachedPlants.findIndex((plant) => plant.id === id);
   if (index !== -1) {
-    cachedPlants[index] = { ...cachedPlants[index], location };
+    cachedPlants[index] = { ...cachedPlants[index]!, location };
     await setData(KEYS.PLANTS, cachedPlants);
   }
 };
@@ -395,7 +420,19 @@ export const updatePlantVariety = async (
   id: string,
   plantVariety: string,
 ): Promise<void> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+
   const docRef = doc(db, PLANTS_COLLECTION, id);
+
+  // Verify ownership before updating
+  const existingSnap = await withTimeoutAndRetry(() => getDoc(docRef), {
+    timeoutMs: FIRESTORE_READ_TIMEOUT_MS,
+  });
+  if (!existingSnap.exists() || existingSnap.data().user_id !== user.uid) {
+    throw new Error('Not authorized to update this plant');
+  }
+
   await withTimeoutAndRetry(
     () => updateDoc(docRef, { plant_variety: plantVariety }),
     { timeoutMs: FIRESTORE_READ_TIMEOUT_MS },
@@ -407,7 +444,7 @@ export const updatePlantVariety = async (
   const index = cachedPlants.findIndex((plant) => plant.id === id);
   if (index !== -1) {
     cachedPlants[index] = {
-      ...cachedPlants[index],
+      ...cachedPlants[index]!,
       plant_variety: plantVariety,
     };
     await setData(KEYS.PLANTS, cachedPlants);
@@ -415,7 +452,19 @@ export const updatePlantVariety = async (
 };
 
 export const deletePlant = async (id: string): Promise<void> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+
   const docRef = doc(db, PLANTS_COLLECTION, id);
+
+  // Verify ownership before deleting
+  const existingSnap = await withTimeoutAndRetry(() => getDoc(docRef), {
+    timeoutMs: FIRESTORE_READ_TIMEOUT_MS,
+  });
+  if (!existingSnap.exists() || existingSnap.data().user_id !== user.uid) {
+    throw new Error('Not authorized to delete this plant');
+  }
+
   await withTimeoutAndRetry(
     () =>
       updateDoc(docRef, {
@@ -443,7 +492,19 @@ export const deletePlant = async (id: string): Promise<void> => {
 };
 
 export const restorePlant = async (id: string): Promise<Plant> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+
   const docRef = doc(db, PLANTS_COLLECTION, id);
+
+  // Verify ownership before restoring
+  const existingSnap = await withTimeoutAndRetry(() => getDoc(docRef), {
+    timeoutMs: FIRESTORE_READ_TIMEOUT_MS,
+  });
+  if (!existingSnap.exists() || existingSnap.data().user_id !== user.uid) {
+    throw new Error('Not authorized to restore this plant');
+  }
+
   await withTimeoutAndRetry(
     () =>
       updateDoc(docRef, {

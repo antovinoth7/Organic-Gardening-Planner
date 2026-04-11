@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsDoc() {
+      return signedIn()
+        && resource.data.user_id == request.auth.uid;
+    }
+
+    function ownsNewDoc() {
+      return signedIn()
+        && request.resource.data.user_id == request.auth.uid;
+    }
+
+    match /plants/{plantId} {
+      allow create: if ownsNewDoc();
+      allow read, update, delete: if ownsDoc();
+    }
+
+    match /task_templates/{taskId} {
+      allow create: if ownsNewDoc();
+      allow read, update, delete: if ownsDoc();
+    }
+
+    match /task_logs/{logId} {
+      allow create: if ownsNewDoc();
+      allow read, update, delete: if ownsDoc();
+    }
+
+    match /journal_entries/{entryId} {
+      allow create: if ownsNewDoc();
+      allow read, update, delete: if ownsDoc();
+    }
+
+    match /user_settings/{userId} {
+      allow read, write: if signedIn()
+        && request.auth.uid == userId;
+    }
+  }
+}

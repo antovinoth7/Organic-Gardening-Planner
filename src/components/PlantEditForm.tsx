@@ -1,4 +1,5 @@
 import React, { useMemo, useCallback } from "react";
+import type { ImageStyle } from "react-native";
 import {
   View,
   Text,
@@ -51,7 +52,7 @@ interface Props {
   formState: PlantFormStateReturn;
 }
 
-export function PlantEditForm({ formState }: Props) {
+export function PlantEditForm({ formState }: Props): React.JSX.Element {
   const {
     theme,
     insets,
@@ -180,14 +181,14 @@ export function PlantEditForm({ formState }: Props) {
   }, [hasUnsavedChanges, handleBackPress, formState]);
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={editStyles.flexOne}>
       {dataLoading && (
         <View style={editStyles.dataLoadingOverlay}>
           <ActivityIndicator size="large" color={theme.primary} />
         </View>
       )}
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={editStyles.flexOne}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -218,7 +219,7 @@ export function PlantEditForm({ formState }: Props) {
         <ScrollView
           ref={formState.scrollViewRef}
           style={styles.content}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: 160 }]}
+          contentContainerStyle={[styles.scrollContent, editStyles.scrollContentPadding]}
           keyboardShouldPersistTaps="handled"
         >
           {/* Photo Hero */}
@@ -231,7 +232,7 @@ export function PlantEditForm({ formState }: Props) {
               <>
                 <Image
                   source={{ uri: photoUri }}
-                  style={styles.photoHeroImage}
+                  style={styles.photoHeroImage as ImageStyle}
                   contentFit="cover"
                   transition={200}
                   cachePolicy="memory-disk"
@@ -531,7 +532,7 @@ export function PlantEditForm({ formState }: Props) {
                     >
                       {opt.label}
                     </Text>
-                    <Text style={{ fontSize: 10, color: theme.textTertiary, marginTop: 2 }}>
+                    <Text style={editStyles.spaceTypeCardHint}>
                       {opt.hint}
                     </Text>
                   </TouchableOpacity>
@@ -639,7 +640,7 @@ export function PlantEditForm({ formState }: Props) {
                     })}
                   </View>
 
-                  <View style={{ height: 8 }} />
+                  <View style={editStyles.spacerSmall} />
                   <ThemedDropdown
                     items={[
                       { label: "Garden Soil", value: "garden_soil" },
@@ -656,7 +657,7 @@ export function PlantEditForm({ formState }: Props) {
                     placeholder="Select soil type"
                     label="Soil Type"
                   />
-                  <View style={{ height: 4 }} />
+                  <View style={editStyles.spacerTiny} />
               </View>
 
               <View style={styles.fieldGroupDivider} />
@@ -752,7 +753,7 @@ export function PlantEditForm({ formState }: Props) {
                 ) : null}
               </View>
 
-              <View style={{ marginTop: 12 }} />
+              <View style={editStyles.spacerMedium} />
               <ThemedDropdown
                 items={[
                   { label: "Compost", value: "compost" },
@@ -800,11 +801,11 @@ export function PlantEditForm({ formState }: Props) {
                 <>
                   <View style={styles.fieldGroupDivider} />
                   <Text style={styles.fieldGroupLabel}>✂️ Pruning</Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                    <Text style={[styles.frequencyCardLabel, { marginBottom: 0 }]}>Every</Text>
-                    <View style={[styles.frequencyInputWrap, { width: 70, marginBottom: 0 }]}>
+                  <View style={editStyles.pruningFrequencyRow}>
+                    <Text style={[styles.frequencyCardLabel, editStyles.noMarginBottom]}>Every</Text>
+                    <View style={[styles.frequencyInputWrap, editStyles.frequencyInputWrapCompact]}>
                       <TextInput
-                        style={[styles.frequencyInput, { fontSize: 18 }]}
+                        style={[styles.frequencyInput, editStyles.frequencyInputLarge]}
                         value={pruningFrequency}
                         onChangeText={(text) => setPruningFrequency(sanitizeNumberText(text))}
                         keyboardType="numeric"
@@ -813,47 +814,47 @@ export function PlantEditForm({ formState }: Props) {
                         maxLength={3}
                       />
                     </View>
-                    <Text style={[styles.frequencyCardLabel, { marginBottom: 0 }]}>days</Text>
+                    <Text style={[styles.frequencyCardLabel, editStyles.noMarginBottom]}>days</Text>
                   </View>
                   {(() => {
                     const userOverride = plantType && plantVariety ? plantCareProfiles[plantType as PlantType]?.[plantVariety] : undefined;
                     const info = getPruningTechniques(plantType, plantVariety, userOverride);
                     const hasTips = info.tips.length > 0 || info.shapePruning || info.flowerPruning;
                     return hasTips ? (
-                      <View style={{ backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: theme.borderLight, marginBottom: 8 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                      <View style={editStyles.pruningTipsCard}>
+                        <View style={editStyles.pruningTipsHeader}>
                           <Ionicons name="bulb-outline" size={16} color={theme.accent} />
-                          <Text style={{ fontSize: 12, fontWeight: "700", color: theme.textSecondary, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                          <Text style={editStyles.pruningTipsTitle}>
                             Pruning Tips{plantVariety ? ` — ${plantVariety}` : ""}
                           </Text>
                         </View>
                         {info.tips.map((tip, i) => (
-                          <View key={i} style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, marginBottom: 4 }}>
-                            <Text style={{ color: theme.textTertiary, fontSize: 13, lineHeight: 18 }}>{"\u2022"}</Text>
-                            <Text style={{ color: theme.text, fontSize: 13, lineHeight: 18, flex: 1 }}>{tip}</Text>
+                          <View key={i} style={editStyles.pruningTipRow}>
+                            <Text style={editStyles.pruningTipBullet}>{"\u2022"}</Text>
+                            <Text style={editStyles.pruningTipText}>{tip}</Text>
                           </View>
                         ))}
                         {info.shapePruning && (
-                          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: info.tips.length > 0 ? 6 : 0, marginBottom: 4 }}>
-                            <Text style={{ fontSize: 13, lineHeight: 18 }}>{"\u2702\uFE0F"}</Text>
-                            <View style={{ flex: 1 }}>
-                              <Text style={{ color: theme.text, fontSize: 13, lineHeight: 18, fontWeight: "600" }}>
-                                Shape pruning<Text style={{ fontWeight: "400" }}> — {info.shapePruning.tip}</Text>
+                          <View style={[editStyles.pruningTipRow, info.tips.length > 0 && editStyles.pruningTechniqueTopGap]}>
+                            <Text style={editStyles.pruningTechniqueIcon}>{"\u2702\uFE0F"}</Text>
+                            <View style={editStyles.flexOne}>
+                              <Text style={editStyles.pruningTechniqueTitle}>
+                                Shape pruning<Text style={editStyles.pruningTechniqueDetail}> — {info.shapePruning.tip}</Text>
                               </Text>
-                              <Text style={{ color: theme.primary, fontSize: 12, fontWeight: "600", marginTop: 2 }}>
+                              <Text style={editStyles.pruningTechniqueBestTime}>
                                 Best: {info.shapePruning.months}
                               </Text>
                             </View>
                           </View>
                         )}
                         {info.flowerPruning && (
-                          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: 4 }}>
-                            <Text style={{ fontSize: 13, lineHeight: 18 }}>{"\uD83C\uDF38"}</Text>
-                            <View style={{ flex: 1 }}>
-                              <Text style={{ color: theme.text, fontSize: 13, lineHeight: 18, fontWeight: "600" }}>
-                                Flower pruning<Text style={{ fontWeight: "400" }}> — {info.flowerPruning.tip}</Text>
+                          <View style={[editStyles.pruningTipRow, editStyles.pruningFlowerTopGap]}>
+                            <Text style={editStyles.pruningTechniqueIcon}>{"\uD83C\uDF38"}</Text>
+                            <View style={editStyles.flexOne}>
+                              <Text style={editStyles.pruningTechniqueTitle}>
+                                Flower pruning<Text style={editStyles.pruningTechniqueDetail}> — {info.flowerPruning.tip}</Text>
                               </Text>
-                              <Text style={{ color: theme.primary, fontSize: 12, fontWeight: "600", marginTop: 2 }}>
+                              <Text style={editStyles.pruningTechniqueBestTime}>
                                 Best: {info.flowerPruning.months}
                               </Text>
                             </View>
@@ -1033,19 +1034,19 @@ export function PlantEditForm({ formState }: Props) {
               sectionStatus="optional"
             >
               {coconutAgeInfo && (
-                <View style={[styles.infoCard, { marginBottom: 16, borderLeftColor: "#8B5A2B", borderLeftWidth: 4 }]}>
+                <View style={[styles.infoCard, editStyles.coconutInfoCard]}>
                   <View style={styles.infoCardHeader}>
-                    <Ionicons name="leaf" size={16} color="#8B5A2B" />
-                    <Text style={[styles.infoCardTitle, { color: "#8B5A2B" }]}>
+                    <Ionicons name="leaf" size={16} color={theme.coconut} />
+                    <Text style={[styles.infoCardTitle, editStyles.coconutInfoCardTitle]}>
                       Age-based Care — {coconutAgeInfo.ageLabel}
                     </Text>
                   </View>
                   <Text style={styles.infoCardText}>Stage: {coconutAgeInfo.stageLabel}</Text>
                   <Text style={styles.infoCardText}>Expected yield: {coconutAgeInfo.expectedNutsPerYear}</Text>
-                  <Text style={[styles.infoCardText, { marginTop: 6, fontWeight: "600" }]}>Suggested schedule:</Text>
+                  <Text style={[styles.infoCardText, editStyles.infoCardTextBold]}>Suggested schedule:</Text>
                   <Text style={styles.infoCardText}>• Water every {coconutAgeInfo.wateringFrequencyDays} day{coconutAgeInfo.wateringFrequencyDays !== 1 ? "s" : ""}</Text>
                   <Text style={styles.infoCardText}>• Fertilise every {coconutAgeInfo.fertilisingFrequencyDays} days</Text>
-                  <Text style={[styles.infoCardText, { marginTop: 6, fontWeight: "600" }]}>Care tips for this stage:</Text>
+                  <Text style={[styles.infoCardText, editStyles.infoCardTextBold]}>Care tips for this stage:</Text>
                   {coconutAgeInfo.careTips.map((tip, i) => (
                     <Text key={i} style={styles.infoCardText}>• {tip}</Text>
                   ))}
@@ -1282,7 +1283,7 @@ export function PlantEditForm({ formState }: Props) {
                       key={record.id || index}
                       style={[
                         styles.pestDiseaseCard,
-                        { borderLeftWidth: 3, borderLeftColor: record.resolved ? "#4CAF50" : "#f44336" },
+                        record.resolved ? editStyles.pestCardResolved : editStyles.pestCardUnresolved,
                       ]}
                       activeOpacity={0.7}
                       onPress={() => {

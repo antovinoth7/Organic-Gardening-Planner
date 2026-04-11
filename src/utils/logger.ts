@@ -19,7 +19,7 @@ enum LogLevel {
 interface LogOptions {
   level?: LogLevel;
   tags?: string[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 class Logger {
@@ -29,14 +29,14 @@ class Logger {
   /**
    * Enable or disable logging
    */
-  setEnabled(enabled: boolean) {
+  setEnabled(enabled: boolean): void {
     this.enabled = enabled;
   }
 
   /**
    * Set minimum log level to display
    */
-  setMinLevel(level: LogLevel) {
+  setMinLevel(level: LogLevel): void {
     this.minLevel = level;
   }
 
@@ -65,7 +65,7 @@ class Logger {
   /**
    * Debug logging - verbose information
    */
-  debug(message: string, options?: LogOptions) {
+  debug(message: string, options?: LogOptions): void {
     if (this.shouldLog(LogLevel.DEBUG)) {
       const formatted = this.formatMessage(message, options);
       console.log(`🔍 ${formatted}`, options?.metadata || '');
@@ -75,7 +75,7 @@ class Logger {
   /**
    * Info logging - general information
    */
-  info(message: string, options?: LogOptions) {
+  info(message: string, options?: LogOptions): void {
     if (this.shouldLog(LogLevel.INFO)) {
       const formatted = this.formatMessage(message, options);
       console.log(`ℹ️  ${formatted}`, options?.metadata || '');
@@ -85,7 +85,7 @@ class Logger {
   /**
    * Warning logging - potential issues
    */
-  warn(message: string, error?: Error, options?: LogOptions) {
+  warn(message: string, error?: Error, options?: LogOptions): void {
     if (this.shouldLog(LogLevel.WARN)) {
       const formatted = this.formatMessage(message, options);
       console.warn(`⚠️  ${formatted}`, error || options?.metadata || '');
@@ -95,7 +95,7 @@ class Logger {
   /**
    * Error logging - serious problems
    */
-  error(message: string, error?: Error, options?: LogOptions) {
+  error(message: string, error?: Error, options?: LogOptions): void {
     if (this.shouldLog(LogLevel.ERROR)) {
       const formatted = this.formatMessage(message, options);
       console.error(`❌ ${formatted}`, error || options?.metadata || '');
@@ -108,13 +108,13 @@ class Logger {
   /**
    * Performance logging
    */
-  time(label: string) {
+  time(label: string): void {
     if (this.enabled && isDevelopment) {
       console.time(label);
     }
   }
 
-  timeEnd(label: string) {
+  timeEnd(label: string): void {
     if (this.enabled && isDevelopment) {
       console.timeEnd(label);
     }
@@ -123,7 +123,7 @@ class Logger {
   /**
    * Network request logging
    */
-  network(method: string, url: string, status?: number, duration?: number) {
+  network(method: string, url: string, status?: number, duration?: number): void {
     if (this.shouldLog(LogLevel.DEBUG)) {
       const statusEmoji = status && status >= 200 && status < 300 ? '✅' : '❌';
       const durationStr = duration ? ` (${duration}ms)` : '';
@@ -134,7 +134,7 @@ class Logger {
   /**
    * Firebase operation logging
    */
-  firebase(operation: string, collection: string, details?: string) {
+  firebase(operation: string, collection: string, details?: string): void {
     if (this.shouldLog(LogLevel.DEBUG)) {
       console.log(`🔥 ${operation} ${collection}${details ? ` - ${details}` : ''}`);
     }
@@ -143,7 +143,7 @@ class Logger {
   /**
    * Storage operation logging
    */
-  storage(operation: string, key: string, details?: string) {
+  storage(operation: string, key: string, details?: string): void {
     if (this.shouldLog(LogLevel.DEBUG)) {
       console.log(`💾 ${operation} ${key}${details ? ` - ${details}` : ''}`);
     }

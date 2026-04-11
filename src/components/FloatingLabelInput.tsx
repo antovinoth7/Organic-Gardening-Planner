@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
+  NativeSyntheticEvent,
+  TargetedEvent,
   TextInput,
   TextInputProps,
   View,
@@ -23,7 +25,7 @@ export default function FloatingLabelInput({
   onBlur,
   multiline,
   ...rest
-}: FloatingLabelInputProps) {
+}: FloatingLabelInputProps): React.JSX.Element {
   const theme = useTheme();
   const s = React.useMemo(() => createStyles(theme), [theme]);
 
@@ -41,7 +43,7 @@ export default function FloatingLabelInput({
   }, [isFloated, anim]);
 
   const handleFocus = useCallback(
-    (e: any) => {
+    (e: NativeSyntheticEvent<TargetedEvent>) => {
       setIsFocused(true);
       onFocus?.(e);
     },
@@ -49,7 +51,7 @@ export default function FloatingLabelInput({
   );
 
   const handleBlur = useCallback(
-    (e: any) => {
+    (e: NativeSyntheticEvent<TargetedEvent>) => {
       setIsFocused(false);
       onBlur?.(e);
     },

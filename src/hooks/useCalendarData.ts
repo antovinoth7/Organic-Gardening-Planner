@@ -356,7 +356,7 @@ export function useCalendarData({
         );
         if (plantHarvests.length === 0) return null;
 
-        const lastHarvest = plantHarvests[0];
+        const lastHarvest = plantHarvests[0]!;
         const lastDate = new Date(lastHarvest.created_at);
         const nextDate = new Date(lastDate);
 

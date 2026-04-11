@@ -191,7 +191,7 @@ const getImageUriSize = async (uri: string): Promise<number> => {
 const withImportVersion = (uri: string, version: string): string => {
   if (!uri) return uri;
 
-  const [withoutHash, hashPart] = uri.split("#", 2);
+  const [withoutHash = '', hashPart] = uri.split("#", 2);
   const hash = hashPart ? `#${hashPart}` : "";
   const [base, query = ""] = withoutHash.split("?", 2);
   const queryParts = query
@@ -271,7 +271,7 @@ export const exportImagesOnly = async (): Promise<string> => {
     return zipUri;
   } catch (error) {
     logger.error("Error exporting images", error as Error);
-    throw new Error("Failed to export images: " + (error as Error).message);
+    throw new Error("Failed to export images. Please ensure you have images to export.");
   }
 };
 
@@ -303,7 +303,7 @@ export const importImagesOnly = async (): Promise<number> => {
         : `${FileSystem.documentDirectory}garden_images/`;
 
     const { imageUris } = await extractZipWithImages(
-      result.assets[0].uri,
+      result.assets[0]!.uri,
       IMAGES_DIR
     );
     const getImportedImageUri = buildImageUriLookup(imageUris);
@@ -421,6 +421,6 @@ export const importImagesOnly = async (): Promise<number> => {
     return imageUris.size;
   } catch (error) {
     logger.error("Error importing images", error as Error);
-    throw new Error("Failed to import images: " + (error as Error).message);
+    throw new Error("Failed to import images. Please try again with a valid backup file.");
   }
 };

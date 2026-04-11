@@ -1,7 +1,7 @@
 import { StyleSheet } from 'react-native';
-import { useTheme } from '../theme';
+import type { Theme } from '../theme/colors';
 
-export const createStyles = (theme: ReturnType<typeof useTheme>) =>
+export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create> =>
   StyleSheet.create({
     container: {
       flex: 1,

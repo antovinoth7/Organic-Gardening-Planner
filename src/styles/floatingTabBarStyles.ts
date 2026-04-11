@@ -1,7 +1,9 @@
 import { Platform, StyleSheet } from "react-native";
 import type { Theme } from "../theme/colors";
 
-export const createStyles = (theme: Theme) =>
+const SHADOW_COLOR = "#000";
+
+export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create> =>
   StyleSheet.create({
     container: {
       position: "absolute",
@@ -24,10 +26,9 @@ export const createStyles = (theme: Theme) =>
         android: {
           elevation: 8,
         },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- web-specific CSS property not in RN StyleSheet types
         web: {
           boxShadow: "0 -2px 8px rgba(0, 0, 0, 0.08)",
-        } as any,
+        } as Record<string, unknown>,
       }),
     },
     tab: {
@@ -43,6 +44,9 @@ export const createStyles = (theme: Theme) =>
     labelFocused: {
       fontWeight: "600",
     },
+    iconLabelSpacer: {
+      height: 2,
+    },
   });
 
 export const fabStyles = StyleSheet.create({
@@ -54,7 +58,7 @@ export const fabStyles = StyleSheet.create({
     borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
+    shadowColor: SHADOW_COLOR,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

@@ -34,7 +34,7 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     logger.error('ErrorBoundary caught an error', error);
     this.setState({
       error,
@@ -45,7 +45,7 @@ export class ErrorBoundary extends Component<Props, State> {
     this.logError(error, errorInfo);
   }
 
-  async logError(error: Error, errorInfo: ErrorInfo) {
+  async logError(error: Error, errorInfo: ErrorInfo): Promise<void> {
     const { errorTracker } = await import('../utils/errorTracker');
     await errorTracker.trackError('React Error Boundary', error, {
       componentStack: errorInfo.componentStack,
@@ -53,7 +53,7 @@ export class ErrorBoundary extends Component<Props, State> {
     });
   }
 
-  handleReset = () => {
+  handleReset = (): void => {
     this.setState({
       hasError: false,
       error: null,
@@ -61,7 +61,7 @@ export class ErrorBoundary extends Component<Props, State> {
     });
   };
 
-  render() {
+  render(): React.ReactNode {
     if (this.state.hasError) {
       if (this.props.fallback) {
         return this.props.fallback;

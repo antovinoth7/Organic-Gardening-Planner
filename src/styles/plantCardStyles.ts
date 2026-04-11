@@ -1,7 +1,7 @@
 import { StyleSheet } from 'react-native';
-import { useTheme } from '../theme';
+import type { Theme } from '../theme/colors';
 
-export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.create({
+export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create> => StyleSheet.create({
   // ── Standard List Card ──
   card: {
     flexDirection: 'row',
@@ -49,7 +49,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: theme.textInverse + 'D9',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -127,21 +127,21 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
-    backgroundColor: '#e3f2fd',
+    backgroundColor: theme.info + '20',
     borderWidth: 1,
-    borderColor: '#bbdefb',
+    borderColor: theme.info + '40',
   },
   statusChipOverdue: {
-    backgroundColor: '#ffebee',
-    borderColor: '#ffcdd2',
+    backgroundColor: theme.errorLight,
+    borderColor: theme.error + '30',
   },
   statusChipText: {
     fontSize: 11,
-    color: '#2196f3',
+    color: theme.info,
     fontWeight: '600',
   },
   statusChipTextOverdue: {
-    color: '#f44336',
+    color: theme.error,
   },
   statusDot: {
     width: 6,
@@ -149,13 +149,13 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
     borderRadius: 3,
   },
   pestStatusChip: {
-    backgroundColor: '#FFEBEE',
-    borderColor: '#f4433640',
+    backgroundColor: theme.errorLight,
+    borderColor: theme.error + '40',
   },
   pestStatusChipText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#f44336',
+    color: theme.error,
   },
   highlight: {
     fontWeight: '700',
@@ -213,22 +213,22 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: theme.textInverse + 'E6',
     borderRadius: 8,
     paddingHorizontal: 5,
     paddingVertical: 2,
     zIndex: 2,
   },
   waterBadgeOverdue: {
-    backgroundColor: 'rgba(255,235,238,0.95)',
+    backgroundColor: theme.errorLight,
   },
   waterBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#2196f3',
+    color: theme.info,
   },
   waterBadgeTextOverdue: {
-    color: '#f44336',
+    color: theme.error,
   },
   pestBadgeCompact: {
     position: 'absolute',
@@ -237,7 +237,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: 'rgba(255,235,238,0.95)',
+    backgroundColor: theme.errorLight,
     borderRadius: 8,
     paddingHorizontal: 5,
     paddingVertical: 2,
@@ -246,7 +246,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
   pestBadgeCompactText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#f44336',
+    color: theme.error,
   },
   compactInfo: {
     padding: 8,
@@ -290,21 +290,21 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    backgroundColor: '#1976D2',
+    backgroundColor: theme.info,
   },
   swipeDeleteAction: {
     width: 64,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    backgroundColor: '#f44336',
+    backgroundColor: theme.error,
     borderTopRightRadius: 12,
     borderBottomRightRadius: 12,
   },
   swipeActionText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#fff',
+    color: theme.textInverse,
   },
 
   // ── Plant action menu (bottom sheet) ──
@@ -314,7 +314,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
   },
   menuBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: theme.overlay,
   },
   menuSheet: {
     backgroundColor: theme.backgroundSecondary,
@@ -392,7 +392,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
     justifyContent: 'center',
   },
   menuActionIconDestructive: {
-    backgroundColor: '#FFEBEE',
+    backgroundColor: theme.errorLight,
   },
   menuActionText: {
     flex: 1,
@@ -404,7 +404,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
     flex: 1,
     fontSize: 15,
     fontWeight: '500',
-    color: '#f44336',
+    color: theme.error,
   },
   menuCancelBtn: {
     alignItems: 'center',
@@ -420,7 +420,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
   cardActionOverlay: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.30)',
+    backgroundColor: theme.overlay,
     justifyContent: 'flex-end',
     padding: 8,
     zIndex: 10,
@@ -439,14 +439,14 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) => StyleSheet.c
     borderRadius: 20,
   },
   cardActionBtnEdit: {
-    backgroundColor: '#1976D2',
+    backgroundColor: theme.info,
   },
   cardActionBtnDelete: {
-    backgroundColor: '#f44336',
+    backgroundColor: theme.error,
   },
   cardActionBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#fff',
+    color: theme.textInverse,
   },
 });

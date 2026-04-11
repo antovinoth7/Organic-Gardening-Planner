@@ -20,6 +20,7 @@ import {
   UIManager,
   Pressable,
 } from "react-native";
+import type { ImageStyle } from "react-native";
 import { Image } from "expo-image";
 import { getJournalEntries, deleteJournalEntry } from "../services/journal";
 import { getAllPlants } from "../services/plants";
@@ -28,7 +29,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import { createStyles } from "../styles/journalStyles";
-import { useNavigation, useRoute, NavigationProp, ParamListBase } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import {
+  JournalScreenNavigationProp,
+  JournalScreenRouteProp,
+} from "../types/navigation.types";
 import { getErrorMessage } from "../utils/errorLogging";
 import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 import {
@@ -44,9 +49,9 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export default function JournalScreen() {
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const route = useRoute();
+export default function JournalScreen(): React.JSX.Element {
+  const navigation = useNavigation<JournalScreenNavigationProp>();
+  const route = useRoute<JournalScreenRouteProp>();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -76,7 +81,7 @@ export default function JournalScreen() {
   // Gallery modal state
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  const loadData = async (options?: { silent?: boolean }) => {
+  const loadData = async (options?: { silent?: boolean }): Promise<void> => {
     if (!options?.silent) {
       setLoading(true);
     }
@@ -117,12 +122,11 @@ export default function JournalScreen() {
       isMounted = false;
       unsubscribe();
     };
-  }, [navigation]);
+  }, [navigation, resetTabBar]);
 
   // Listen for refresh param from child screens (after add/edit/delete)
   useEffect(() => {
-    const params = route.params as Record<string, unknown> | undefined;
-    if (params?.refresh) {
+    if (route.params?.refresh) {
       loadData();
       navigation.setParams({ refresh: undefined });
     }
@@ -137,7 +141,7 @@ export default function JournalScreen() {
     [plants],
   );
 
-  const getEntryTypeIcon = (type: JournalEntryType) => {
+  const getEntryTypeIcon = (type: JournalEntryType): { iconName: React.ComponentProps<typeof Ionicons>['name']; color: string } => {
     const iconMap: Record<JournalEntryType, React.ComponentProps<typeof Ionicons>['name']> = {
       [JournalEntryType.Observation]: "eye",
       [JournalEntryType.Harvest]: "basket",
@@ -251,12 +255,12 @@ export default function JournalScreen() {
     return count;
   }, [dateFilter, selectedType]);
 
-  const toggleFilters = () => {
+  const toggleFilters = (): void => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setShowFilters((prev) => !prev);
   };
 
-  const clearAllFilters = () => {
+  const clearAllFilters = (): void => {
     setSearchQuery("");
     setSelectedType(null);
     setDateFilter("week");
@@ -277,7 +281,7 @@ export default function JournalScreen() {
     return photos;
   }, [filteredEntries]);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string): Promise<void> => {
     Alert.alert(
       "Delete Entry",
       "Are you sure you want to delete this journal entry?",
@@ -591,7 +595,7 @@ export default function JournalScreen() {
                           >
                             <Image
                               source={{ uri: photoUrl }}
-                              style={styles.photo}
+                              style={styles.photo as ImageStyle}
                               contentFit="cover"
                               transition={200}
                               cachePolicy="memory-disk"
@@ -649,7 +653,7 @@ export default function JournalScreen() {
               >
                 <Image
                   source={{ uri: photo.uri }}
-                  style={styles.galleryImage}
+                  style={styles.galleryImage as ImageStyle}
                   contentFit="cover"
                   transition={200}
                   cachePolicy="memory-disk"
@@ -817,7 +821,7 @@ export default function JournalScreen() {
           {selectedImage && (
             <Image
               source={{ uri: selectedImage }}
-              style={styles.modalImage}
+              style={styles.modalImage as ImageStyle}
               contentFit="contain"
               transition={200}
               cachePolicy="memory-disk"

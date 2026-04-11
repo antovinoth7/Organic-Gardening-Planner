@@ -10,8 +10,9 @@ import { onAuthStateChanged, User } from "@firebase/auth";
 import { ThemeProvider, useTheme, useThemeMode } from "./src/theme";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import { logAuthError, setErrorLogUserId } from "./src/utils/errorLogging";
+import { logger } from "./src/utils/logger";
 import { initAppLifecycle } from "./src/utils/appLifecycle";
-import { Alert, Platform } from "react-native";
+import { Alert, Platform, StyleSheet } from "react-native";
 import Constants from "expo-constants";
 import * as Sentry from "@sentry/react-native";
 import { migrateImagesToMediaLibrary } from "./src/lib/imageStorage";
@@ -55,8 +56,8 @@ const isDev = __DEV__;
 
 // Only log Sentry config in development
 if (isDev) {
-  console.log("🔧 Sentry DSN loaded:", sentryDsn ? "YES" : "NO");
-  console.log("🔧 Environment:", isDev ? "development" : "production");
+  logger.debug(`Sentry DSN loaded: ${sentryDsn ? "YES" : "NO"}`);
+  logger.debug(`Environment: ${isDev ? "development" : "production"}`);
 }
 
 Sentry.init({
@@ -115,11 +116,13 @@ Sentry.init({
 
     // Log in development only
     if (isDev) {
-      console.log("📤 Sentry event:", {
-        eventId: event.event_id,
-        level: event.level,
-        message: event.message,
-        exception: event.exception?.values?.[0]?.value,
+      logger.debug("Sentry event:", {
+        metadata: {
+          eventId: event.event_id,
+          level: event.level,
+          message: event.message,
+          exception: event.exception?.values?.[0]?.value,
+        },
       });
     }
 
@@ -152,18 +155,14 @@ Sentry.init({
 });
 
 if (isDev) {
-  console.log("✅ Sentry initialized");
+  logger.debug("Sentry initialized");
 }
 
 // Global error handlers to prevent silent crashes
 if (typeof ErrorUtils !== "undefined") {
   const originalHandler = ErrorUtils.getGlobalHandler();
   ErrorUtils.setGlobalHandler((error, isFatal) => {
-    console.error("🔴 Global error caught:", {
-      error: error?.message || error,
-      stack: error?.stack,
-      isFatal,
-    });
+    logger.error("Global error caught:", error instanceof Error ? error : new Error(String(error)));
 
     // Send to Sentry
     Sentry.captureException(error, {
@@ -183,11 +182,7 @@ const rejectionTracking = require("promise/setimmediate/rejection-tracking");
 rejectionTracking.enable({
   allRejections: true,
   onUnhandled: (id: string, error: Error) => {
-    console.error("🔴 Unhandled promise rejection:", {
-      id,
-      error: error?.message || error,
-      stack: error?.stack,
-    });
+    logger.error("Unhandled promise rejection:", error instanceof Error ? error : new Error(String(error)));
 
     // Send to Sentry
     Sentry.captureException(error, {
@@ -196,7 +191,7 @@ rejectionTracking.enable({
   },
   onHandled: (id: string) => {
     if (isDev) {
-      console.log("✅ Promise rejection handled:", id);
+      logger.debug(`Promise rejection handled: ${id}`);
     }
   },
 });
@@ -204,7 +199,7 @@ rejectionTracking.enable({
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-const PlantStack = () => (
+const PlantStack = (): React.JSX.Element => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="PlantsList" component={PlantsScreen} />
     <Stack.Screen name="ArchivedPlants" component={ArchivedPlantsScreen} />
@@ -213,14 +208,14 @@ const PlantStack = () => (
   </Stack.Navigator>
 );
 
-const JournalStack = () => (
+const JournalStack = (): React.JSX.Element => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="JournalList" component={JournalScreen} />
     <Stack.Screen name="JournalForm" component={JournalFormScreen} />
   </Stack.Navigator>
 );
 
-const MoreStack = () => (
+const MoreStack = (): React.JSX.Element => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="MoreHome" component={MoreScreen} />
     <Stack.Screen name="ManageLocations" component={ManageLocationsScreen} />
@@ -232,7 +227,7 @@ const MoreStack = () => (
   </Stack.Navigator>
 );
 
-const AppTabs = () => {
+const AppTabs = (): React.JSX.Element => {
   const theme = useTheme();
 
   return (
@@ -303,7 +298,7 @@ const AppTabs = () => {
   );
 };
 
-const AppRoot = () => {
+const AppRoot = (): React.JSX.Element | null => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const theme = useTheme();
@@ -358,7 +353,7 @@ const AppRoot = () => {
     const cleanupLifecycle = initAppLifecycle();
 
     // Run image migration once on Android
-    const runImageMigration = async () => {
+    const runImageMigration = async (): Promise<void> => {
       if (Platform.OS !== "android") return;
 
       try {
@@ -367,15 +362,15 @@ const AppRoot = () => {
           "@image_migration_complete",
         );
         if (migrationComplete === "true") {
-          console.log("Image migration already completed");
+          logger.debug("Image migration already completed");
           return;
         }
 
-        console.log("Starting image migration to MediaLibrary...");
+        logger.debug("Starting image migration to MediaLibrary...");
         const result = await migrateImagesToMediaLibrary();
 
         if (result.success || result.migratedCount > 0) {
-          console.log("✅ Migration completed:", result.message);
+          logger.debug(`Migration completed: ${result.message}`);
           if (result.completed) {
             await AsyncStorage.setItem("@image_migration_complete", "true");
           }
@@ -388,10 +383,10 @@ const AppRoot = () => {
             );
           }
         } else if (!result.success) {
-          console.warn("⚠️ Migration had issues:", result.message);
+          logger.warn(`Migration had issues: ${result.message}`);
         }
       } catch (error) {
-        console.error("Migration error:", error);
+        logger.error("Migration error:", error instanceof Error ? error : new Error(String(error)));
       }
     };
 
@@ -402,9 +397,8 @@ const AppRoot = () => {
         if (!isMounted) return;
 
         if (isDev) {
-          console.log(
-            "Auth state changed:",
-            user ? `Logged in as ${user.email}` : "Logged out",
+          logger.debug(
+            `Auth state changed: ${user ? `Logged in as ${user.uid}` : "Logged out"}`,
           );
         }
         setUser(user);
@@ -417,7 +411,6 @@ const AppRoot = () => {
         if (user) {
           Sentry.setUser({
             id: user.uid,
-            email: user.email || undefined,
           });
           Sentry.setTag("user_authenticated", "true");
 
@@ -431,12 +424,12 @@ const AppRoot = () => {
       (error) => {
         if (!isMounted) return;
 
-        console.error("Auth state change error:", error);
+        logger.error("Auth state change error:", error instanceof Error ? error : new Error(String(error)));
         logAuthError("Auth state listener error", error);
         setLoading(false);
 
         // Handle network errors silently - just show login screen
-        const errorCode = (error as any)?.code;
+        const errorCode = (error as { code?: string })?.code;
         if (errorCode === "auth/network-request-failed") {
           setUser(null);
           return;
@@ -487,9 +480,9 @@ const AppRoot = () => {
   );
 };
 
-function App() {
+function App(): React.JSX.Element {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={rootStyles.flex}>
       <ErrorBoundary>
         <SafeAreaProvider>
           <ThemeProvider>
@@ -500,5 +493,9 @@ function App() {
     </GestureHandlerRootView>
   );
 }
+
+const rootStyles = StyleSheet.create({
+  flex: { flex: 1 },
+});
 
 export default Sentry.wrap(App);

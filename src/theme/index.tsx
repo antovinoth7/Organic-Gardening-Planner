@@ -31,7 +31,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     let isMounted = true;
-    const loadTheme = async () => {
+    const loadTheme = async (): Promise<void> => {
       try {
         const stored = await safeGetItem(THEME_STORAGE_KEY);
         if (stored === 'light' || stored === 'dark' || stored === 'system') {
@@ -50,7 +50,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   useEffect(() => {
-    const saveTheme = async () => {
+    const saveTheme = async (): Promise<void> => {
       try {
         await safeSetItem(THEME_STORAGE_KEY, mode);
       } catch (error) {

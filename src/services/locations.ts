@@ -55,13 +55,17 @@ export const DEFAULT_CHILD_LOCATIONS = [
   "Back",
 ];
 
+const MAX_LIST_SIZE = 100;
+const MAX_NAME_LENGTH = 200;
+
 const normalizeList = (values: string[] | undefined | null): string[] => {
   if (!Array.isArray(values)) return [];
   const seen = new Set<string>();
   const result: string[] = [];
   values.forEach((value) => {
+    if (result.length >= MAX_LIST_SIZE) return;
     const trimmed = (value ?? "").toString().trim();
-    if (!trimmed) return;
+    if (!trimmed || trimmed.length > MAX_NAME_LENGTH) return;
     const key = trimmed.toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);

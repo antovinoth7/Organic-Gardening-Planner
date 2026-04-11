@@ -8,6 +8,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ImageStyle,
 } from "react-native";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
@@ -20,10 +21,14 @@ import {
   saveJournalImage,
 } from "../services/journal";
 import { getAllPlants } from "../services/plants";
-import { Plant, JournalEntry, JournalEntryType } from "../types/database.types";
+import { Plant, JournalEntryType } from "../types/database.types";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation, useRoute, NavigationProp, ParamListBase } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import {
+  JournalFormScreenNavigationProp,
+  JournalFormScreenRouteProp,
+} from "../types/navigation.types";
 import { useTheme } from "../theme";
 import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 import { createStyles } from "../styles/journalFormStyles";
@@ -40,17 +45,12 @@ type PhotoItem = {
   filename: string | null;
 };
 
-export default function JournalFormScreen() {
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const route = useRoute();
-  const params = (route.params || {}) as {
-    entry?: JournalEntry;
-    initialEntryType?: JournalEntryType;
-    initialPlantId?: string;
-  };
-  const editEntry = params.entry;
-  const initialEntryType = params.initialEntryType;
-  const initialPlantId = params.initialPlantId;
+export default function JournalFormScreen(): React.JSX.Element {
+  const navigation = useNavigation<JournalFormScreenNavigationProp>();
+  const route = useRoute<JournalFormScreenRouteProp>();
+  const editEntry = route.params?.entry;
+  const initialEntryType = route.params?.initialEntryType;
+  const initialPlantId = route.params?.initialPlantId;
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const isEditing = !!editEntry;
@@ -115,7 +115,7 @@ export default function JournalFormScreen() {
     }
   }, [isEditing, initialEntryType, initialPlantId]);
 
-  const loadPlants = async () => {
+  const loadPlants = async (): Promise<void> => {
     try {
       const data = await getAllPlants();
       setPlants(data);
@@ -124,7 +124,7 @@ export default function JournalFormScreen() {
     }
   };
 
-  const openImageLibrary = async () => {
+  const openImageLibrary = async (): Promise<void> => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       Alert.alert("Permission required", "Please allow access to your photos");
@@ -147,7 +147,7 @@ export default function JournalFormScreen() {
     }
   };
 
-  const openCamera = async () => {
+  const openCamera = async (): Promise<void> => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
       Alert.alert("Permission required", "Please allow access to your camera");
@@ -177,15 +177,15 @@ export default function JournalFormScreen() {
     }
   };
 
-  const pickImage = () => {
+  const pickImage = (): void => {
     setShowPhotoSourceModal(true);
   };
 
-  const removeImage = (index: number) => {
+  const removeImage = (index: number): void => {
     setPhotoItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<void> => {
     // Input validation
     if (!content.trim()) {
       Alert.alert("Validation Error", "Please write something in your journal");
@@ -440,7 +440,7 @@ export default function JournalFormScreen() {
                 <View key={index} style={styles.photoContainer}>
                   <Image
                     source={{ uri: item.uri }}
-                    style={styles.photoThumbnail}
+                    style={styles.photoThumbnail as ImageStyle}
                     contentFit="cover"
                     transition={200}
                     cachePolicy="memory-disk"
@@ -531,7 +531,7 @@ export default function JournalFormScreen() {
                   { value: "good" as const, label: "Good", emoji: "👍" },
                   { value: "fair" as const, label: "Fair", emoji: "👌" },
                   { value: "poor" as const, label: "Poor", emoji: "👎" },
-                ] satisfies Array<{ value: "excellent" | "good" | "fair" | "poor"; label: string; emoji: string }>
+                ] satisfies { value: "excellent" | "good" | "fair" | "poor"; label: string; emoji: string }[]
               ).map((quality) => (
                 <TouchableOpacity
                   key={quality.value}
@@ -556,7 +556,7 @@ export default function JournalFormScreen() {
               ))}
             </View>
 
-            <View style={[styles.notesWrapper, { marginTop: 12 }]}>
+            <View style={[styles.notesWrapper, styles.notesWrapperMarginTop]}>
               <FloatingLabelInput
                 label="Storage / Notes"
                 value={harvestNotes}
@@ -589,7 +589,7 @@ export default function JournalFormScreen() {
         </View>
 
         {/* Extra spacing for keyboard */}
-        <View style={{ height: 300 }} />
+        <View style={styles.keyboardSpacer} />
       </ScrollView>
 
       <PhotoSourceModal

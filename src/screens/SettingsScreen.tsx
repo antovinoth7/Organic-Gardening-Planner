@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { clearAllData } from "../lib/storage";
 import { createStyles } from "../styles/settingsStyles";import { logger } from '../utils/logger';
 import { getErrorMessage } from '../utils/errorLogging';
-export default function SettingsScreen() {
+export default function SettingsScreen(): React.JSX.Element {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -58,7 +58,7 @@ export default function SettingsScreen() {
     return mb.toFixed(2) + " MB";
   };
 
-  const handleExportImagesOnly = async () => {
+  const handleExportImagesOnly = async (): Promise<void> => {
     Alert.alert(
       "Export Images Only",
       "This will create a ZIP file containing ONLY your photos (no data). Useful for backing up images separately.",
@@ -86,7 +86,7 @@ export default function SettingsScreen() {
     );
   };
 
-  const handleImportImagesOnly = async () => {
+  const handleImportImagesOnly = async (): Promise<void> => {
     Alert.alert(
       "Import Images Only",
       "This will import ONLY photos from a ZIP file. Your existing data will not be changed, only images will be added/replaced.",
@@ -116,7 +116,7 @@ export default function SettingsScreen() {
     );
   };
 
-  const handleClearCache = async () => {
+  const handleClearCache = async (): Promise<void> => {
     Alert.alert(
       "Clear App Cache",
       "This will clear the app's local data cache. Firebase data will be re-synced on next load. Your data will not be deleted.",
@@ -190,11 +190,11 @@ export default function SettingsScreen() {
             disabled={loading}
           >
             {loadingAction === "import" ? (
-              <ActivityIndicator color="#2e7d32" />
+              <ActivityIndicator color={theme.success} />
             ) : (
               <>
-                <Ionicons name="image-outline" size={20} color="#2e7d32" />
-                <Text style={[styles.backupButtonText, { color: "#2e7d32" }]}>
+                <Ionicons name="image-outline" size={20} color={theme.success} />
+                <Text style={[styles.backupButtonText, styles.backupButtonTextSuccess]}>
                   Import Images Only
                 </Text>
               </>
@@ -232,7 +232,7 @@ export default function SettingsScreen() {
 
           <View style={styles.card}>
             <View style={styles.row}>
-              <Ionicons name="leaf" size={24} color="#2e7d32" />
+              <Ionicons name="leaf" size={24} color={theme.success} />
               <View style={styles.rowContent}>
                 <Text style={styles.rowTitle}>Garden Planner</Text>
                 <Text style={styles.rowSubtitle}>Version 1.0.0</Text>

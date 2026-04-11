@@ -1,5 +1,16 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import { getAllPlants } from "../services/plants";
+import {
+  DEFAULT_CHILD_LOCATIONS,
+  DEFAULT_PARENT_LOCATIONS,
+  getLocationConfig,
+} from "../services/locations";
+import {
+  DEFAULT_PLANT_CATALOG,
+  getPlantCatalog,
+} from "../services/plantCatalog";
+import { getPlantCareProfiles } from "../services/plantCareProfiles";
 import {
   LocationProfile,
   Plant,
@@ -7,6 +18,7 @@ import {
   PlantCatalog,
   PlantCareProfiles,
 } from "../types/database.types";
+import { logger } from "../utils/logger";
 
 export interface UsePlantFormDataReturn {
   existingPlants: Plant[];
@@ -26,18 +38,14 @@ export interface UsePlantFormDataReturn {
   harvestSectionFieldCount: number;
   notesHistoryFieldCount: number;
 }
-import {
-  DEFAULT_CHILD_LOCATIONS,
-  DEFAULT_PARENT_LOCATIONS,
-  getLocationConfig,
-} from "../services/locations";
-import {
-  DEFAULT_PLANT_CATALOG,
-  getPlantCatalog,
-} from "../services/plantCatalog";
-import { getPlantCareProfiles } from "../services/plantCareProfiles";
-import { useFocusEffect } from "@react-navigation/native";
-import { logger } from "../utils/logger";
+
+const TAMIL_NADU_HARVEST_SEASONS = [
+  "Year Round",
+  "Summer (Mar-May)",
+  "Southwest Monsoon (Jun-Sep)",
+  "Northeast Monsoon (Oct-Dec)",
+  "Cool Dry (Jan-Feb)",
+];
 
 interface UsePlantFormDataOptions {
   plantType: PlantType | string;
@@ -73,7 +81,7 @@ export function usePlantFormData({
   const [locationShortNames, setLocationShortNames] = useState<Record<string, string>>({});
   const [locationProfiles, setLocationProfiles] = useState<Record<string, LocationProfile>>({});
 
-  const loadLocations = async () => {
+  const loadLocations = useCallback(async (): Promise<void> => {
     try {
       const config = await getLocationConfig();
       setParentLocations(config.parentLocations);
@@ -83,27 +91,27 @@ export function usePlantFormData({
     } catch (error) {
       logger.error("Error loading locations", error as Error);
     }
-  };
+  }, []);
 
-  const loadPlantCatalog = async () => {
+  const loadPlantCatalog = useCallback(async (): Promise<void> => {
     try {
       const catalog = await getPlantCatalog();
       setPlantCatalog(catalog);
     } catch (error) {
       logger.error("Error loading plant catalog", error as Error);
     }
-  };
+  }, []);
 
-  const loadExistingPlants = async () => {
+  const loadExistingPlants = useCallback(async (): Promise<void> => {
     try {
       const plants = await getAllPlants();
       setExistingPlants(plants);
     } catch (error) {
       logger.error("Error loading plants for naming", error as Error);
     }
-  };
+  }, []);
 
-  const loadPlantCareProfiles = async () => {
+  const loadPlantCareProfiles = useCallback(async (): Promise<void> => {
     try {
       const profiles = await getPlantCareProfiles();
       setPlantCareProfiles(profiles);
@@ -112,23 +120,23 @@ export function usePlantFormData({
     } finally {
       setCareProfilesLoaded(true);
     }
-  };
+  }, []);
 
-  const loadAllReferenceData = () => {
+  const loadAllReferenceData = useCallback((): void => {
     loadLocations();
     loadPlantCatalog();
     loadPlantCareProfiles();
     loadExistingPlants();
-  };
+  }, [loadLocations, loadPlantCatalog, loadPlantCareProfiles, loadExistingPlants]);
 
   useEffect(() => {
     loadAllReferenceData();
-  }, []);
+  }, [loadAllReferenceData]);
 
   useFocusEffect(
     React.useCallback(() => {
       loadAllReferenceData();
-    }, []),
+    }, [loadAllReferenceData]),
   );
 
   // Derived option lists
@@ -158,14 +166,6 @@ export function usePlantFormData({
     if (!plantVariety) return [];
     return plantCatalog.categories[plantType as PlantType]?.varieties?.[plantVariety] ?? [];
   }, [plantCatalog, plantType, plantVariety]);
-
-  const TAMIL_NADU_HARVEST_SEASONS = [
-    "Year Round",
-    "Summer (Mar-May)",
-    "Southwest Monsoon (Jun-Sep)",
-    "Northeast Monsoon (Oct-Dec)",
-    "Cool Dry (Jan-Feb)",
-  ];
 
   const harvestSeasonOptions = React.useMemo(() => {
     if (!harvestSeason) return TAMIL_NADU_HARVEST_SEASONS;

@@ -25,12 +25,12 @@
 
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
-
-type AssetWithFileSize = MediaLibrary.Asset & { fileSize?: number };
-type AssetInfoWithFileSize = MediaLibrary.AssetInfo & { fileSize?: number; localUri?: string };
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { logger } from '../utils/logger';
+
+type AssetWithFileSize = MediaLibrary.Asset & { fileSize?: number };
+type AssetInfoWithFileSize = MediaLibrary.AssetInfo & { fileSize?: number; localUri?: string };
 
 /**
  * Check if running in Expo Go (which has limited MediaLibrary permissions)
@@ -54,7 +54,7 @@ const MEDIA_LOOKUP_MAX_PAGES = 20;
 let mediaLookupCache: Map<string, string> | null = null;
 let mediaLookupPromise: Promise<Map<string, string>> | null = null;
 
-const clearMediaLookupCache = () => {
+const clearMediaLookupCache = (): void => {
   mediaLookupCache = null;
   mediaLookupPromise = null;
 };
@@ -204,7 +204,7 @@ const requestMediaLibraryPermissions = async (): Promise<boolean> => {
 const upsertAssetLookup = (
   lookup: Map<string, string>,
   asset: MediaLibrary.Asset
-) => {
+): void => {
   if (asset.id) {
     lookup.set(String(asset.id), asset.uri);
   }
@@ -219,8 +219,8 @@ const upsertAssetLookup = (
 
 const scanMediaAssets = async (
   lookup: Map<string, string>,
-  options: any = {}
-) => {
+  options: MediaLibrary.AssetsOptions = {}
+): Promise<void> => {
   let after: string | undefined;
   let pageCount = 0;
 
@@ -485,14 +485,14 @@ export const imageExists = async (imageUri: string | null): Promise<boolean> => 
         try {
           const asset = await MediaLibrary.getAssetInfoAsync(trimmedUri);
           return !!asset;
-        } catch (firstError) {
+        } catch {
           // Try extracting content ID as fallback
-          const contentId = trimmedUri.split('?')[0].split('#')[0].split('/').pop();
+          const contentId = trimmedUri.split('?')[0]!.split('#')[0]!.split('/').pop();
           if (contentId && contentId.length > 0) {
             try {
               const asset = await MediaLibrary.getAssetInfoAsync(contentId);
               return !!asset;
-            } catch (secondError) {
+            } catch {
               // URI is stale or invalid - this is common after device restarts
               if (__DEV__) {
                 logger.warn('MediaLibrary asset not found (stale URI)');
@@ -569,7 +569,7 @@ export const saveImageLocallyWithFilename = async (
 export const getFilenameFromUri = (uri: string): string | null => {
   if (!uri) return null;
   try {
-    const cleanUri = uri.split('?')[0].split('#')[0];
+    const cleanUri = uri.split('?')[0]!.split('#')[0]!;
     const filename = cleanUri.split('/').pop();
     return filename ? decodeURIComponent(filename) : null;
   } catch (error) {
@@ -583,7 +583,7 @@ const getAndroidAssetIdFromUri = (uri: string): string | null => {
     return null;
   }
 
-  const cleanUri = uri.split('?')[0].split('#')[0];
+  const cleanUri = uri.split('?')[0]!.split('#')[0]!;
   return cleanUri.split('/').pop() || null;
 };
 
@@ -640,7 +640,14 @@ export const getLocalImageUriFromFilename = (
 ): string | null => {
   if (!filename || !IMAGES_DIR || Platform.OS === 'web') return null;
   const cleanFilename = getFilenameFromUri(filename);
-  return cleanFilename ? `${IMAGES_DIR}${cleanFilename}` : null;
+  if (!cleanFilename) return null;
+
+  // Reject path traversal attempts
+  if (cleanFilename.includes('..') || cleanFilename.includes('/') || cleanFilename.includes('\\')) {
+    return null;
+  }
+
+  return `${IMAGES_DIR}${cleanFilename}`;
 };
 
 /**

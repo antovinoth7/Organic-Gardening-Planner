@@ -16,7 +16,7 @@ export default function DiscardChangesModal({
   styles,
   onKeepEditing,
   onDiscard,
-}: DiscardChangesModalProps) {
+}: DiscardChangesModalProps): React.JSX.Element {
   const theme = useTheme() as Theme;
   return (
     <Modal

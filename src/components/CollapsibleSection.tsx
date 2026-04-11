@@ -13,7 +13,7 @@ import { createStyles } from "../styles/collapsibleSectionStyles";
 
 // Enable LayoutAnimation on Android only for the old architecture.
 const isNewArchitectureEnabled =
-  (global as { nativeFabricUIManager?: unknown }).nativeFabricUIManager !=
+  (globalThis as { nativeFabricUIManager?: unknown }).nativeFabricUIManager !=
   null;
 
 if (Platform.OS === "android" && !isNewArchitectureEnabled) {
@@ -48,14 +48,14 @@ export default function CollapsibleSection({
   hasError = false,
   autoFilled = false,
   sectionStatus,
-}: CollapsibleSectionProps) {
+}: CollapsibleSectionProps): React.JSX.Element {
   const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
   const theme = useTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const isControlled = typeof expanded === "boolean";
   const isExpanded = isControlled ? !!expanded : internalExpanded;
 
-  const toggleExpanded = () => {
+  const toggleExpanded = (): void => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     const next = !isExpanded;
     if (!isControlled) {

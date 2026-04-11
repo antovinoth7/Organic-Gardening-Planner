@@ -56,7 +56,9 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firebase Auth with React Native AsyncStorage persistence
 // CRITICAL: This ensures user sessions persist across app restarts in APK builds
 // Without this, users would be logged out every time the app is closed
-const getReactNativePersistence = (FirebaseAuth as any).getReactNativePersistence;
+const getReactNativePersistence = (FirebaseAuth as Record<string, unknown>).getReactNativePersistence as
+  | ((storage: typeof ReactNativeAsyncStorage) => FirebaseAuth.Persistence)
+  | undefined;
 
 let auth: FirebaseAuth.Auth;
 if (typeof getReactNativePersistence === 'function') {

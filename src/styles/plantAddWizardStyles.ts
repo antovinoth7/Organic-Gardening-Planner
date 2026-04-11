@@ -1,7 +1,7 @@
 import { StyleSheet } from "react-native";
 import type { Theme } from "../theme/colors";
 
-export const createWizardStyles = (theme: Theme) =>
+export const createWizardStyles = (theme: Theme): ReturnType<typeof StyleSheet.create> =>
   StyleSheet.create({
     root: {
       flex: 1,
@@ -174,7 +174,7 @@ export const createWizardStyles = (theme: Theme) =>
       gap: 10,
       borderWidth: 1,
       borderColor: theme.primaryLight,
-      shadowColor: "#000",
+      shadowColor: theme.shadow,
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.1,
       shadowRadius: 8,
@@ -185,5 +185,18 @@ export const createWizardStyles = (theme: Theme) =>
       fontSize: 13,
       color: theme.text,
       lineHeight: 18,
+    },
+    dateCardLabelRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 6,
+    },
+    spaceTypeCardHint: {
+      fontSize: 10,
+      color: theme.textTertiary,
+      marginTop: 2,
+    },
+    wizardSaveBtnDisabled: {
+      opacity: 0.6,
     },
   });

@@ -33,12 +33,19 @@ const safeDecodeURIComponent = (value: string): string => {
 
 const sanitizeZipImageFilename = (filename: string): string => {
   const normalized = filename.replace(/\\/g, '/');
+  // Reject path traversal attempts
+  if (normalized.includes('..') || normalized.startsWith('/')) {
+    return `image_${Date.now()}.jpg`;
+  }
   const clean = normalized.split('/').pop() || `image_${Date.now()}.jpg`;
-  return safeDecodeURIComponent(clean).replace(/\0/g, '');
+  const decoded = safeDecodeURIComponent(clean).replace(/\0/g, '');
+  // Whitelist safe characters only
+  const safeName = decoded.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return safeName || `image_${Date.now()}.jpg`;
 };
 
 const formatBackupTimestamp = (date: Date): string => {
-  const pad = (value: number) => String(value).padStart(2, '0');
+  const pad = (value: number): string => String(value).padStart(2, '0');
   const year = date.getFullYear();
   const month = pad(date.getMonth() + 1);
   const day = pad(date.getDate());
@@ -55,7 +62,7 @@ const formatBackupTimestamp = (date: Date): string => {
  * @returns URI of the created ZIP file
  */
 export const createZipWithImages = async (
-  jsonData: any,
+  jsonData: Record<string, unknown>,
   imageFiles: ZipImageFile[]
 ): Promise<string> => {
   try {
@@ -154,9 +161,13 @@ export const extractZipWithImages = async (
   zipUri: string,
   targetImagesDir: string
 ): Promise<{
-  jsonData: any;
+  jsonData: Record<string, unknown>;
   imageUris: Map<string, string>; // Map of original filename -> new local URI
 }> => {
+  const MAX_FILES = 1000;
+  const MAX_TOTAL_SIZE = 500 * 1024 * 1024; // 500 MB
+  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB per file
+
   try {
     // Read ZIP file
     let zipData: Uint8Array;
@@ -174,6 +185,27 @@ export const extractZipWithImages = async (
     // Unzip using fflate (synchronous for React Native compatibility)
     // Workers are not available in React Native, so we use unzipSync
     const unzippedFiles = unzipSync(zipData);
+
+    // Validate against ZIP bomb / decompression attacks
+    const entryCount = Object.keys(unzippedFiles).length;
+    if (entryCount > MAX_FILES) {
+      throw new Error(`ZIP contains too many files (${entryCount}). Maximum allowed: ${MAX_FILES}`);
+    }
+
+    let totalSize = 0;
+    for (const [filePath, fileData] of Object.entries(unzippedFiles)) {
+      if (fileData.byteLength > MAX_FILE_SIZE) {
+        throw new Error(`File "${filePath}" exceeds maximum size of ${MAX_FILE_SIZE / 1024 / 1024}MB`);
+      }
+      // Reject path traversal in ZIP entry names
+      if (filePath.includes('..') || filePath.startsWith('/')) {
+        throw new Error(`Invalid file path in ZIP: "${filePath}"`);
+      }
+      totalSize += fileData.byteLength;
+      if (totalSize > MAX_TOTAL_SIZE) {
+        throw new Error(`ZIP total extracted size exceeds ${MAX_TOTAL_SIZE / 1024 / 1024}MB limit`);
+      }
+    }
     
     // Extract backup.json
     const backupJsonData = unzippedFiles['backup.json'];
@@ -257,7 +289,7 @@ const uint8ArrayToBase64 = (bytes: Uint8Array): string => {
   let binary = '';
   const len = bytes.byteLength;
   for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
+    binary += String.fromCharCode(bytes[i]!);
   }
   return btoa(binary);
 };

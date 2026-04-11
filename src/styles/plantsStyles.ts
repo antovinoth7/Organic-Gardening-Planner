@@ -1,7 +1,7 @@
 import { StyleSheet, Dimensions } from "react-native";
-import { useTheme } from "../theme";
+import type { Theme } from "../theme/colors";
 
-export const createStyles = (theme: ReturnType<typeof useTheme>) =>
+export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create> =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -120,7 +120,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       borderRadius: 12,
       borderWidth: 1,
       borderColor: theme.border,
-      shadowColor: "#000",
+      shadowColor: theme.shadow,
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.1,
       shadowRadius: 4,
@@ -149,7 +149,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     sheetOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.4)",
+      backgroundColor: theme.overlay,
       justifyContent: "flex-end",
       zIndex: 1000,
       elevation: 1000,
@@ -394,5 +394,56 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       fontWeight: "600",
       color: theme.primary,
     },
-
+    undoToast: {
+      position: "absolute",
+      left: 16,
+      right: 16,
+      backgroundColor: theme.backgroundSecondary,
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 4,
+      elevation: 6,
+      shadowColor: theme.shadow,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.16,
+      shadowRadius: 8,
+      zIndex: 100,
+    },
+    undoToastRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 8,
+    },
+    undoToastLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    undoToastText: {
+      fontSize: 14,
+      color: theme.text,
+      fontWeight: "500",
+    },
+    undoToastAction: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.primary,
+    },
+    undoProgressTrack: {
+      height: 3,
+      backgroundColor: theme.border,
+      borderRadius: 2,
+      overflow: "hidden",
+      marginBottom: 8,
+    },
+    undoProgressBar: {
+      height: 3,
+      backgroundColor: theme.primary,
+      borderRadius: 2,
+    },
+    filterBottomSpacer: {
+      height: 12,
+    },
   });

@@ -11,12 +11,12 @@ import { createStyles } from "../styles/moreStyles";
 import { useNavigation, NavigationProp, ParamListBase } from "@react-navigation/native";
 import { getErrorMessage } from "../utils/errorLogging";
 
-export default function MoreScreen() {
+export default function MoreScreen(): React.JSX.Element {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const theme = useTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
-  const handleSignOut = async () => {
+  const handleSignOut = async (): Promise<void> => {
     try {
       invalidateAll();
       await signOut(auth);

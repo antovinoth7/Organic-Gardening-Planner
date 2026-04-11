@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ImageStyle } from "react-native";
 import {
   View,
   Text,
@@ -16,7 +17,11 @@ import {
   TapGestureHandler,
   GestureHandlerRootView,
   State,
+  PinchGestureHandlerEventPayload,
+  PanGestureHandlerEventPayload,
+  TapGestureHandlerEventPayload,
 } from "react-native-gesture-handler";
+import type { HandlerStateChangeEvent } from "react-native-gesture-handler";
 import { Image } from 'expo-image';
 import { getPlant } from "../services/plants";
 import { getTaskTemplates, getSeasonalCareReminder } from "../services/tasks";
@@ -44,15 +49,19 @@ import {
 } from "../utils/plantHelpers";
 import PestDiseaseHistorySection from "../components/PestDiseaseHistorySection";
 import HarvestHistorySection from "../components/HarvestHistorySection";
-import { useNavigation, useRoute, NavigationProp, ParamListBase } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import {
+  PlantDetailScreenNavigationProp,
+  PlantDetailScreenRouteProp,
+} from "../types/navigation.types";
 import { getErrorMessage } from "../utils/errorLogging";
 
 const SCREEN = Dimensions.get("window");
 
-export default function PlantDetailScreen() {
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const route = useRoute();
-  const { plantId } = (route.params || {}) as { plantId?: string };
+export default function PlantDetailScreen(): React.JSX.Element {
+  const navigation = useNavigation<PlantDetailScreenNavigationProp>();
+  const route = useRoute<PlantDetailScreenRouteProp>();
+  const { plantId } = route.params ?? {};
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -94,7 +103,7 @@ export default function PlantDetailScreen() {
     Animated.event([{ nativeEvent: { scale: pinchScale } }], { useNativeDriver: true })
   ).current;
 
-  const onPinchStateChange = useCallback(({ nativeEvent }: any) => {
+  const onPinchStateChange = useCallback(({ nativeEvent }: HandlerStateChangeEvent<PinchGestureHandlerEventPayload>) => {
     if (nativeEvent.oldState === State.ACTIVE) {
       lastScale.current = Math.min(4, Math.max(1, lastScale.current * nativeEvent.scale));
       baseScale.setValue(lastScale.current);
@@ -109,7 +118,7 @@ export default function PlantDetailScreen() {
     )
   ).current;
 
-  const onPanStateChange = useCallback(({ nativeEvent }: any) => {
+  const onPanStateChange = useCallback(({ nativeEvent }: HandlerStateChangeEvent<PanGestureHandlerEventPayload>) => {
     if (nativeEvent.oldState === State.ACTIVE) {
       lastOffset.current.x += nativeEvent.translationX;
       lastOffset.current.y += nativeEvent.translationY;
@@ -120,7 +129,7 @@ export default function PlantDetailScreen() {
     }
   }, [translateX, translateY]);
 
-  const onDoubleTap = useCallback(({ nativeEvent }: any) => {
+  const onDoubleTap = useCallback(({ nativeEvent }: HandlerStateChangeEvent<TapGestureHandlerEventPayload>) => {
     if (nativeEvent.state === State.ACTIVE) {
       if (lastScale.current > 1) {
         // Collapse offset into value so spring animates to true 0
@@ -276,7 +285,7 @@ export default function PlantDetailScreen() {
         <TouchableOpacity activeOpacity={0.9} onPress={() => setZoomVisible(true)}>
           <Image 
             source={{ uri: plant.photo_url }} 
-            style={styles.photo}
+            style={styles.photo as ImageStyle}
             contentFit="cover"
             transition={200}
             cachePolicy="memory-disk"
@@ -298,7 +307,7 @@ export default function PlantDetailScreen() {
         statusBarTranslucent
       >
         <StatusBar barStyle="light-content" backgroundColor="#000" />
-        <GestureHandlerRootView style={{ flex: 1 }}>
+        <GestureHandlerRootView style={styles.gestureRoot}>
         <View style={styles.zoomOverlay}>
           <TouchableOpacity
             style={[styles.zoomClose, { top: insets.top + 16 }]}
@@ -307,7 +316,7 @@ export default function PlantDetailScreen() {
             <Ionicons name="close" size={28} color="#fff" />
           </TouchableOpacity>
           <TapGestureHandler numberOfTaps={2} onHandlerStateChange={onDoubleTap}>
-            <Animated.View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+            <Animated.View style={styles.zoomGestureContainer}>
               <PanGestureHandler
                 ref={panHandlerRef}
                 onGestureEvent={onPanEvent}
@@ -316,7 +325,7 @@ export default function PlantDetailScreen() {
                 minPointers={1}
                 maxPointers={2}
               >
-                <Animated.View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+                <Animated.View style={styles.zoomGestureContainer}>
                   <PinchGestureHandler
                     ref={pinchHandlerRef}
                     onGestureEvent={onPinchEvent}
@@ -324,17 +333,15 @@ export default function PlantDetailScreen() {
                     simultaneousHandlers={[panHandlerRef]}
                   >
                     <Animated.View
-                      style={{
+                      style={[styles.zoomGestureContainer, {
                         width: SCREEN.width,
                         height: SCREEN.height * 0.8,
-                        justifyContent: "center",
-                        alignItems: "center",
                         transform: [
                           { translateX },
                           { translateY },
                           { scale: composedScale },
                         ],
-                      }}
+                      }]}
                     >
                       <Image
                         source={{ uri: plant.photo_url! }}
@@ -524,24 +531,20 @@ export default function PlantDetailScreen() {
                 size={20}
                 color={
                   plant.health_status === "healthy"
-                    ? "#4CAF50"
+                    ? theme.success
                     : plant.health_status === "sick"
-                    ? "#f44336"
-                    : "#FF9800"
+                    ? theme.error
+                    : theme.warning
                 }
               />
               <Text
                 style={[
                   styles.infoText,
-                  {
-                    color:
-                      plant.health_status === "healthy"
-                        ? "#4CAF50"
-                        : plant.health_status === "sick"
-                        ? "#f44336"
-                        : "#FF9800",
-                    fontWeight: "600",
-                  },
+                  plant.health_status === "healthy"
+                    ? styles.healthStatusHealthy
+                    : plant.health_status === "sick"
+                    ? styles.healthStatusSick
+                    : styles.healthStatusWarning,
                 ]}
               >
                 {plant.health_status.charAt(0).toUpperCase() +
@@ -631,7 +634,7 @@ export default function PlantDetailScreen() {
               )}
             </View>
             {plant.last_climbing_date && (
-              <View style={[styles.infoRow, { marginTop: 12 }]}>
+              <View style={[styles.infoRow, styles.infoRowMarginTop]}>
                 <Ionicons name="calendar" size={20} color={theme.textSecondary} />
                 <Text style={styles.infoText}>Last Climbing: {plant.last_climbing_date}</Text>
               </View>
@@ -776,7 +779,7 @@ export default function PlantDetailScreen() {
                 key={def.nutrient}
                 style={[
                   styles.nutrientCard,
-                  { borderLeftColor: def.urgency === "high" ? "#f44336" : def.urgency === "medium" ? "#FF9800" : "#4CAF50" },
+                  def.urgency === "high" ? styles.nutrientCardHigh : def.urgency === "medium" ? styles.nutrientCardMedium : styles.nutrientCardLow,
                 ]}
               >
                 <Text style={styles.nutrientName}>{def.nutrient}</Text>

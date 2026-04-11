@@ -17,11 +17,11 @@ interface MonthCalendarViewProps {
 export default function MonthCalendarView({
   currentMonth,
   selectedDate,
-  taskColors,
+  taskColors: _taskColors,
   getTasksForDate,
   onSelectDate,
   onNavigateMonth,
-}: MonthCalendarViewProps) {
+}: MonthCalendarViewProps): React.JSX.Element {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -124,7 +124,9 @@ export default function MonthCalendarView({
                 <View
                   style={[
                     styles.monthCellBar,
-                    { backgroundColor: isSelected ? "#fff" : theme.primary },
+                    isSelected
+                      ? styles.monthCellBarSelected
+                      : styles.monthCellBarDefault,
                     { opacity: Math.min(0.4 + dayTasks.length * 0.15, 1) },
                   ]}
                 />

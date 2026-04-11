@@ -1,9 +1,12 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PestDiseaseRecord } from "../types/database.types";
 import { getPestDiseaseEmoji } from "../utils/plantHelpers";
 import { createStyles } from "../styles/plantDetailStyles";
+import { createStyles as createLocalStyles } from "../styles/pestDiseaseHistorySectionStyles";
+import { useTheme } from "../theme";
+import type { Theme } from "../theme/colors";
 
 interface SeasonalPestAlert {
   type: "pest" | "disease";
@@ -21,7 +24,9 @@ export default function PestDiseaseHistorySection({
   records,
   seasonalAlerts,
   styles,
-}: PestDiseaseHistorySectionProps) {
+}: PestDiseaseHistorySectionProps): React.JSX.Element {
+  const theme = useTheme() as Theme;
+  const localStyles = useMemo(() => createLocalStyles(theme), [theme]);
   return (
     <>
       {records.length > 0 && (
@@ -37,43 +42,37 @@ export default function PestDiseaseHistorySection({
                 key={record.id || index}
                 style={[
                   styles.pestCard,
-                  {
-                    borderLeftColor: record.resolved ? "#4CAF50" : "#f44336",
-                  },
+                  record.resolved
+                    ? localStyles.pestCardResolved
+                    : localStyles.pestCardUnresolved,
                 ]}
               >
                 <View style={styles.pestCardHeader}>
                   <Ionicons
                     name={record.type === "pest" ? "bug" : "medical"}
                     size={18}
-                    color={record.resolved ? "#4CAF50" : "#f44336"}
+                    color={record.resolved ? theme.success : theme.error}
                   />
                   <Text style={styles.pestCardName}>{getPestDiseaseEmoji(record.name, record.type)} {record.name}</Text>
                   {record.severity && (
                     <View
                       style={[
                         styles.severityBadge,
-                        {
-                          backgroundColor:
-                            record.severity === "high"
-                              ? "#FFEBEE"
-                              : record.severity === "medium"
-                                ? "#FFF3E0"
-                                : "#E8F5E9",
-                        },
+                        record.severity === "high"
+                          ? localStyles.severityHighBg
+                          : record.severity === "medium"
+                            ? localStyles.severityMediumBg
+                            : localStyles.severityLowBg,
                       ]}
                     >
                       <Text
                         style={[
                           styles.severityText,
-                          {
-                            color:
-                              record.severity === "high"
-                                ? "#C62828"
-                                : record.severity === "medium"
-                                  ? "#E65100"
-                                  : "#2E7D32",
-                          },
+                          record.severity === "high"
+                            ? localStyles.severityHighText
+                            : record.severity === "medium"
+                              ? localStyles.severityMediumText
+                              : localStyles.severityLowText,
                         ]}
                       >
                         {record.severity.toUpperCase()}
@@ -85,7 +84,7 @@ export default function PestDiseaseHistorySection({
                       <Ionicons
                         name="checkmark-circle"
                         size={14}
-                        color="#4CAF50"
+                        color={theme.success}
                       />
                       <Text style={styles.resolvedTextDetail}>Resolved</Text>
                     </View>
@@ -140,7 +139,7 @@ export default function PestDiseaseHistorySection({
                 <Ionicons
                   name={alert.type === "pest" ? "bug" : "medical"}
                   size={16}
-                  color="#E65100"
+                  color={theme.warning}
                 />
                 <Text style={styles.seasonAlertName}>{alert.issue}</Text>
                 <View style={styles.seasonAlertTypeBadge}>

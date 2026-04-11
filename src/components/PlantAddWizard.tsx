@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useMemo } from "react";
+import type { ImageStyle } from "react-native";
 import {
   View,
   Text,
@@ -41,7 +42,7 @@ interface Props {
 
 const STEP_LABELS = ["What", "Where", "How"];
 
-export function PlantAddWizard({ formState }: Props) {
+export function PlantAddWizard({ formState }: Props): React.JSX.Element {
   const {
     theme,
     insets,
@@ -178,7 +179,7 @@ export function PlantAddWizard({ formState }: Props) {
             <>
               <Image
                 source={{ uri: photoUri }}
-                style={formStyles.photoHeroImage}
+                style={formStyles.photoHeroImage as ImageStyle}
                 contentFit="cover"
                 transition={200}
                 cachePolicy="memory-disk"
@@ -300,7 +301,7 @@ export function PlantAddWizard({ formState }: Props) {
                   <Ionicons name="calendar" size={20} color={theme.primary} />
                 </View>
                 <View style={formStyles.dateCardContent}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <View style={wizardStyles.dateCardLabelRow}>
                     <Text style={formStyles.dateCardLabel}>Planting Date</Text>
                   </View>
                   <Text
@@ -353,7 +354,7 @@ export function PlantAddWizard({ formState }: Props) {
                   <Ionicons name="calendar" size={20} color={theme.primary} />
                 </View>
                 <View style={formStyles.dateCardContent}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <View style={wizardStyles.dateCardLabelRow}>
                     <Text style={formStyles.dateCardLabel}>Planting Date</Text>
                     <View style={formStyles.optionalBadge}>
                       <Text style={formStyles.optionalBadgeText}>Optional</Text>
@@ -401,6 +402,7 @@ export function PlantAddWizard({ formState }: Props) {
     ),
     [
       formStyles,
+      wizardStyles,
       theme,
       photoUri,
       pickImage,
@@ -605,11 +607,7 @@ export function PlantAddWizard({ formState }: Props) {
                 {opt.label}
               </Text>
               <Text
-                style={{
-                  fontSize: 10,
-                  color: theme.textTertiary,
-                  marginTop: 2,
-                }}
+                style={wizardStyles.spaceTypeCardHint}
               >
                 {opt.hint}
               </Text>
@@ -638,6 +636,7 @@ export function PlantAddWizard({ formState }: Props) {
     ),
     [
       formStyles,
+      wizardStyles,
       theme,
       parentLocationOptions,
       parentLocation,
@@ -1127,7 +1126,7 @@ export function PlantAddWizard({ formState }: Props) {
 
           {wizardStep === 3 ? (
             <TouchableOpacity
-              style={[wizardStyles.wizardSaveBtn, loading && { opacity: 0.6 }]}
+              style={[wizardStyles.wizardSaveBtn, loading && wizardStyles.wizardSaveBtnDisabled]}
               onPress={handleWizardSave}
               disabled={loading}
               activeOpacity={0.85}

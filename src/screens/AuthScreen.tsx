@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { auth } from '../lib/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from '@firebase/auth';
@@ -6,24 +6,53 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import FloatingLabelInput from '../components/FloatingLabelInput';
 import { createStyles } from '../styles/authStyles';
-import { getErrorMessage, getErrorCode } from '../utils/errorLogging';
+import { getErrorCode, logAuthError } from '../utils/errorLogging';
 
-export default function AuthScreen() {
+const MAX_AUTH_ATTEMPTS = 5;
+const AUTH_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const MIN_PASSWORD_LENGTH = 8;
+
+const isStrongPassword = (pwd: string): boolean => {
+  return pwd.length >= MIN_PASSWORD_LENGTH && /[A-Z]/.test(pwd) && /\d/.test(pwd);
+};
+
+export default function AuthScreen(): React.JSX.Element {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
+  const authAttempts = useRef<number[]>([]);
 
-  const handleAuth = async () => {
+  const isRateLimited = useCallback((): boolean => {
+    const now = Date.now();
+    authAttempts.current = authAttempts.current.filter(t => now - t < AUTH_WINDOW_MS);
+    return authAttempts.current.length >= MAX_AUTH_ATTEMPTS;
+  }, []);
+
+  const recordAttempt = useCallback(() => {
+    authAttempts.current.push(Date.now());
+  }, []);
+
+  const handleAuth = async (): Promise<void> => {
     if (!email || !password) {
       Alert.alert('Error', 'Please enter email and password');
       return;
     }
 
-    if (password.length < 6) {
+    if (isSignUp && !isStrongPassword(password)) {
+      Alert.alert('Error', 'Password must be at least 8 characters and include an uppercase letter and a number.');
+      return;
+    }
+
+    if (!isSignUp && password.length < 6) {
       Alert.alert('Error', 'Password must be at least 6 characters');
+      return;
+    }
+
+    if (isRateLimited()) {
+      Alert.alert('Too Many Attempts', 'Please wait 15 minutes before trying again.');
       return;
     }
 
@@ -37,22 +66,19 @@ export default function AuthScreen() {
         await signInWithEmailAndPassword(auth, email, password);
       }
     } catch (error: unknown) {
-      let message = getErrorMessage(error);
+      recordAttempt();
       const code = getErrorCode(error);
-      
-      // Provide user-friendly error messages
-      if (code === 'auth/email-already-in-use') {
-        message = 'This email is already registered. Please sign in instead.';
-      } else if (code === 'auth/invalid-email') {
+      logAuthError(`Auth failed: ${code ?? 'unknown'}`, error instanceof Error ? error : undefined);
+
+      let message: string;
+      if (code === 'auth/invalid-email') {
         message = 'Please enter a valid email address.';
-      } else if (code === 'auth/user-not-found') {
-        message = 'No account found with this email. Please sign up.';
-      } else if (code === 'auth/wrong-password') {
-        message = 'Incorrect password. Please try again.';
-      } else if (code === 'auth/invalid-credential') {
+      } else if (code === 'auth/too-many-requests') {
+        message = 'Too many attempts. Please try again later.';
+      } else {
         message = 'Invalid email or password. Please try again.';
       }
-      
+
       Alert.alert('Error', message);
     } finally {
       setLoading(false);
@@ -82,7 +108,7 @@ export default function AuthScreen() {
           />
 
           <FloatingLabelInput
-            label="Password (min 6 characters)"
+            label={isSignUp ? "Password (min 8 chars, 1 uppercase, 1 number)" : "Password"}
             value={password}
             onChangeText={setPassword}
             secureTextEntry

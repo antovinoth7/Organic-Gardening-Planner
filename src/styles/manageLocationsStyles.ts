@@ -1,7 +1,7 @@
 import { StyleSheet } from "react-native";
-import { useTheme } from "../theme";
+import type { Theme } from "../theme/colors";
 
-export const createStyles = (theme: ReturnType<typeof useTheme>) =>
+export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create> =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -86,7 +86,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       backgroundColor: theme.primary,
       alignItems: "center",
       justifyContent: "center",
-      shadowColor: "#000",
+      shadowColor: theme.shadow,
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.18,
       shadowRadius: 4,
@@ -262,7 +262,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     savingText: {
       fontSize: 14,
-      color: "#fff",
+      color: theme.textInverse,
       fontWeight: "600",
     },
 
@@ -282,7 +282,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     },
     modalTabActive: {
       backgroundColor: theme.primary,
-      shadowColor: "#000",
+      shadowColor: theme.shadow,
       shadowOffset: { width: 0, height: 1 },
       shadowOpacity: 0.12,
       shadowRadius: 3,
@@ -294,7 +294,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       color: theme.text,
     },
     modalTabTextActive: {
-      color: "#fff",
+      color: theme.textInverse,
       fontWeight: "700",
     },
     modalFooter: {
@@ -315,7 +315,7 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
     modalFooterButtonTextPrimary: {
       fontSize: 14,
       fontWeight: "700",
-      color: "#fff",
+      color: theme.textInverse,
     },
     profileSection: {
       marginBottom: 16,
@@ -490,5 +490,15 @@ export const createStyles = (theme: ReturnType<typeof useTheme>) =>
       width: 7,
       height: 7,
       borderRadius: 4,
+    },
+    modalContentTall: {
+      maxHeight: "88%",
+    },
+    scrollContentPadding: {
+      paddingTop: 10,
+      paddingBottom: 4,
+    },
+    shortNameWrap: {
+      marginTop: 8,
     },
   });

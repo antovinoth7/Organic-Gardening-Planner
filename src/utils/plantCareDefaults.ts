@@ -460,7 +460,7 @@ const findProfileByVariety = (
   const key = Object.keys(PLANT_CARE_PROFILES).find((profileKey) =>
     profileKey.endsWith(`:${plantVariety}`),
   );
-  return key ? PLANT_CARE_PROFILES[key] : null;
+  return key ? (PLANT_CARE_PROFILES[key] ?? null) : null;
 };
 
 const applyOverrides = (

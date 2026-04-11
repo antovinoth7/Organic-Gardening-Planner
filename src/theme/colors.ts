@@ -5,14 +5,14 @@
 export const lightTheme = {
   // Background colors
   background: '#f5f5f5',
-  backgroundSecondary: '#fff',
+  backgroundSecondary: '#ffffff',
   backgroundTertiary: '#e8f5e9',
   
   // Text colors
   text: '#1a1a1a',
   textSecondary: '#2f2f2f',
   textTertiary: '#4a4a4a',
-  textInverse: '#fff',
+  textInverse: '#ffffff',
   
   // Primary colors
   primary: '#2e7d32',
@@ -35,30 +35,31 @@ export const lightTheme = {
   info: '#2196f3',
   warningLight: '#fff3e0',
   errorLight: '#ffebee',
+  coconut: '#8B5A2B',
   
   // Special colors
   overlay: 'rgba(0,0,0,0.5)',
   shadow: '#000',
 
   // Card & button
-  card: '#fff',
-  buttonText: '#fff',
+  card: '#ffffff',
+  buttonText: '#ffffff',
   
   // Input colors
-  inputBackground: '#fff',
+  inputBackground: '#ffffff',
   inputText: '#1a1a1a',
   inputPlaceholder: '#5f5f5f',
   inputBorder: '#dddddd',
   
   // Picker colors
-  pickerBackground: '#fff',
+  pickerBackground: '#ffffff',
   pickerText: '#333',
   pickerBorder: '#dddddd',
   
   // Tab bar
   tabBarActive: '#2e7d32',
   tabBarInactive: 'gray',
-  tabBarBackground: '#fff',
+  tabBarBackground: '#ffffff',
 };
 
 export const darkTheme = {
@@ -71,7 +72,7 @@ export const darkTheme = {
   text: '#fafafa',
   textSecondary: '#d6d6d6',
   textTertiary: '#b8b8b8',
-  textInverse: '#000',
+  textInverse: '#000000',
   
   // Primary colors
   primary: '#4caf50',
@@ -94,6 +95,7 @@ export const darkTheme = {
   info: '#42a5f5',
   warningLight: '#4a3a1f',
   errorLight: '#4a1f1f',
+  coconut: '#A67B5B',
   
   // Special colors
   overlay: 'rgba(0,0,0,0.8)',

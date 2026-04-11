@@ -35,7 +35,7 @@ export default function TaskCard({
   isOverdue,
   disabled,
   priority,
-}: TaskCardProps) {
+}: TaskCardProps): React.JSX.Element {
   const theme = useTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const color = taskColors[task.task_type] || theme.textSecondary;
