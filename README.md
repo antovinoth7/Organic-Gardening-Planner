@@ -234,13 +234,19 @@ app-local file storage.
 
 ```text
 src/
-  components/    shared UI components
-  lib/           firebase init, image storage, AsyncStorage wrapper
-  screens/       app screens
-  services/      plants, tasks, journal, backup, locations, plant catalog
-  theme/         light/dark theme tokens and provider
-  types/         TypeScript data models
-  utils/         network, zip, logging, lifecycle, domain helpers
+  components/         shared UI components
+    calendar/         calendar views and swipeable task cards
+    forms/            plant edit form sections and add wizard steps
+    modals/           task, photo, discard, and pest/disease modals
+  hooks/              custom React hooks
+  lib/                firebase init, image storage, AsyncStorage wrapper
+  navigation/         tab and stack navigator definitions
+  screens/            app screens
+  services/           plants, tasks, journal, backup, locations, plant catalog
+  styles/             StyleSheet files per component
+  theme/              light/dark theme tokens and provider
+  types/              TypeScript data models
+  utils/              network, zip, logging, lifecycle, domain helpers
 ```
 
 ## Data Model
@@ -283,6 +289,7 @@ Stored image fields:
 ## Runtime Structure
 
 - App entry: `App.tsx`
+- Navigation: `src/navigation/AppNavigator.tsx`
 - Providers:
   - `ErrorBoundary`
   - `SafeAreaProvider`

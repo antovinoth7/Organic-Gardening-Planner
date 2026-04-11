@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import PhotoSourceModal from "../components/PhotoSourceModal";
+import PhotoSourceModal from "../components/modals/PhotoSourceModal";
 import FloatingLabelInput from "../components/FloatingLabelInput";
 import ThemedDropdown from "../components/ThemedDropdown";
 import {

@@ -12,7 +12,7 @@ import {
   getDoc,
   addDoc,
   updateDoc,
-  deleteDoc,
+  writeBatch,
   query,
   where,
   orderBy,
@@ -22,10 +22,12 @@ import { getData, setData, KEYS } from "../lib/storage";
 import { withTimeoutAndRetry, FIRESTORE_WRITE_TIMEOUT_MS, FIRESTORE_READ_TIMEOUT_MS } from "../utils/firestoreTimeout";
 import { logError } from "../utils/errorLogging";
 import { logger } from "../utils/logger";
+import { convertTimestamp } from "../utils/dateHelpers";
 import {
   getCached,
   setCached,
   invalidate,
+  dedup,
   CACHE_KEYS,
 } from "../lib/dataCache";
 import { TASK_DUE_TIME_HOUR, MS_PER_DAY } from "../utils/taskConstants";
@@ -75,24 +77,21 @@ export const getTaskTemplates = async (): Promise<TaskTemplate[]> => {
       orderBy("created_at", "desc"),
     );
 
-    const snapshot = await withTimeoutAndRetry(() => getDocs(q), {
-      timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS,
-    });
+    const tasks = await dedup(CACHE_KEYS.TASK_TEMPLATES, async () => {
+      const snapshot = await withTimeoutAndRetry(() => getDocs(q), {
+        timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS,
+      });
 
-    const tasks = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-      created_at:
-        doc.data().created_at?.toDate?.()?.toISOString() ||
-        doc.data().created_at,
-      next_due_at:
-        doc.data().next_due_at?.toDate?.()?.toISOString() ||
-        doc.data().next_due_at,
-    })) as TaskTemplate[];
+      return snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        created_at: convertTimestamp(doc.data().created_at),
+        next_due_at: convertTimestamp(doc.data().next_due_at),
+      })) as TaskTemplate[];
+    });
 
     // Cache locally
     await setData(KEYS.TASKS, tasks);
-    setCached(CACHE_KEYS.TASK_TEMPLATES, tasks);
 
     return tasks;
   } catch (error) {
@@ -140,12 +139,8 @@ export const getTodayTasks = async (): Promise<TaskTemplate[]> => {
     let tasks = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
-      created_at:
-        doc.data().created_at?.toDate?.()?.toISOString() ||
-        doc.data().created_at,
-      next_due_at:
-        doc.data().next_due_at?.toDate?.()?.toISOString() ||
-        doc.data().next_due_at,
+      created_at: convertTimestamp(doc.data().created_at),
+      next_due_at: convertTimestamp(doc.data().next_due_at),
     })) as TaskTemplate[];
 
     // Filter tasks: include overdue tasks and tasks due today
@@ -207,9 +202,9 @@ export const createTaskTemplate = async (
     id: docRef.id,
     ...template,
     user_id: user.uid,
-    created_at: newTemplate.created_at.toDate().toISOString(),
+    created_at: convertTimestamp(newTemplate.created_at),
     next_due_at: newTemplate.next_due_at
-      ? newTemplate.next_due_at.toDate().toISOString()
+      ? convertTimestamp(newTemplate.next_due_at)
       : template.next_due_at,
   } as TaskTemplate;
 
@@ -259,10 +254,8 @@ export const updateTaskTemplate = async (
   const result = {
     id,
     ...doc_data,
-    created_at:
-      doc_data.created_at?.toDate?.()?.toISOString() || doc_data.created_at,
-    next_due_at:
-      doc_data.next_due_at?.toDate?.()?.toISOString() || doc_data.next_due_at,
+    created_at: convertTimestamp(doc_data.created_at),
+    next_due_at: convertTimestamp(doc_data.next_due_at),
   } as TaskTemplate;
 
   invalidate(CACHE_KEYS.TASK_TEMPLATES, CACHE_KEYS.TODAY_TASKS);
@@ -292,26 +285,23 @@ export const deleteTasksForPlantIds = async (
     (log) => log.plant_id && plantIdSet.has(log.plant_id),
   );
 
-  for (const task of tasksToDelete) {
-    try {
-      await withTimeoutAndRetry(
-        () => deleteDoc(doc(db, TASKS_COLLECTION, task.id)),
-        { timeoutMs: FIRESTORE_READ_TIMEOUT_MS },
-      );
-    } catch (error) {
-      logger.warn(`Failed to delete task template ${task.id}`, error as Error);
-    }
-  }
+  // Batch delete all related templates and logs atomically
+  // Firestore batches support up to 500 operations
+  const BATCH_LIMIT = 500;
+  const allDeletes = [
+    ...tasksToDelete.map((task) => doc(db, TASKS_COLLECTION, task.id)),
+    ...logsToDelete.map((log) => doc(db, TASK_LOGS_COLLECTION, log.id)),
+  ];
 
-  for (const log of logsToDelete) {
-    try {
-      await withTimeoutAndRetry(
-        () => deleteDoc(doc(db, TASK_LOGS_COLLECTION, log.id)),
-        { timeoutMs: FIRESTORE_READ_TIMEOUT_MS },
-      );
-    } catch (error) {
-      logger.warn(`Failed to delete task log ${log.id}`, error as Error);
+  for (let i = 0; i < allDeletes.length; i += BATCH_LIMIT) {
+    const chunk = allDeletes.slice(i, i + BATCH_LIMIT);
+    const batch = writeBatch(db);
+    for (const ref of chunk) {
+      batch.delete(ref);
     }
+    await withTimeoutAndRetry(() => batch.commit(), {
+      timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS,
+    });
   }
 
   const cachedTasks = await getData<TaskTemplate>(KEYS.TASKS);
@@ -404,7 +394,9 @@ export const markTaskDone = async (
   }
 
   // Insert task log with optional notes
-  const logDocRef = await addDoc(collection(db, TASK_LOGS_COLLECTION), {
+  const logDocRef = doc(collection(db, TASK_LOGS_COLLECTION));
+  const doneAtIso = doneAt.toISOString();
+  const logData = {
     user_id: user.uid,
     template_id: template.id,
     plant_id: template.plant_id,
@@ -413,9 +405,42 @@ export const markTaskDone = async (
     notes: notes || null,
     product_used: productUsed || null,
     created_at: Timestamp.now(),
+  };
+
+  // Update next due date
+  const templateDocRef = doc(db, TASKS_COLLECTION, template.id);
+  const templateUpdates: { next_due_at?: Timestamp; enabled?: boolean } = {};
+  let nextDueAtIso: string | undefined;
+  if (frequencyDays <= 0) {
+    templateUpdates.enabled = false;
+    templateUpdates.next_due_at = Timestamp.fromDate(doneAt);
+    nextDueAtIso = doneAtIso;
+  } else if (!Number.isNaN(nextDueAt.getTime())) {
+    templateUpdates.next_due_at = Timestamp.fromDate(nextDueAt);
+    nextDueAtIso = nextDueAt.toISOString();
+  }
+
+  // Determine plant last-care update
+  const plantLastCareField =
+    TASK_TYPE_TO_PLANT_LAST_CARE_FIELD[template.task_type];
+
+  // Atomic batch: create log + update template + update plant in one commit
+  const batch = writeBatch(db);
+  batch.set(logDocRef, logData);
+  if (Object.keys(templateUpdates).length > 0) {
+    batch.update(templateDocRef, templateUpdates);
+  }
+  if (template.plant_id && plantLastCareField) {
+    batch.update(doc(db, PLANTS_COLLECTION, template.plant_id), {
+      [plantLastCareField]: doneAtIso,
+    });
+  }
+  await withTimeoutAndRetry(() => batch.commit(), {
+    timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS,
   });
 
-  const doneAtIso = doneAt.toISOString();
+  // ── Update local caches after successful batch commit ──
+
   const newTaskLog: TaskLog = {
     id: logDocRef.id,
     user_id: user.uid,
@@ -431,31 +456,14 @@ export const markTaskDone = async (
   cachedLogs.unshift(newTaskLog);
   await setData(KEYS.TASK_LOGS, cachedLogs);
 
-  // Update next due date
-  const docRef = doc(db, TASKS_COLLECTION, template.id);
-  const updates: { next_due_at?: Timestamp; enabled?: boolean } = {};
-  let nextDueAtIso: string | undefined;
-  if (frequencyDays <= 0) {
-    updates.enabled = false;
-    updates.next_due_at = Timestamp.fromDate(doneAt);
-    nextDueAtIso = doneAtIso;
-  } else if (!Number.isNaN(nextDueAt.getTime())) {
-    updates.next_due_at = Timestamp.fromDate(nextDueAt);
-    nextDueAtIso = nextDueAt.toISOString();
-  }
-
-  if (Object.keys(updates).length > 0) {
-    await updateDoc(docRef, updates);
-  }
-
-  if (Object.keys(updates).length > 0) {
+  if (Object.keys(templateUpdates).length > 0) {
     const cachedTasks = await getData<TaskTemplate>(KEYS.TASKS);
     const taskIndex = cachedTasks.findIndex((task) => task.id === template.id);
     if (taskIndex !== -1) {
       cachedTasks[taskIndex] = {
         ...cachedTasks[taskIndex]!,
-        ...(typeof updates.enabled === "boolean"
-          ? { enabled: updates.enabled }
+        ...(typeof templateUpdates.enabled === "boolean"
+          ? { enabled: templateUpdates.enabled }
           : {}),
         ...(nextDueAtIso ? { next_due_at: nextDueAtIso } : {}),
       };
@@ -463,30 +471,17 @@ export const markTaskDone = async (
     }
   }
 
-  const plantLastCareField =
-    TASK_TYPE_TO_PLANT_LAST_CARE_FIELD[template.task_type];
   if (template.plant_id && plantLastCareField) {
-    try {
-      await updateDoc(doc(db, PLANTS_COLLECTION, template.plant_id), {
+    const cachedPlants = await getData<Plant>(KEYS.PLANTS);
+    const plantIndex = cachedPlants.findIndex(
+      (plant) => plant.id === template.plant_id,
+    );
+    if (plantIndex !== -1) {
+      cachedPlants[plantIndex] = {
+        ...cachedPlants[plantIndex]!,
         [plantLastCareField]: doneAtIso,
-      });
-
-      const cachedPlants = await getData<Plant>(KEYS.PLANTS);
-      const plantIndex = cachedPlants.findIndex(
-        (plant) => plant.id === template.plant_id,
-      );
-      if (plantIndex !== -1) {
-        cachedPlants[plantIndex] = {
-          ...cachedPlants[plantIndex]!,
-          [plantLastCareField]: doneAtIso,
-        };
-        await setData(KEYS.PLANTS, cachedPlants);
-      }
-    } catch (error) {
-      logger.warn(
-        `Failed to update ${plantLastCareField} for plant ${template.plant_id}`,
-        error as Error,
-      );
+      };
+      await setData(KEYS.PLANTS, cachedPlants);
     }
   }
 
@@ -531,11 +526,8 @@ export const getTaskLogs = async (templateId?: string): Promise<TaskLog[]> => {
     const logs = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
-      done_at:
-        doc.data().done_at?.toDate?.()?.toISOString() || doc.data().done_at,
-      created_at:
-        doc.data().created_at?.toDate?.()?.toISOString() ||
-        doc.data().created_at,
+      done_at: convertTimestamp(doc.data().done_at),
+      created_at: convertTimestamp(doc.data().created_at),
     })) as TaskLog[];
 
     // Sort in-memory by done_at descending
@@ -593,11 +585,8 @@ export const getTodayTaskLogs = async (): Promise<TaskLog[]> => {
     const logs = snapshot.docs.map((d) => ({
       id: d.id,
       ...d.data(),
-      done_at:
-        d.data().done_at?.toDate?.()?.toISOString() || d.data().done_at,
-      created_at:
-        d.data().created_at?.toDate?.()?.toISOString() ||
-        d.data().created_at,
+      done_at: convertTimestamp(d.data().done_at),
+      created_at: convertTimestamp(d.data().created_at),
     })) as TaskLog[];
 
     logs.sort(

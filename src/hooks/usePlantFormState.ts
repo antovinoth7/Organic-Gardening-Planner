@@ -53,164 +53,32 @@ import { toLocalDateString } from "../utils/dateHelpers";
 import { logger } from "../utils/logger";
 import { getErrorMessage } from "../utils/errorLogging";
 import type { EdgeInsets } from "react-native-safe-area-context";
+import {
+  buildGeneratedPlantNameBase,
+  isGeneratedPlantName,
+  buildGeneratedPlantName,
+} from "../utils/plantNameGenerator";
+import {
+  NOTES_MAX_LENGTH,
+  sanitizeNumberText,
+  type FormSectionKey,
+  CATEGORY_OPTIONS,
+  HEALTH_OPTIONS,
+  GROWTH_STAGE_OPTIONS,
+  getFrequencyLabel,
+  adjustFrequency,
+} from "../utils/plantFormConstants";
 
-// ─── Module-level constants / pure utilities (importable by components) ─────
-
-export const NOTES_MAX_LENGTH = 500;
-
-export const sanitizeNumberText = (value: string): string =>
-  value.replace(/[^0-9]/g, "");
-
-export type FormSectionKey =
-  | "basic"
-  | "location"
-  | "care"
-  | "health"
-  | "harvest"
-  | "coconut"
-  | "notesHistory"
-  | "pestDisease";
-
-export const CATEGORY_OPTIONS = [
-  { label: "🥬 Vegetable", value: "vegetable" },
-  { label: "🍇 Fruit", value: "fruit_tree" },
-  { label: "🥥 Coconut", value: "coconut_tree" },
-  { label: "🌿 Herb", value: "herb" },
-  { label: "🌲 Timber", value: "timber_tree" },
-  { label: "🌸 Flower", value: "flower" },
-  { label: "🌱 Shrub", value: "shrub" },
-] as const;
-
-export const HEALTH_OPTIONS = [
-  { label: "✅ Healthy", value: "healthy" },
-  { label: "⚠️ Stressed", value: "stressed" },
-  { label: "🔄 Recovering", value: "recovering" },
-  { label: "❌ Sick", value: "sick" },
-] as const;
-
-export const GROWTH_STAGE_OPTIONS = [
-  { label: "🌱 Seedling", value: "seedling" },
-  { label: "🌿 Vegetative", value: "vegetative" },
-  { label: "🌸 Flowering", value: "flowering" },
-  { label: "🍎 Fruiting", value: "fruiting" },
-  { label: "🌳 Mature", value: "mature" },
-  { label: "💤 Dormant", value: "dormant" },
-] as const;
-
-export const getFrequencyLabel = (days: string): string => {
-  const n = parseInt(days, 10);
-  if (isNaN(n) || n < 1) return "";
-  if (n === 1) return "Daily";
-  if (n === 7) return "Weekly";
-  if (n === 14) return "Fortnightly";
-  if (n === 30) return "Monthly";
-  return `Every ${n} days`;
-};
-
-export const adjustFrequency = (
-  current: string,
-  delta: number,
-  setter: (value: string) => void,
-): void => {
-  const n = parseInt(current, 10);
-  const next = Math.max(1, (isNaN(n) ? 0 : n) + delta);
-  setter(next.toString());
-};
-
-// ─── Internal name-generation helpers ────────────────────────────────────────
-
-const buildGeneratedPlantNameBase = (
-  plantType: PlantType | string,
-  plantVariety: string,
-  variety: string,
-  plantingDate?: string,
-  parentLocation?: string,
-  locationShortName?: string,
-): string => {
-  const pv = plantVariety.trim();
-  const v = variety.trim();
-  if (!pv) return "";
-
-  let base: string;
-  if (!v) {
-    base = pv;
-  } else if (v.toLowerCase().includes(pv.toLowerCase())) {
-    base = v;
-  } else {
-    base = `${pv} - ${v}`;
-  }
-
-  const isTree = ["fruit_tree", "timber_tree", "coconut_tree"].includes(
-    plantType as string,
-  );
-  if (isTree && plantingDate) {
-    const d = new Date(plantingDate);
-    if (!isNaN(d.getTime())) {
-      base = `${base} '${String(d.getFullYear()).slice(2)}`;
-    }
-  }
-
-  const loc = parentLocation?.trim();
-  if (loc) {
-    const token =
-      locationShortName?.trim() || (loc.split(/\s+/)[0] ?? '').slice(0, 10);
-    if (token) base = `${base} (${token})`;
-  }
-
-  return base;
-};
-
-const escapeRegExp = (value: string): string =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-const isGeneratedPlantName = (value: string, baseName: string): boolean => {
-  const nv = value.trim();
-  const nb = baseName.trim();
-  if (!nv || !nb) return false;
-  const pattern = new RegExp(`^${escapeRegExp(nb)}(?: #(\\d+))?$`, "i");
-  return pattern.test(nv);
-};
-
-const buildGeneratedPlantName = (
-  baseName: string,
-  existingPlants: Plant[],
-  currentPlantId?: string,
-  currentGeneratedName?: string,
-): string => {
-  const normalizedBase = baseName.trim();
-  if (!normalizedBase) return "";
-
-  if (
-    currentPlantId &&
-    currentGeneratedName &&
-    isGeneratedPlantName(currentGeneratedName, normalizedBase)
-  ) {
-    return currentGeneratedName;
-  }
-
-  const pattern = new RegExp(
-    `^${escapeRegExp(normalizedBase)}(?: #(\\d+))?$`,
-    "i",
-  );
-  let baseTaken = false;
-  const usedSuffixes = new Set<number>();
-
-  existingPlants.forEach((plant) => {
-    if (plant.id === currentPlantId) return;
-    const match = plant.name?.trim().match(pattern);
-    if (!match) return;
-    if (!match[1]) {
-      baseTaken = true;
-    } else {
-      const suffix = parseInt(match[1], 10);
-      if (!Number.isNaN(suffix)) usedSuffixes.add(suffix);
-    }
-  });
-
-  if (!baseTaken) return normalizedBase;
-  let next = 2;
-  while (usedSuffixes.has(next)) next++;
-  return `${normalizedBase} #${next}`;
+// Re-export for consumers that already import from this module
+export {
+  NOTES_MAX_LENGTH,
+  sanitizeNumberText,
+  type FormSectionKey,
+  CATEGORY_OPTIONS,
+  HEALTH_OPTIONS,
+  GROWTH_STAGE_OPTIONS,
+  getFrequencyLabel,
+  adjustFrequency,
 };
 
 // ─── PlantFormStateReturn interface ──────────────────────────────────────────

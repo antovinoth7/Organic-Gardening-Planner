@@ -1,10 +1,10 @@
 import React, { useMemo } from "react";
 import { View } from "react-native";
 import { usePlantFormState } from "../hooks/usePlantFormState";
-import { PlantAddWizard } from "../components/PlantAddWizard";
-import { PlantEditForm } from "../components/PlantEditForm";
-import DiscardChangesModal from "../components/DiscardChangesModal";
-import PhotoSourceModal from "../components/PhotoSourceModal";
+import { PlantAddWizard } from "../components/forms/PlantAddWizard";
+import { PlantEditForm } from "../components/forms/PlantEditForm";
+import DiscardChangesModal from "../components/modals/DiscardChangesModal";
+import PhotoSourceModal from "../components/modals/PhotoSourceModal";
 import { useTheme } from "../theme";
 import { createStyles } from "../styles/plantFormStyles";
 

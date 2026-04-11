@@ -27,6 +27,7 @@ import {
   resolveLocalImageUri,
 } from "../lib/imageStorage";
 import { logger } from "../utils/logger";
+import { collectReferencedFilenames } from "../utils/photoFilename";
 
 const BACKUP_PLANT_PAGE_SIZE = 200;
 
@@ -107,35 +108,7 @@ const resolveImportedImageUri = async (
 const collectReferencedImageFilenames = (
   plants: Plant[],
   journal: JournalEntry[]
-): Set<string> => {
-  const imageFilenames = new Set<string>();
-
-  plants.forEach((plant) => {
-    const photoFilename =
-      plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "");
-    if (photoFilename) {
-      imageFilenames.add(photoFilename);
-    }
-  });
-
-  journal.forEach((entry) => {
-    const legacyUrls =
-      entry.photo_urls && entry.photo_urls.length > 0
-        ? entry.photo_urls
-        : entry.photo_url
-        ? [entry.photo_url]
-        : [];
-    const photoFilenames =
-      entry.photo_filenames && entry.photo_filenames.length > 0
-        ? entry.photo_filenames
-        : legacyUrls
-            .map((uri) => getFilenameFromUri(uri))
-            .filter((filename): filename is string => !!filename);
-    photoFilenames.forEach((filename) => imageFilenames.add(filename));
-  });
-
-  return imageFilenames;
-};
+): Set<string> => collectReferencedFilenames(plants, journal);
 
 const resolveImageFilesFromFilenames = async (
   imageFilenames: Set<string>

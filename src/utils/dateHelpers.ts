@@ -7,6 +7,20 @@
 import { logger } from './logger';
 
 /**
+ * Convert a Firestore Timestamp (or already-converted string) to an ISO string.
+ * Handles both `Timestamp` objects and plain string values safely.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Firestore document field type is untyped
+export const convertTimestamp = (value: any): string | undefined => {
+  if (!value) return undefined;
+  if (typeof value === 'string') return value;
+  if (typeof value?.toDate === 'function') {
+    return value.toDate().toISOString();
+  }
+  return undefined;
+};
+
+/**
  * Format a Date to a local YYYY-MM-DD string without UTC shift.
  */
 export const toLocalDateString = (date: Date): string => {

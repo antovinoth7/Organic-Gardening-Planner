@@ -25,6 +25,7 @@ import { getData, setData, KEYS } from '../lib/storage';
 import { withTimeoutAndRetry, FIRESTORE_WRITE_TIMEOUT_MS, FIRESTORE_READ_TIMEOUT_MS } from '../utils/firestoreTimeout';
 import { logError } from '../utils/errorLogging';
 import { logger } from '../utils/logger';
+import { convertTimestamp } from '../utils/dateHelpers';
 import {
   getCached,
   setCached,
@@ -82,7 +83,7 @@ export const getJournalEntries = async (): Promise<JournalEntry[]> => {
             photo_filenames: photoFilenames,
             photo_urls: resolvedPhotoUrls,
             photo_url: resolvedLegacy,
-            created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at
+            created_at: convertTimestamp(data.created_at)
           };
         } catch (error) {
           logger.warn(`Failed to resolve images for journal ${doc.id}`, error as Error);
@@ -94,7 +95,7 @@ export const getJournalEntries = async (): Promise<JournalEntry[]> => {
             photo_filenames: [],
             photo_urls: [],
             photo_url: null,
-            created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at
+            created_at: convertTimestamp(data.created_at)
           };
         }
       })
@@ -176,7 +177,7 @@ export const createJournalEntry = async (
     photo_filenames: photoFilenames,
     photo_urls: photoUrlsForCache,
     user_id: user.uid,
-    created_at: firestoreEntry.created_at.toDate().toISOString()
+    created_at: convertTimestamp(firestoreEntry.created_at)
   } as JournalEntry;
   
   // Update local cache
@@ -258,7 +259,7 @@ export const updateJournalEntry = async (
     ...doc_data,
     photo_filenames: photoFilenames,
     photo_urls: resolvedPhotoUrls,
-    created_at: doc_data.created_at?.toDate?.()?.toISOString() || doc_data.created_at
+    created_at: convertTimestamp(doc_data.created_at)
   } as JournalEntry;
   
   // Update local cache
@@ -382,7 +383,7 @@ export const getJournalMetadata = async (): Promise<JournalEntry[]> => {
         photo_filenames: data.photo_filenames || [],
         photo_urls: [],
         photo_url: null,
-        created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at,
+        created_at: convertTimestamp(data.created_at),
       } as unknown as JournalEntry;
     });
 

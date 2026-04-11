@@ -20,7 +20,11 @@ React Native + Expo application for personal organic garden management. Targets 
 ```text
 src/
 ├── components/     # Reusable UI components (.tsx, PascalCase filenames)
+│   ├── calendar/   # Calendar-specific components (views, task cards)
+│   ├── forms/      # Plant form components (edit sections, wizard steps)
+│   └── modals/     # Modal dialogs (task, photo, discard, pest/disease)
 ├── hooks/          # Custom React hooks (use*.ts)
+├── navigation/     # Navigator definitions (AppNavigator.tsx)
 ├── screens/        # Screen-level components (*Screen.tsx)
 ├── services/       # Data access layer (camelCase .ts, one file per domain)
 ├── lib/            # Firebase init, storage helpers, image handling, caching
@@ -160,7 +164,6 @@ export function MyComponent({ value, onPress }: Props) {
 
 ## Error Handling
 
-- Wrap all async operations in the `asyncWrapper` utility.
 - Use `ErrorBoundary` component around screen trees.
 - Never swallow errors silently. At minimum, log to Sentry.
 - User-facing errors: use a toast or modal — never `console.error` alone.
@@ -182,7 +185,7 @@ export function MyComponent({ value, onPress }: Props) {
 
 ## Navigation Standards
 
-- Navigation lives in the root `App.tsx` navigator definitions.
+- Navigation lives in `src/navigation/AppNavigator.tsx`.
 - All param lists are defined in `src/types/navigation.types.ts` — add new screens there first.
 - Screen components use typed hooks: `useNavigation<ScreenNavigationProp>()` and `useRoute<ScreenRouteProp>()`. Import the convenience types from `src/types/navigation.types.ts`.
 - Never use `useNavigation()` untyped or cast `route.params as Record<string, unknown>`.
@@ -295,7 +298,7 @@ Before generating any code for this project, verify each item:
 - [ ] File follows the naming convention for its type (see Naming Conventions table)
 - [ ] New component has a colocated `*Styles.ts` file in `src/styles/`
 - [ ] New service implements cache → auth → Firestore → AsyncStorage fallback
-- [ ] Reuses existing utilities: `withTimeoutAndRetry`, `dataCache`, `refreshAuthToken`, `logger`, `asyncWrapper`
+- [ ] Reuses existing utilities: `withTimeoutAndRetry`, `dataCache`, `refreshAuthToken`, `logger`
 
 ### TypeScript
 

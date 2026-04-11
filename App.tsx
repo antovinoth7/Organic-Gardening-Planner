@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { NavigationContainer } from "@react-navigation/native";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import * as NavigationBar from "expo-navigation-bar";
 import { auth } from "./src/lib/firebase";
@@ -20,24 +18,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-// Screens
+// Screens & Navigation
 import AuthScreen from "./src/screens/AuthScreen";
-import TodayScreen from "./src/screens/TodayScreen";
-import PlantsScreen from "./src/screens/PlantsScreen";
-import ArchivedPlantsScreen from "./src/screens/ArchivedPlantsScreen";
-import PlantFormScreen from "./src/screens/PlantFormScreen";
-import PlantDetailScreen from "./src/screens/PlantDetailScreen";
-import CalendarScreen from "./src/screens/CalendarScreen";
-import JournalScreen from "./src/screens/JournalScreen";
-import JournalFormScreen from "./src/screens/JournalFormScreen";
-import SettingsScreen from "./src/screens/SettingsScreen";
-import MoreScreen from "./src/screens/MoreScreen";
-import ManageLocationsScreen from "./src/screens/ManageLocationsScreen";
-import ManagePlantCatalogScreen from "./src/screens/ManagePlantCatalogScreen";
-import {
-  FloatingTabBarProvider,
-  FloatingTabBar,
-} from "./src/components/FloatingTabBar";
+import { AppTabs } from "./src/navigation/AppNavigator";
 
 const expoExtra = (Constants.expoConfig?.extra ?? {}) as Record<
   string,
@@ -196,107 +179,7 @@ rejectionTracking.enable({
   },
 });
 
-const Tab = createBottomTabNavigator();
-const Stack = createNativeStackNavigator();
-
-const PlantStack = (): React.JSX.Element => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="PlantsList" component={PlantsScreen} />
-    <Stack.Screen name="ArchivedPlants" component={ArchivedPlantsScreen} />
-    <Stack.Screen name="PlantDetail" component={PlantDetailScreen} />
-    <Stack.Screen name="PlantForm" component={PlantFormScreen} />
-  </Stack.Navigator>
-);
-
-const JournalStack = (): React.JSX.Element => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="JournalList" component={JournalScreen} />
-    <Stack.Screen name="JournalForm" component={JournalFormScreen} />
-  </Stack.Navigator>
-);
-
-const MoreStack = (): React.JSX.Element => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="MoreHome" component={MoreScreen} />
-    <Stack.Screen name="ManageLocations" component={ManageLocationsScreen} />
-    <Stack.Screen
-      name="ManagePlantCatalog"
-      component={ManagePlantCatalogScreen}
-    />
-    <Stack.Screen name="Settings" component={SettingsScreen} />
-  </Stack.Navigator>
-);
-
-const AppTabs = (): React.JSX.Element => {
-  const theme = useTheme();
-
-  return (
-    <FloatingTabBarProvider>
-      <Tab.Navigator
-        tabBar={(props) => <FloatingTabBar {...props} />}
-        screenOptions={({ route }) => ({
-          tabBarIcon: ({ color, size }) => {
-            let iconName: keyof typeof Ionicons.glyphMap = "home";
-            if (route.name === "Home") iconName = "home";
-            else if (route.name === "Plants") iconName = "leaf";
-            else if (route.name === "Care Plan") iconName = "calendar";
-            else if (route.name === "Journal") iconName = "book";
-            else if (route.name === "More") iconName = "ellipsis-vertical";
-            return <Ionicons name={iconName} size={size} color={color} />;
-          },
-          tabBarActiveTintColor: theme.tabBarActive,
-          tabBarInactiveTintColor: theme.tabBarInactive,
-          tabBarHideOnKeyboard: true,
-          headerShown: false,
-        })}
-      >
-        <Tab.Screen name="Home" component={TodayScreen} />
-        <Tab.Screen
-          name="Plants"
-          component={PlantStack}
-          listeners={({ navigation }) => ({
-            tabPress: (e) => {
-              e.preventDefault();
-              // Always reset to the root of Plants stack when tab is pressed
-              navigation.navigate("Plants", {
-                screen: "PlantsList",
-                params: {},
-              });
-            },
-          })}
-        />
-        <Tab.Screen name="Care Plan" component={CalendarScreen} />
-        <Tab.Screen
-          name="Journal"
-          component={JournalStack}
-          listeners={({ navigation }) => ({
-            tabPress: (e) => {
-              e.preventDefault();
-              // Always reset to the root of Journal stack when tab is pressed
-              navigation.navigate("Journal", {
-                screen: "JournalList",
-                params: {},
-              });
-            },
-          })}
-        />
-        <Tab.Screen
-          name="More"
-          component={MoreStack}
-          listeners={({ navigation }) => ({
-            tabPress: (e) => {
-              e.preventDefault();
-              navigation.navigate("More", {
-                screen: "MoreHome",
-                params: {},
-              });
-            },
-          })}
-        />
-      </Tab.Navigator>
-    </FloatingTabBarProvider>
-  );
-};
+const RootStack = createNativeStackNavigator();
 
 const AppRoot = (): React.JSX.Element | null => {
   const [user, setUser] = useState<User | null>(null);
@@ -468,13 +351,13 @@ const AppRoot = (): React.JSX.Element | null => {
         translucent={true}
       />
       <NavigationContainer theme={navigationTheme}>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <RootStack.Navigator screenOptions={{ headerShown: false }}>
           {user ? (
-            <Stack.Screen name="AppTabs" component={AppTabs} />
+            <RootStack.Screen name="AppTabs" component={AppTabs} />
           ) : (
-            <Stack.Screen name="Auth" component={AuthScreen} />
+            <RootStack.Screen name="Auth" component={AuthScreen} />
           )}
-        </Stack.Navigator>
+        </RootStack.Navigator>
       </NavigationContainer>
     </>
   );

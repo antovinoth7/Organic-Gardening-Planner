@@ -4,7 +4,7 @@ Use this file as the working source of guidance for AI contributors. If any mark
 
 ## Current Stack
 - Expo SDK 54, React 19, React Native 0.81, TypeScript.
-- App entry is `App.tsx`.
+- App entry is `App.tsx`. Navigation is defined in `src/navigation/AppNavigator.tsx`.
 - Providers wrap the app in this order: `ErrorBoundary` -> `SafeAreaProvider` -> `ThemeProvider`.
 - Navigation is auth-gated with Firebase Auth.
 - Main tabs are `Home`, `Plants`, `Care Plan`, `Journal`, and `More`.
@@ -127,15 +127,16 @@ Specific current behavior to preserve:
 - When adding a new screen or component, create its style file in `src/styles/` following this pattern.
 - In screens/components, import and call `createStyles(theme)` — use `useMemo(() => createStyles(theme), [theme])` for larger screens.
 
-Current style files (21 total):
+Current style files (25 total):
 - **Screens (13):** `authStyles`, `moreStyles`, `settingsStyles`, `archivedPlantsStyles`, `journalFormStyles`, `manageLocationsStyles`, `journalStyles`, `plantsStyles`, `managePlantCatalogStyles`, `todayStyles`, `calendarStyles`, `plantFormStyles`, `plantDetailStyles`
-- **Components (8):** `collapsibleSectionStyles`, `errorBoundaryStyles`, `floatingLabelInputStyles`, `floatingTabBarStyles`, `photoSourceModalStyles`, `plantCardStyles`, `taskCardStyles`, `themedDropdownStyles`
+- **Components (12):** `collapsibleSectionStyles`, `errorBoundaryStyles`, `floatingLabelInputStyles`, `floatingTabBarStyles`, `harvestHistorySectionStyles`, `pestDiseaseHistorySectionStyles`, `photoSourceModalStyles`, `plantAddWizardStyles`, `plantCardStyles`, `plantEditFormStyles`, `taskCardStyles`, `themedDropdownStyles`
 
 ## Extracted Components
-Larger screens have been decomposed into focused sub-components in `src/components/`:
-- **Modals:** `DiscardChangesModal`, `CompleteAllModal`, `TaskCompletionModal`, `CreateTaskModal`, `PestDiseaseModal`
-- **Calendar views:** `WeekCalendarView`, `MonthCalendarView`
-- **Detail sections:** `PestDiseaseHistorySection`, `HarvestHistorySection`
+Larger screens have been decomposed into focused sub-components organized in `src/components/`:
+- **`calendar/`:** `MonthCalendarView`, `WeekCalendarView`, `SwipeableTaskCard`
+- **`forms/`:** `PlantEditForm`, `PlantAddWizard`, `EditBasicInfoSection`, `EditLocationSection`, `EditCareScheduleSection`, `EditCoconutSection`, `WizardStep1`, `WizardStep2`, `WizardStep3`
+- **`modals/`:** `DiscardChangesModal`, `TaskCompletionModal`, `CreateTaskModal`, `PestDiseaseModal`, `PhotoSourceModal`
+- **Root:** `PestDiseaseHistorySection`, `HarvestHistorySection`, `LocationProfileEditor`, `PlantFilterSheet`
 
 Prefer reusing these over rebuilding similar UI in new screens.
 
@@ -174,8 +175,7 @@ When adding complex data logic to a screen, consider extracting it into a custom
 
 ## Additional Utilities
 - `src/utils/appLifecycle.ts` — app lifecycle management, used in `App.tsx`.
-- `src/utils/asyncWrapper.ts` — async utility helpers.
-- `src/utils/dateHelpers.ts` — date parsing and formatting helpers used across services.
+- `src/utils/dateHelpers.ts` — date parsing, formatting helpers, and Firestore timestamp conversion used across services.
 - `src/utils/errorTracker.ts` — error tracking service.
 - `src/utils/networkState.ts` — network connectivity state, used by `firestoreTimeout.ts`.
 - `src/utils/textSanitizer.ts` — text sanitization for user input.
@@ -283,7 +283,7 @@ export function MyComponent({ value, onPress }: Props) {
 
 ## Navigation Standards
 
-- Navigator definitions live in `App.tsx`. Do not define navigators inside screen files.
+- Navigator definitions live in `src/navigation/AppNavigator.tsx`. Do not define navigators inside screen files.
 - Screen components access navigation via `useNavigation()` and `useRoute()` hooks only.
 - Pass only primitives or serialisable values via route params. Load full objects inside the screen.
 - Coordinate scroll-hide behaviour through `TabBarScrollContext`; do not reimplement scroll detection in individual screens.
@@ -351,7 +351,7 @@ Before generating any code for this project, verify each item:
 - File follows the naming convention for its type (see Naming Conventions table)
 - New component has a colocated `*Styles.ts` in `src/styles/`
 - New service implements cache → auth → Firestore → AsyncStorage fallback
-- Reuses existing utilities: `withTimeoutAndRetry`, `dataCache`, `refreshAuthToken`, `logger`, `asyncWrapper`
+- Reuses existing utilities: `withTimeoutAndRetry`, `dataCache`, `refreshAuthToken`, `logger`
 
 **TypeScript**
 

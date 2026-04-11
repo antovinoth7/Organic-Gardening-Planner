@@ -46,10 +46,11 @@ import { sanitizeAlphaNumericSpaces } from "../utils/textSanitizer";
 import { safeGetItem, safeSetItem } from "../utils/safeStorage";
 import { useCalendarData, HarvestReadyItem } from "../hooks/useCalendarData";
 import { useTabBarScroll, TAB_BAR_HEIGHT, AnimatedFAB } from "../components/FloatingTabBar";
-import CreateTaskModal from "../components/CreateTaskModal";
-import TaskCompletionModal from "../components/TaskCompletionModal";
-import WeekCalendarView from "../components/WeekCalendarView";
-import MonthCalendarView from "../components/MonthCalendarView";
+import CreateTaskModal from "../components/modals/CreateTaskModal";
+import TaskCompletionModal from "../components/modals/TaskCompletionModal";
+import WeekCalendarView from "../components/calendar/WeekCalendarView";
+import MonthCalendarView from "../components/calendar/MonthCalendarView";
+import { SwipeableTaskCard } from "../components/calendar/SwipeableTaskCard";
 import { getErrorMessage } from "../utils/errorLogging";
 
 if (
@@ -532,229 +533,38 @@ export default function CalendarScreen(): React.JSX.Element {
     handleOpenSkipModal(detailTask);
   }, [detailTask, handleOpenSkipModal]);
 
-  const renderSwipeableTask = (task: TaskTemplate): React.JSX.Element | null => {
-    if (!task || !task.next_due_at) return null;
-    const plantDetails = getPlantDetails(task.plant_id);
-    const dueDate = new Date(task.next_due_at);
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const isOverdue = dueDate < todayStart;
+  const handleShowDetail = useCallback((task: TaskTemplate) => {
+    setDetailTask(task);
+    setShowTaskDetail(true);
+  }, []);
 
-    const plantObj = task.plant_id ? plantMap.get(task.plant_id) : undefined;
-    const effectivePriority =
-      task.priority_level || calculateTaskPriority(task, plantObj || null);
-
-    const priorityColor =
-      effectivePriority === "critical"
-        ? theme.error
-        : effectivePriority === "high"
-          ? theme.warning
-          : null;
-
-    const renderRightActions = (
-      progress: Animated.AnimatedInterpolation<number>,
-      _dragX: Animated.AnimatedInterpolation<number>,
-    ): React.JSX.Element => {
-      const scale = progress.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0.5, 1],
-        extrapolate: "clamp",
-      });
-      const opacity = progress.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, 1],
-        extrapolate: "clamp",
-      });
-
-      return (
-        <TouchableOpacity
-          style={styles.swipeAction}
-          onPress={() => handleTaskComplete(task)}
-        >
-          <Animated.View
-            style={[
-              styles.swipeActionContent,
-              { opacity, transform: [{ scale }] },
-            ]}
-          >
-            <Ionicons name="checkmark-circle" size={28} color={theme.textInverse} />
-            <Text style={styles.swipeActionText}>Done</Text>
-          </Animated.View>
-        </TouchableOpacity>
-      );
-    };
-
-    const renderLeftActions = (
-      progress: Animated.AnimatedInterpolation<number>,
-      _dragX: Animated.AnimatedInterpolation<number>,
-    ): React.JSX.Element => {
-      const scale = progress.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0.5, 1],
-        extrapolate: "clamp",
-      });
-      const opacity = progress.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, 1],
-        extrapolate: "clamp",
-      });
-
-      return (
-        <View style={styles.swipeLeftActions}>
-          <TouchableOpacity
-            style={styles.swipeSnoozeAction}
-            onPress={() => handleSnooze(task, isOverdue ? 2 : 4)}
-          >
-            <Animated.View
-              style={[
-                styles.swipeActionContent,
-                { opacity, transform: [{ scale }] },
-              ]}
-            >
-              <Ionicons name="time-outline" size={24} color={theme.textInverse} />
-              <Text style={styles.swipeActionText}>
-                {isOverdue ? "+2h" : "+4h"}
-              </Text>
-            </Animated.View>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.swipeSkipAction}
-            onPress={() => handleOpenSkipModal(task)}
-          >
-            <Animated.View
-              style={[
-                styles.swipeActionContent,
-                { opacity, transform: [{ scale }] },
-              ]}
-            >
-              <Ionicons name="play-skip-forward" size={24} color={theme.textInverse} />
-              <Text style={styles.swipeActionText}>Skip</Text>
-            </Animated.View>
-          </TouchableOpacity>
-        </View>
-      );
-    };
-
-    const isSelected = selectedTaskIds.has(task.id);
-
-    return (
-      <Swipeable
+  const renderSwipeableTask = useCallback(
+    (task: TaskTemplate): React.JSX.Element | null => (
+      <SwipeableTaskCard
         key={task.id}
-        ref={(ref) => {
-          if (ref) {
-            swipeableRefs.current.set(task.id, ref);
-          } else {
-            swipeableRefs.current.delete(task.id);
-          }
-        }}
-        renderRightActions={renderRightActions}
-        renderLeftActions={renderLeftActions}
-        friction={2}
-        rightThreshold={40}
-        leftThreshold={40}
-        overshootRight={false}
-        overshootLeft={false}
-        onSwipeableOpen={(direction) => {
-          if (direction === "right") handleTaskComplete(task);
-        }}
-      >
-        <View style={[styles.taskCard, isOverdue && styles.taskCardOverdue, isSelected && styles.taskCardSelected]}>
-          <View
-            style={[
-              styles.taskColorBar,
-              { backgroundColor: TASK_COLORS[task.task_type] },
-            ]}
-          />
-          <TouchableOpacity
-            style={styles.flexOne}
-            onPress={() => {
-              setDetailTask(task);
-              setShowTaskDetail(true);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.taskContent}>
-              <View style={styles.taskHeader}>
-                <View
-                  style={[
-                    styles.taskIconContainer,
-                    { backgroundColor: TASK_COLORS[task.task_type] + "18" },
-                  ]}
-                >
-                  <Text style={styles.taskIconEmoji}>
-                    {TASK_EMOJIS[task.task_type] || "📌"}
-                  </Text>
-                </View>
-                <View style={styles.taskInfo}>
-                  <View style={styles.rowCenter}>
-                    <Text style={styles.taskTitle}>
-                      {TASK_LABELS[task.task_type]}
-                    </Text>
-                    {priorityColor && (
-                      <View
-                        style={[
-                          styles.taskPriorityBadge,
-                          { backgroundColor: priorityColor + "22" },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.taskPriorityBadgeText,
-                            { color: priorityColor },
-                          ]}
-                        >
-                          {effectivePriority === "critical" ? "⚠ Critical" : "↑ High"}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.taskPlant}>{plantDetails.name}</Text>
-                  {plantDetails.location && (
-                    <Text style={styles.taskLocation}>
-                      📍 {plantDetails.location}
-                    </Text>
-                  )}
-                  {task.preferred_time && (
-                    <Text style={styles.taskPreferredTime}>
-                      {task.preferred_time === "morning"
-                        ? "🌅 Morning"
-                        : task.preferred_time === "afternoon"
-                          ? "☀️ Afternoon"
-                          : "🌙 Evening"}
-                    </Text>
-                  )}
-                </View>
-                <View style={styles.taskRight}>
-                  <Text
-                    style={[styles.taskTime, isOverdue && styles.taskTimeOverdue]}
-                  >
-                    {isOverdue
-                      ? "Overdue"
-                      : dueDate.toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                  </Text>
-                  <TouchableOpacity
-                    style={[styles.taskCheckbox, isSelected && styles.taskCheckboxSelected]}
-                    onPress={() => toggleTaskSelection(task.id)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    activeOpacity={0.6}
-                  >
-                    <Ionicons
-                      name={isSelected ? "checkmark-circle" : "ellipse-outline"}
-                      size={22}
-                      color={isSelected ? theme.primary : theme.border}
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          </TouchableOpacity>
-        </View>
-      </Swipeable>
-    );
-  };
+        task={task}
+        isSelected={selectedTaskIds.has(task.id)}
+        plantMap={plantMap}
+        swipeableRefs={swipeableRefs}
+        getPlantDetails={getPlantDetails}
+        onComplete={handleTaskComplete}
+        onSnooze={handleSnooze}
+        onSkipOpen={handleOpenSkipModal}
+        onSelectToggle={toggleTaskSelection}
+        onDetail={handleShowDetail}
+      />
+    ),
+    [
+      selectedTaskIds,
+      plantMap,
+      getPlantDetails,
+      handleTaskComplete,
+      handleSnooze,
+      handleOpenSkipModal,
+      toggleTaskSelection,
+      handleShowDetail,
+    ],
+  );
 
   const isViewingToday = React.useMemo(() => {
     const today = new Date();

@@ -19,17 +19,18 @@ import {
 import {
   saveImageLocallyWithFilename,
   resolveLocalImageUri,
-  getFilenameFromUri,
   SavedImage,
 } from "../lib/imageStorage";
 import { getData, setData, KEYS } from "../lib/storage";
 import { withTimeoutAndRetry, FIRESTORE_WRITE_TIMEOUT_MS, FIRESTORE_READ_TIMEOUT_MS } from "../utils/firestoreTimeout";
 import { logError } from "../utils/errorLogging";
 import { logger } from "../utils/logger";
+import { convertTimestamp } from "../utils/dateHelpers";
+import { resolvePhotoFilename } from "../utils/photoFilename";
 import {
   getCached,
-  setCached,
   invalidate,
+  dedup,
   CACHE_KEYS,
 } from "../lib/dataCache";
 
@@ -80,18 +81,15 @@ export const getPlants = async (
     // Batch image resolution for better performance
     const plantsData = snapshot.docs.map((doc) => {
       const data = doc.data();
-      const photoFilename =
-        data.photo_filename ?? getFilenameFromUri(data.photo_url ?? "");
+      const photoFilename = resolvePhotoFilename(data.photo_filename, data.photo_url);
       return {
         id: doc.id,
         ...data,
         photo_filename: photoFilename ?? null,
         photoIdentifier: data.photo_filename ?? data.photo_url ?? null,
         plant_type: data.plant_type || "vegetable",
-        created_at:
-          data.created_at?.toDate?.()?.toISOString() || data.created_at,
-        deleted_at:
-          data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
+        created_at: convertTimestamp(data.created_at),
+        deleted_at: convertTimestamp(data.deleted_at),
         is_deleted: data.is_deleted ?? false,
       };
     });
@@ -155,7 +153,7 @@ export const getPlants = async (
       ...plant,
       photo_filename:
         plant.photo_filename ??
-        getFilenameFromUri(plant.photo_url ?? "") ??
+        resolvePhotoFilename(null, plant.photo_url) ??
         null,
       photo_url: resolvedUrls[index] ?? null,
     }));
@@ -170,32 +168,33 @@ export const getAllPlants = async (
   const cached = getCached<Plant[]>(CACHE_KEYS.ALL_PLANTS);
   if (cached) return cached;
 
-  const allPlants: Plant[] = [];
-  let lastDoc: QueryDocumentSnapshot | undefined = undefined;
-  let hasMore = true;
+  return dedup(CACHE_KEYS.ALL_PLANTS, async () => {
+    const allPlants: Plant[] = [];
+    let lastDoc: QueryDocumentSnapshot | undefined = undefined;
+    let hasMore = true;
 
-  while (hasMore) {
-    try {
-      const response = await getPlants(pageSize, lastDoc);
-      allPlants.push(...(response.plants ?? []));
+    while (hasMore) {
+      try {
+        const response = await getPlants(pageSize, lastDoc);
+        allPlants.push(...(response.plants ?? []));
 
-      if (!response.lastDoc || response.plants.length < pageSize) {
-        hasMore = false;
-        continue;
+        if (!response.lastDoc || response.plants.length < pageSize) {
+          hasMore = false;
+          continue;
+        }
+
+        lastDoc = response.lastDoc;
+      } catch (error) {
+        logger.warn(
+          "getAllPlants: page fetch failed, returning partial results",
+          error as Error,
+        );
+        break;
       }
-
-      lastDoc = response.lastDoc;
-    } catch (error) {
-      logger.warn(
-        "getAllPlants: page fetch failed, returning partial results",
-        error as Error,
-      );
-      break;
     }
-  }
 
-  setCached(CACHE_KEYS.ALL_PLANTS, allPlants);
-  return allPlants;
+    return allPlants;
+  });
 };
 
 export const getPlant = async (id: string): Promise<Plant | null> => {
@@ -224,16 +223,15 @@ export const getPlant = async (id: string): Promise<Plant | null> => {
 
   const photoIdentifier = data.photo_filename ?? data.photo_url ?? null;
   const resolvedPhotoUrl = await resolveLocalImageUri(photoIdentifier);
-  const photoFilename =
-    data.photo_filename ?? getFilenameFromUri(data.photo_url ?? "");
+  const photoFilename = resolvePhotoFilename(data.photo_filename, data.photo_url);
 
   return {
     id: docSnap.id,
     ...data,
     photo_filename: photoFilename ?? null,
     photo_url: resolvedPhotoUrl ?? null,
-    created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at,
-    deleted_at: data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
+    created_at: convertTimestamp(data.created_at),
+    deleted_at: convertTimestamp(data.deleted_at),
     is_deleted: data.is_deleted ?? false,
   } as Plant;
 };
@@ -259,10 +257,8 @@ export const getArchivedPlants = async (): Promise<Plant[]> => {
         id: doc.id,
         ...data,
         plant_type: data.plant_type || "vegetable",
-        created_at:
-          data.created_at?.toDate?.()?.toISOString() || data.created_at,
-        deleted_at:
-          data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
+        created_at: convertTimestamp(data.created_at),
+        deleted_at: convertTimestamp(data.deleted_at),
         is_deleted: data.is_deleted ?? false,
       };
     }) as Plant[];
@@ -307,8 +303,7 @@ export const createPlant = async (
   // CRITICAL: photo_filename should already be set for local images
   // Only the filename (not the image data) is stored in Firestore
   const { photo_url: _photoUrl, ...rest } = plant;
-  const photoFilename =
-    plant.photo_filename ?? getFilenameFromUri(plant.photo_url ?? "");
+  const photoFilename = resolvePhotoFilename(plant.photo_filename, plant.photo_url);
   const newPlant = {
     ...rest,
     photo_filename: photoFilename ?? null,
@@ -326,7 +321,7 @@ export const createPlant = async (
     id: docRef.id,
     ...newPlant,
     photo_url: resolvedPhotoUrl ?? null,
-    created_at: newPlant.created_at.toDate().toISOString(),
+    created_at: convertTimestamp(newPlant.created_at),
   } as Plant;
 
   // Invalidate in-memory cache so next getAllPlants re-fetches
@@ -523,16 +518,15 @@ export const restorePlant = async (id: string): Promise<Plant> => {
   const data = docSnap.data();
   const photoIdentifier = data.photo_filename ?? data.photo_url ?? null;
   const resolvedPhotoUrl = await resolveLocalImageUri(photoIdentifier);
-  const photoFilename =
-    data.photo_filename ?? getFilenameFromUri(data.photo_url ?? "");
+  const photoFilename = resolvePhotoFilename(data.photo_filename, data.photo_url);
   const restored = {
     id: docSnap.id,
     ...data,
     photo_filename: photoFilename ?? null,
     photo_url: resolvedPhotoUrl ?? null,
     plant_type: data.plant_type || "vegetable",
-    created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at,
-    deleted_at: data.deleted_at?.toDate?.()?.toISOString() || data.deleted_at,
+    created_at: convertTimestamp(data.created_at),
+    deleted_at: convertTimestamp(data.deleted_at),
     is_deleted: data.is_deleted ?? false,
   } as Plant;
 

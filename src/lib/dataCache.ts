@@ -49,6 +49,35 @@ export function invalidate(...keys: string[]): void {
 /** Mark everything stale (e.g. on sign-out). */
 export function invalidateAll(): void {
   store.clear();
+  pendingRequests.clear();
+}
+
+/* ── request deduplication ──────────────────────────────── */
+
+const pendingRequests = new Map<string, Promise<unknown>>();
+
+/**
+ * Deduplicate concurrent service calls for the same cache key.
+ *
+ * If a request for `key` is already in-flight, subsequent callers
+ * receive the same promise instead of firing a duplicate Firestore
+ * read.  The result is stored via `setCached()` on success.
+ */
+export function dedup<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+  const existing = pendingRequests.get(key) as Promise<T> | undefined;
+  if (existing) return existing;
+
+  const promise = fetcher()
+    .then((result) => {
+      setCached(key, result);
+      return result;
+    })
+    .finally(() => {
+      pendingRequests.delete(key);
+    });
+
+  pendingRequests.set(key, promise);
+  return promise;
 }
 
 /* ── well-known cache keys ──────────────────────────────── */
