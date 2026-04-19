@@ -99,7 +99,7 @@ export default function PlantsScreen(): React.JSX.Element {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE);
-  const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [loadingMore, setLoadingMore] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; plant: Plant; index: number } | null>(null);
   const undoProgress = useRef(new Animated.Value(1)).current;

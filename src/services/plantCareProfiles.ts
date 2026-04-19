@@ -2,12 +2,16 @@ import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db, refreshAuthToken } from "../lib/firebase";
 import { getData, setData, KEYS } from "../lib/storage";
 import {
+  FeedingIntensity,
   FertiliserType,
   GrowthStage,
+  Lifecycle,
+  NumericRange,
   PlantCareProfileOverride,
   PlantCareProfiles,
   SoilType,
   SunlightLevel,
+  ToleranceLevel,
   WaterRequirement,
 } from "../types/database.types";
 import { logError } from "../utils/errorLogging";
@@ -55,12 +59,39 @@ const GROWTH_STAGES: GrowthStage[] = [
   "dormant",
   "mature",
 ];
+const TOLERANCE_LEVELS: ToleranceLevel[] = ["low", "medium", "high"];
+const FEEDING_INTENSITIES: FeedingIntensity[] = ["light", "medium", "heavy"];
+const LIFECYCLES: Lifecycle[] = ["annual", "biennial", "perennial"];
 
 const normalizeNumber = (value: unknown): number | undefined => {
   if (value === null || value === undefined || value === "") return undefined;
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
   return Math.round(parsed);
+};
+
+const normalizeNumericRange = (value: unknown): NumericRange | undefined => {
+  if (!value || typeof value !== "object") return undefined;
+  const obj = value as Record<string, unknown>;
+  const min = Number(obj.min);
+  const max = Number(obj.max);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max < min) return undefined;
+  return { min, max };
+};
+
+const normalizeStringArray = (value: unknown): string[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  const items = value
+    .filter((v): v is string => typeof v === "string")
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0);
+  return items.length > 0 ? items : undefined;
+};
+
+const normalizeOptionalString = (value: unknown): string | undefined => {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 };
 
 const normalizeOverride = (
@@ -88,14 +119,26 @@ const normalizeOverride = (
     normalized.initialGrowthStage = override.initialGrowthStage as GrowthStage;
   }
 
-  const wateringDays = normalizeNumber(override.wateringFrequencyDays);
-  if (wateringDays) normalized.wateringFrequencyDays = wateringDays;
+  if (override.wateringEnabled === false) {
+    normalized.wateringEnabled = false;
+  } else {
+    const wateringDays = normalizeNumber(override.wateringFrequencyDays);
+    if (wateringDays) normalized.wateringFrequencyDays = wateringDays;
+  }
 
-  const fertilisingDays = normalizeNumber(override.fertilisingFrequencyDays);
-  if (fertilisingDays) normalized.fertilisingFrequencyDays = fertilisingDays;
+  if (override.fertilisingEnabled === false) {
+    normalized.fertilisingEnabled = false;
+  } else {
+    const fertilisingDays = normalizeNumber(override.fertilisingFrequencyDays);
+    if (fertilisingDays) normalized.fertilisingFrequencyDays = fertilisingDays;
+  }
 
-  const pruningDays = normalizeNumber(override.pruningFrequencyDays);
-  if (pruningDays) normalized.pruningFrequencyDays = pruningDays;
+  if (override.pruningEnabled === false) {
+    normalized.pruningEnabled = false;
+  } else {
+    const pruningDays = normalizeNumber(override.pruningFrequencyDays);
+    if (pruningDays) normalized.pruningFrequencyDays = pruningDays;
+  }
 
   // Pruning techniques
   if (Array.isArray(override.pruningTips)) {
@@ -117,6 +160,87 @@ const normalizeOverride = (
   if (typeof override.flowerPruningMonths === "string" && override.flowerPruningMonths.trim()) {
     normalized.flowerPruningMonths = override.flowerPruningMonths.trim();
   }
+
+  // A2 fields — botanical identity
+  const scientificName = normalizeOptionalString(override.scientificName);
+  if (scientificName) normalized.scientificName = scientificName;
+
+  const taxonomicFamily = normalizeOptionalString(override.taxonomicFamily);
+  if (taxonomicFamily) normalized.taxonomicFamily = taxonomicFamily;
+
+  if (LIFECYCLES.includes(override.lifecycle as Lifecycle)) {
+    normalized.lifecycle = override.lifecycle as Lifecycle;
+  }
+
+  const tamilName = normalizeOptionalString(override.tamilName);
+  if (tamilName) normalized.tamilName = tamilName;
+
+  const description = normalizeOptionalString(override.description);
+  if (description) normalized.description = description;
+
+  // A2 fields — growing parameters
+  const daysToHarvest = normalizeNumericRange(override.daysToHarvest);
+  if (daysToHarvest) normalized.daysToHarvest = daysToHarvest;
+
+  const yearsToFirstHarvest = normalizeNumber(override.yearsToFirstHarvest);
+  if (yearsToFirstHarvest) normalized.yearsToFirstHarvest = yearsToFirstHarvest;
+
+  const heightCm = normalizeNumericRange(override.heightCm);
+  if (heightCm) normalized.heightCm = heightCm;
+
+  const spacingCm = normalizeNumber(override.spacingCm);
+  if (spacingCm) normalized.spacingCm = spacingCm;
+
+  const plantingDepthCm = normalizeNumber(override.plantingDepthCm);
+  if (plantingDepthCm) normalized.plantingDepthCm = plantingDepthCm;
+
+  const growingSeason = normalizeOptionalString(override.growingSeason);
+  if (growingSeason) normalized.growingSeason = growingSeason;
+
+  const germinationDays = normalizeNumericRange(override.germinationDays);
+  if (germinationDays) normalized.germinationDays = germinationDays;
+
+  const germinationTempC = normalizeNumericRange(override.germinationTempC);
+  if (germinationTempC) normalized.germinationTempC = germinationTempC;
+
+  const soilPhRange = normalizeNumericRange(override.soilPhRange);
+  if (soilPhRange) normalized.soilPhRange = soilPhRange;
+
+  // A2 fields — tolerances
+  if (TOLERANCE_LEVELS.includes(override.heatTolerance as ToleranceLevel)) {
+    normalized.heatTolerance = override.heatTolerance as ToleranceLevel;
+  }
+  if (TOLERANCE_LEVELS.includes(override.droughtTolerance as ToleranceLevel)) {
+    normalized.droughtTolerance = override.droughtTolerance as ToleranceLevel;
+  }
+  if (TOLERANCE_LEVELS.includes(override.waterloggingTolerance as ToleranceLevel)) {
+    normalized.waterloggingTolerance = override.waterloggingTolerance as ToleranceLevel;
+  }
+
+  // A2 fields — nutrition & safety
+  const vitamins = normalizeStringArray(override.vitamins);
+  if (vitamins) normalized.vitamins = vitamins;
+
+  const minerals = normalizeStringArray(override.minerals);
+  if (minerals) normalized.minerals = minerals;
+
+  if (typeof override.petToxicity === "boolean") {
+    normalized.petToxicity = override.petToxicity;
+  }
+
+  if (FEEDING_INTENSITIES.includes(override.feedingIntensity as FeedingIntensity)) {
+    normalized.feedingIntensity = override.feedingIntensity as FeedingIntensity;
+  }
+
+  // A2 fields — user-extendable lists
+  const customPests = normalizeStringArray(override.customPests);
+  if (customPests) normalized.customPests = customPests;
+
+  const customDiseases = normalizeStringArray(override.customDiseases);
+  if (customDiseases) normalized.customDiseases = customDiseases;
+
+  const customBeneficials = normalizeStringArray(override.customBeneficials);
+  if (customBeneficials) normalized.customBeneficials = customBeneficials;
 
   return normalized;
 };

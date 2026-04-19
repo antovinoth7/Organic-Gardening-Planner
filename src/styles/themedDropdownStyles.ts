@@ -22,13 +22,20 @@ export const createStyles = (theme: Theme, compact: boolean): ReturnType<typeof 
     triggerDisabled: {
       opacity: 0.45,
     },
+    triggerLeading: {
+      flex: 1,
+      minWidth: 0,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginRight: 8,
+    },
     // Left-side label (always visible)
     triggerLabel: {
       fontSize: 14,
       fontWeight: "500",
       color: theme.textTertiary,
-      flex: 1,
-      marginRight: 8,
+      flexShrink: 1,
     },
     triggerLabelDisabled: {
       color: theme.textTertiary,

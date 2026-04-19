@@ -1,0 +1,27 @@
+# Build & platform outputs
+node_modules/
+android/
+ios/
+.expo/
+dist/
+web-build/
+
+# Lock files
+*.lock
+
+# Static assets (not code)
+assets/
+
+# Non-essential docs
+CHANGELOG.md
+CONTRIBUTING.md
+SECURITY.md
+DATA_HANDLING.md
+DEPLOYMENT.md
+docs/IMPLEMENTATION_ROADMAP.md
+
+# Sentry properties
+*.properties
+
+# EAS config
+eas.json

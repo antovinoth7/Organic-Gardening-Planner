@@ -79,6 +79,36 @@ export default function MoreScreen(): React.JSX.Element {
 
         <TouchableOpacity
           style={styles.menuItem}
+          onPress={() => navigation.navigate("PestList")}
+        >
+          <View style={styles.menuIcon}>
+            <Ionicons name="bug-outline" size={20} color={theme.primary} />
+          </View>
+          <Text style={styles.menuText}>Pests</Text>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={theme.textSecondary}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => navigation.navigate("DiseaseList")}
+        >
+          <View style={styles.menuIcon}>
+            <Ionicons name="medical-outline" size={20} color={theme.primary} />
+          </View>
+          <Text style={styles.menuText}>Diseases</Text>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={theme.textSecondary}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
           onPress={() => navigation.navigate("Settings")}
         >
           <View style={styles.menuIcon}>

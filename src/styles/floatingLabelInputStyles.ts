@@ -18,6 +18,9 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       justifyContent: "flex-start",
       paddingTop: 18,
     },
+    containerWithHelp: {
+      paddingRight: 42,
+    },
     containerFocused: {
       borderWidth: 2,
     },
@@ -27,13 +30,30 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       paddingHorizontal: 4,
       fontWeight: "500",
     },
+    labelWithHelp: {
+      maxWidth: "82%",
+    },
     input: {
       fontSize: 16,
       paddingVertical: Platform.OS === "ios" ? 18 : 14,
       paddingHorizontal: 0,
     },
+    inputWithHelp: {
+      paddingRight: 2,
+    },
     inputMultiline: {
       paddingTop: 4,
       textAlignVertical: "top",
+    },
+    helpSlot: {
+      position: "absolute",
+      right: 12,
+      zIndex: 2,
+    },
+    helpSlotSingle: {
+      top: 18,
+    },
+    helpSlotMultiline: {
+      top: 12,
     },
   });

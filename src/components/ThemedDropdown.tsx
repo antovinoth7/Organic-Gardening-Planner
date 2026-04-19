@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import { createStyles } from "../styles/themedDropdownStyles";
+import FieldHelp from "./FieldHelp";
 
 export interface DropdownItem {
   label: string;
@@ -36,6 +37,8 @@ interface ThemedDropdownProps {
   compact?: boolean;
   /** Show a search input at the top of the dropdown sheet */
   searchable?: boolean;
+  helpText?: string;
+  helpLabel?: string;
 }
 
 const useNativeDriver = Platform.OS !== "web";
@@ -53,6 +56,8 @@ export default function ThemedDropdown({
   enabled = true,
   compact = false,
   searchable = false,
+  helpText,
+  helpLabel,
 }: ThemedDropdownProps): React.JSX.Element {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -207,12 +212,22 @@ export default function ThemedDropdown({
       >
         {label ? (
           <>
-            <Text
-              style={[styles.triggerLabel, !enabled && styles.triggerLabelDisabled]}
-              numberOfLines={1}
-            >
-              {label}
-            </Text>
+            <View style={styles.triggerLeading}>
+              <Text
+                style={[styles.triggerLabel, !enabled && styles.triggerLabelDisabled]}
+                numberOfLines={1}
+              >
+                {label}
+              </Text>
+              {helpText ? (
+                <FieldHelp
+                  accessibilityLabel={`More information about ${helpLabel ?? label}`}
+                  compact
+                  description={helpText}
+                  title={helpLabel ?? label}
+                />
+              ) : null}
+            </View>
             <Text
               style={[
                 styles.triggerText,

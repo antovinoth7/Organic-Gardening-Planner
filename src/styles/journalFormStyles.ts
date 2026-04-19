@@ -229,6 +229,35 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
     notesWrapperMarginTop: {
       marginTop: 12,
     },
+    tagsSection: {
+      marginBottom: 16,
+    },
+    tagsWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    tagChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 16,
+      backgroundColor: theme.background,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    tagChipActive: {
+      backgroundColor: theme.primaryLight,
+      borderColor: theme.primary,
+    },
+    tagChipText: {
+      fontSize: 13,
+      color: theme.textSecondary,
+      fontWeight: "500",
+      textTransform: "capitalize",
+    },
+    tagChipTextActive: {
+      color: theme.primary,
+    },
     keyboardSpacer: {
       height: 300,
     },

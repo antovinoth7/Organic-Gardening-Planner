@@ -40,6 +40,11 @@ export type MoreStackParamList = {
   MoreHome: undefined;
   ManageLocations: undefined;
   ManagePlantCatalog: undefined;
+  CatalogPlantDetail: { plantName: string; plantType: import('./database.types').PlantType };
+  PestList: undefined;
+  PestDetail: { pestId: string };
+  DiseaseList: undefined;
+  DiseaseDetail: { diseaseId: string };
   Settings: undefined;
 };
 
@@ -95,3 +100,29 @@ export type JournalFormScreenNavigationProp = NativeStackNavigationProp<
   'JournalForm'
 >;
 export type JournalFormScreenRouteProp = RouteProp<JournalStackParamList, 'JournalForm'>;
+
+// PestListScreen — navigates within MoreStack
+export type PestListScreenNavigationProp = NativeStackNavigationProp<
+  MoreStackParamList,
+  'PestList'
+>;
+
+// PestDetailScreen — receives pestId param
+export type PestDetailScreenNavigationProp = NativeStackNavigationProp<
+  MoreStackParamList,
+  'PestDetail'
+>;
+export type PestDetailScreenRouteProp = RouteProp<MoreStackParamList, 'PestDetail'>;
+
+// DiseaseListScreen — navigates within MoreStack
+export type DiseaseListScreenNavigationProp = NativeStackNavigationProp<
+  MoreStackParamList,
+  'DiseaseList'
+>;
+
+// DiseaseDetailScreen — receives diseaseId param
+export type DiseaseDetailScreenNavigationProp = NativeStackNavigationProp<
+  MoreStackParamList,
+  'DiseaseDetail'
+>;
+export type DiseaseDetailScreenRouteProp = RouteProp<MoreStackParamList, 'DiseaseDetail'>;

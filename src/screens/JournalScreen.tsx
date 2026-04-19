@@ -72,6 +72,9 @@ export default function JournalScreen(): React.JSX.Element {
     "all" | "week" | "month" | "year"
   >("week");
 
+  // Tag filter state
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+
   // View mode state
   const [viewMode, setViewMode] = useState<"list" | "gallery">("list");
 
@@ -221,6 +224,13 @@ export default function JournalScreen(): React.JSX.Element {
       filtered = filtered.filter((e) => e.entry_type === selectedType);
     }
 
+    // Tag filter
+    if (selectedTag) {
+      filtered = filtered.filter(
+        (e) => e.tags && e.tags.includes(selectedTag),
+      );
+    }
+
     // Date filter
     if (dateFilter !== "all") {
       const now = new Date();
@@ -246,14 +256,15 @@ export default function JournalScreen(): React.JSX.Element {
     );
 
     return filtered;
-  }, [entries, searchQuery, selectedType, dateFilter, getPlantName]);
+  }, [entries, searchQuery, selectedType, selectedTag, dateFilter, getPlantName]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (dateFilter !== "week") count++;
     if (selectedType) count++;
+    if (selectedTag) count++;
     return count;
-  }, [dateFilter, selectedType]);
+  }, [dateFilter, selectedType, selectedTag]);
 
   const toggleFilters = (): void => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -263,6 +274,7 @@ export default function JournalScreen(): React.JSX.Element {
   const clearAllFilters = (): void => {
     setSearchQuery("");
     setSelectedType(null);
+    setSelectedTag(null);
     setDateFilter("week");
   };
 
@@ -574,6 +586,19 @@ export default function JournalScreen(): React.JSX.Element {
                       </View>
                     )}
 
+                    {/* Tags */}
+                    {entry.tags && entry.tags.length > 0 && (
+                      <View style={styles.tagsRow}>
+                        {entry.tags.map((tag) => (
+                          <View key={tag} style={styles.journalTagBadge}>
+                            <Text style={styles.journalTagText}>
+                              {tag.replace(/_/g, " ")}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
                     {/* Content preview */}
                     <Text style={styles.contentText} numberOfLines={3}>
                       {entry.content}
@@ -793,6 +818,47 @@ export default function JournalScreen(): React.JSX.Element {
                       style={[
                         styles.sheetChipText,
                         selectedType === val && styles.sheetChipTextActive,
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Tags */}
+              <Text style={styles.sheetSectionTitle}>
+                <Ionicons
+                  name="pricetag"
+                  size={14}
+                  color={theme.textSecondary}
+                />{" "}
+                Tag
+              </Text>
+              <View style={styles.sheetChipWrap}>
+                {(
+                  [
+                    [null, "All"],
+                    ["pest", "Pest"],
+                    ["weather_damage", "Weather"],
+                    ["harvest", "Harvest"],
+                    ["soil_prep", "Soil Prep"],
+                    ["growth_update", "Growth"],
+                    ["experiment", "Experiment"],
+                  ] as const
+                ).map(([val, label]) => (
+                  <TouchableOpacity
+                    key={val ?? "all"}
+                    style={[
+                      styles.sheetChip,
+                      selectedTag === val && styles.sheetChipActive,
+                    ]}
+                    onPress={() => setSelectedTag(val)}
+                  >
+                    <Text
+                      style={[
+                        styles.sheetChipText,
+                        selectedTag === val && styles.sheetChipTextActive,
                       ]}
                     >
                       {label}

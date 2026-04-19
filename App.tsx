@@ -14,6 +14,7 @@ import { Alert, Platform, StyleSheet } from "react-native";
 import Constants from "expo-constants";
 import * as Sentry from "@sentry/react-native";
 import { migrateImagesToMediaLibrary } from "./src/lib/imageStorage";
+import { runPendingMigrations } from "./src/migrations";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -297,7 +298,10 @@ const AppRoot = (): React.JSX.Element | null => {
           });
           Sentry.setTag("user_authenticated", "true");
 
-          // Run migration after successful authentication
+          // Run migrations after successful authentication
+          runPendingMigrations(user.uid).catch((error) => {
+            logger.warn("Schema migration failed", error instanceof Error ? error : new Error(String(error)));
+          });
           runImageMigration();
         } else {
           Sentry.setUser(null);

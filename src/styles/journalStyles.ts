@@ -467,4 +467,18 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       width: width,
       height: width,
     },
+    journalTagBadge: {
+      backgroundColor: theme.backgroundSecondary,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.borderLight,
+    },
+    journalTagText: {
+      fontSize: 10,
+      color: theme.textSecondary,
+      fontWeight: "500",
+      textTransform: "capitalize",
+    },
   });

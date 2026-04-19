@@ -238,8 +238,11 @@ src/
     calendar/         calendar views and swipeable task cards
     forms/            plant edit form sections and add wizard steps
     modals/           task, photo, discard, and pest/disease modals
+  config/             static configuration data
+    zones/            agro-climatic zone definitions
   hooks/              custom React hooks
   lib/                firebase init, image storage, AsyncStorage wrapper
+  migrations/         schema migration runner and numbered migrations
   navigation/         tab and stack navigator definitions
   screens/            app screens
   services/           plants, tasks, journal, backup, locations, plant catalog
@@ -261,6 +264,8 @@ Firestore collections:
   - `locations`
   - `plantCatalog`
   - `plantCareProfiles`
+  - `schema_version` (integer, tracks applied migrations)
+  - `district`, `zone_id` (agro-climatic zone config)
 
 Local storage:
 
@@ -310,17 +315,23 @@ see the tabbed application.
 
 ## Domain Notes
 
-- Seasonal logic follows a Kanyakumari four-season model:
-  - `summer`
-  - `sw_monsoon`
-  - `ne_monsoon`
-  - `cool_dry`
+- Seasonal logic is parameterized by agro-climatic zone.
+  The default zone (Kanyakumari / High Rainfall) uses a
+  four-season model: `summer`, `sw_monsoon`, `ne_monsoon`,
+  `cool_dry`. New zones can be added in `src/config/zones/`.
+- Zone definitions include season boundaries, watering
+  multipliers per space type, and seasonal pest alerts.
 - Water scheduling, reminders, harvest estimates, and coconut
   care include Tamil Nadu-specific logic.
+- Journal entries support optional `tags` for structured
+  filtering (pest, weather_damage, harvest, soil_prep,
+  growth_update, experiment).
 
 Key domain modules:
 
-- `src/utils/seasonHelpers.ts`
+- `src/config/zones/` — zone type system and registry
+- `src/utils/seasonHelpers.ts` — zone-aware season detection,
+  watering multipliers, pest alerts
 - `src/utils/plantHelpers.ts`
 - `src/utils/plantCareDefaults.ts`
 
@@ -340,6 +351,9 @@ Key domain modules:
 - `App.tsx` initializes Sentry when configured.
 - Auth state controls whether the user sees `AuthScreen`
   or the app tabs.
+- After authentication, `runPendingMigrations(user.uid)`
+  runs any outstanding schema migrations before the main
+  app renders.
 - Android image migration runs after successful
   authentication when supported.
 
@@ -411,6 +425,8 @@ Key domain modules:
 - `src/lib/firebase.ts`
 - `src/lib/imageStorage.ts`
 - `src/lib/storage.ts`
+- `src/config/zones/` — agro-climatic zone definitions
+- `src/migrations/index.ts` — schema migration runner
 - `src/services/plants.ts`
 - `src/services/tasks.ts`
 - `src/services/journal.ts`
@@ -438,6 +454,17 @@ Key domain modules:
   the original filenames used by the app.
 - Cache issues: clear local cache from Settings and reload
   the app.
+
+## Testing
+
+```bash
+npm test
+npm test -- --coverage
+```
+
+Tests use Jest with ts-jest. Test files live in `src/__tests__/`.
+The `@/` path alias is supported in tests via `moduleNameMapper`
+in `jest.config.js`.
 
 ## Build for Production
 

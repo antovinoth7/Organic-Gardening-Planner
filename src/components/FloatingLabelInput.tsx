@@ -9,17 +9,22 @@ import {
 } from "react-native";
 import { useTheme } from "../theme";
 import { createStyles } from "../styles/floatingLabelInputStyles";
+import FieldHelp from "./FieldHelp";
 
 interface FloatingLabelInputProps extends TextInputProps {
   label: string;
   /** Whether the border turns green on focus (default true) */
   accentBorder?: boolean;
+  helpText?: string;
+  helpLabel?: string;
 }
 
 export default function FloatingLabelInput({
   label,
   value,
   accentBorder = true,
+  helpText,
+  helpLabel,
   style,
   onFocus,
   onBlur,
@@ -31,6 +36,7 @@ export default function FloatingLabelInput({
 
   const [isFocused, setIsFocused] = useState(false);
   const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+  const hasHelp = !!helpText?.trim();
 
   const isFloated = isFocused || !!value;
 
@@ -85,6 +91,7 @@ export default function FloatingLabelInput({
       style={[
         s.container,
         multiline && s.containerMultiline,
+        hasHelp && s.containerWithHelp,
         { borderColor },
         isFocused && accentBorder && s.containerFocused,
       ]}
@@ -92,6 +99,7 @@ export default function FloatingLabelInput({
       <Animated.Text
         style={[
           s.label,
+          hasHelp && s.labelWithHelp,
           {
             top: labelTop,
             fontSize: labelFontSize,
@@ -110,6 +118,7 @@ export default function FloatingLabelInput({
         style={[
           s.input,
           multiline && s.inputMultiline,
+          hasHelp && s.inputWithHelp,
           { color: theme.inputText },
           style,
         ]}
@@ -118,6 +127,16 @@ export default function FloatingLabelInput({
         onBlur={handleBlur}
         placeholderTextColor="transparent"
       />
+      {hasHelp ? (
+        <View style={[s.helpSlot, multiline ? s.helpSlotMultiline : s.helpSlotSingle]}>
+          <FieldHelp
+            accessibilityLabel={`More information about ${helpLabel ?? label}`}
+            compact
+            description={helpText!}
+            title={helpLabel ?? label}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }

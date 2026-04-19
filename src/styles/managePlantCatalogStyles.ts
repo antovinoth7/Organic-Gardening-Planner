@@ -46,115 +46,175 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       fontSize: 14,
       color: theme.textSecondary,
     },
-    categoryBar: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-      marginBottom: 20,
+    categoryScroll: {
+      marginBottom: 8,
     },
-    categoryChip: {
+    categoryScrollContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 6,
+      gap: 8,
+    },
+    categoryPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
       paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 16,
+      paddingVertical: 7,
+      borderRadius: 20,
       backgroundColor: theme.background,
       borderWidth: 1,
       borderColor: theme.border,
     },
-    categoryChipActive: {
+    categoryPillActive: {
       backgroundColor: theme.primaryLight,
       borderColor: theme.primary,
     },
-    categoryChipText: {
+    categoryPillText: {
       fontSize: 13,
-      color: theme.textSecondary,
       fontWeight: "600",
+      color: theme.textSecondary,
     },
-    categoryChipTextActive: {
+    categoryPillTextActive: {
       color: theme.primary,
+      fontWeight: "700",
+    },
+    categoryPillBadge: {
+      minWidth: 18,
+      height: 18,
+      borderRadius: 9,
+      backgroundColor: theme.border,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 4,
+    },
+    categoryPillBadgeActive: {
+      backgroundColor: theme.primary,
+    },
+    categoryPillBadgeText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: theme.textTertiary,
+    },
+    categoryPillBadgeTextActive: {
+      color: theme.textInverse,
+    },
+    contentWrapper: {
+      flex: 1,
     },
     content: {
       padding: 16,
     },
-    infoCard: {
+    plantRowCompact: {
       flexDirection: "row",
-      alignItems: "flex-start",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 10,
       backgroundColor: theme.backgroundSecondary,
-      padding: 16,
+      minHeight: 48,
+    },
+    plantEmoji: {
+      fontSize: 18,
+      width: 24,
+      textAlign: "center",
+      marginRight: 10,
+    },
+    plantCountChip: {
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 10,
+      backgroundColor: theme.background,
+      borderWidth: 1,
+      borderColor: theme.borderLight,
+      marginRight: 4,
+    },
+    plantCountChipText: {
+      fontSize: 11,
+      color: theme.textTertiary,
+      fontWeight: "600",
+    },
+    rowDivider: {
+      height: 1,
+      backgroundColor: theme.borderLight,
+      marginLeft: 50,
+    },
+    listCard: {
+      backgroundColor: theme.backgroundSecondary,
       borderRadius: 12,
       borderWidth: 1,
       borderColor: theme.border,
-      marginBottom: 20,
-      gap: 12,
+      overflow: "hidden",
+      marginBottom: 16,
     },
-    infoContent: {
-      flex: 1,
-    },
-    infoTitle: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: theme.text,
-      marginBottom: 4,
-    },
-    infoText: {
-      fontSize: 13,
-      color: theme.textSecondary,
-      lineHeight: 18,
-    },
-    section: {
-      marginBottom: 24,
-    },
-    sectionHeader: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      justifyContent: "space-between",
-      marginBottom: 10,
-    },
-    sectionHeaderText: {
-      flex: 1,
-    },
-    sectionTitle: {
-      fontSize: 12,
-      fontWeight: "700",
-      color: theme.textTertiary,
-      textTransform: "uppercase",
-      letterSpacing: 0.8,
-      marginBottom: 2,
-    },
-    sectionDescription: {
-      fontSize: 12,
-      color: theme.textSecondary,
-    },
-    sectionAddButton: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+    fab: {
+      position: "absolute",
+      right: 16,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
       backgroundColor: theme.primary,
       alignItems: "center",
       justifyContent: "center",
       shadowColor: theme.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.18,
-      shadowRadius: 4,
-      elevation: 3,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.22,
+      shadowRadius: 8,
+      elevation: 6,
     },
-    addInputRow: {
+
+    section: {
+      marginBottom: 24,
+    },
+
+    actionSheetOverlay: {
+      flex: 1,
+      backgroundColor: theme.overlay,
+      justifyContent: "flex-end",
+    },
+    actionSheet: {
+      backgroundColor: theme.backgroundSecondary,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      paddingTop: 12,
+      paddingHorizontal: 16,
+      borderTopWidth: 1,
+      borderColor: theme.border,
+    },
+    actionSheetHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: theme.border,
+      alignSelf: "center",
+      marginBottom: 16,
+    },
+    actionSheetTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: theme.text,
       marginBottom: 12,
+      paddingHorizontal: 4,
     },
-    addInputActions: {
-      flexDirection: "row",
-      gap: 10,
-      marginTop: 8,
-    },
-    plantRow: {
+    actionSheetItem: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
-      padding: 14,
-      backgroundColor: theme.backgroundSecondary,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: theme.border,
-      marginBottom: 10,
+      gap: 14,
+      paddingVertical: 14,
+      borderTopWidth: 1,
+      borderTopColor: theme.border,
+    },
+    actionSheetItemDanger: {
+      borderTopWidth: 1,
+      borderTopColor: theme.border,
+    },
+    actionSheetItemText: {
+      fontSize: 16,
+      color: theme.text,
+      fontWeight: "500",
+    },
+    actionSheetItemTextDanger: {
+      color: theme.error,
     },
     plantInfo: {
       flex: 1,
@@ -226,17 +286,26 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
     modalOverlay: {
       flex: 1,
       backgroundColor: theme.overlay,
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 20,
+      justifyContent: "flex-end",
+    },
+    modalHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: theme.border,
+      alignSelf: "center",
+      marginBottom: 16,
     },
     modalContent: {
       width: "100%",
-      maxWidth: 420,
       backgroundColor: theme.backgroundSecondary,
-      borderRadius: 16,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
       padding: 20,
-      borderWidth: 1,
+      paddingBottom: 32,
+      borderTopWidth: 1,
+      borderLeftWidth: 1,
+      borderRightWidth: 1,
       borderColor: theme.border,
     },
     careModalContent: {
@@ -420,18 +489,7 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       fontWeight: "600",
       color: theme.textSecondary,
     },
-    savingOverlay: {
-      flex: 1,
-      backgroundColor: theme.overlay,
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 12,
-    },
-    savingText: {
-      fontSize: 14,
-      color: theme.textInverse,
-      fontWeight: "600",
-    },
+
     pruningTipsLabel: {
       fontSize: 12,
       color: theme.textTertiary,
@@ -447,5 +505,22 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       fontSize: 14,
       textAlignVertical: "top",
       backgroundColor: theme.backgroundSecondary,
+    },
+    chipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+    },
+    chip: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+      backgroundColor: theme.background,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    chipText: {
+      fontSize: 12,
+      color: theme.textSecondary,
     },
   });

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -86,6 +86,25 @@ export default function JournalFormScreen(): React.JSX.Element {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(false);
   const [showPhotoSourceModal, setShowPhotoSourceModal] = useState(false);
+
+  // Tags
+  const PREDEFINED_TAGS = [
+    "pest",
+    "weather_damage",
+    "harvest",
+    "soil_prep",
+    "growth_update",
+    "experiment",
+  ] as const;
+  const [selectedTags, setSelectedTags] = useState<string[]>(
+    editEntry?.tags ?? [],
+  );
+
+  const toggleTag = useCallback((tag: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+    );
+  }, []);
 
   // Harvest-specific fields
   const [harvestQuantity, setHarvestQuantity] = useState(
@@ -270,6 +289,7 @@ export default function JournalFormScreen(): React.JSX.Element {
         photo_filenames: photoFilenames,
         photo_urls: photoUrls,
         plant_id: selectedPlantId,
+        tags: selectedTags.length > 0 ? selectedTags : undefined,
         harvest_quantity:
           entryType === JournalEntryType.Harvest
             ? parseFloat(harvestQuantity)
@@ -478,6 +498,32 @@ export default function JournalFormScreen(): React.JSX.Element {
           placeholder="Link to plant (optional)"
           searchable
         />
+
+        {/* Tags */}
+        <View style={styles.tagsSection}>
+          <Text style={styles.label}>Tags</Text>
+          <View style={styles.tagsWrap}>
+            {PREDEFINED_TAGS.map((tag) => (
+              <TouchableOpacity
+                key={tag}
+                style={[
+                  styles.tagChip,
+                  selectedTags.includes(tag) && styles.tagChipActive,
+                ]}
+                onPress={() => toggleTag(tag)}
+              >
+                <Text
+                  style={[
+                    styles.tagChipText,
+                    selectedTags.includes(tag) && styles.tagChipTextActive,
+                  ]}
+                >
+                  {tag.replace(/_/g, " ")}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
         {/* Harvest-specific fields */}
         {entryType === JournalEntryType.Harvest && (

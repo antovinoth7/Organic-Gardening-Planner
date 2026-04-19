@@ -54,6 +54,15 @@ export type GrowthStage =
   | "dormant"
   | "mature";
 
+export type Lifecycle = "annual" | "perennial" | "biennial";
+export type ToleranceLevel = "low" | "medium" | "high";
+export type FeedingIntensity = "light" | "medium" | "heavy";
+
+export interface NumericRange {
+  min: number;
+  max: number;
+}
+
 export type DrainageQuality = "poor" | "fair" | "good" | "excellent";
 export type MoistureRetention = "low" | "medium" | "high";
 export type NutrientLevel = "low" | "medium" | "high";
@@ -92,6 +101,10 @@ export interface LocationConfig {
 export interface PlantCatalogCategory {
   plants: string[];
   varieties: Record<string, string[]>;
+  /** Tamil names keyed by English plant name. Data-only until Phase G language toggle. */
+  tamilNames?: Record<string, string>;
+  /** One-line English descriptions keyed by plant name. */
+  descriptions?: Record<string, string>;
 }
 
 export interface PlantCatalog {
@@ -100,9 +113,12 @@ export interface PlantCatalog {
 
 export interface PlantCareProfile {
   waterRequirement: WaterRequirement;
-  wateringFrequencyDays: number;
-  fertilisingFrequencyDays: number;
+  wateringFrequencyDays?: number;
+  wateringEnabled?: boolean;
+  fertilisingFrequencyDays?: number;
+  fertilisingEnabled?: boolean;
   pruningFrequencyDays?: number;
+  pruningEnabled?: boolean;
   sunlight: SunlightLevel;
   soilType: SoilType;
   preferredFertiliser: FertiliserType;
@@ -112,6 +128,35 @@ export interface PlantCareProfile {
   shapePruningMonths?: string;
   flowerPruningTip?: string;
   flowerPruningMonths?: string;
+  // Botanical identity (Phase A2)
+  scientificName?: string;
+  taxonomicFamily?: string;
+  lifecycle?: Lifecycle;
+  tamilName?: string;
+  description?: string;
+  // Growing parameters (Phase A2)
+  daysToHarvest?: NumericRange;
+  yearsToFirstHarvest?: number;
+  heightCm?: NumericRange;
+  spacingCm?: number;
+  plantingDepthCm?: number;
+  growingSeason?: string;
+  germinationDays?: NumericRange;
+  germinationTempC?: NumericRange;
+  soilPhRange?: NumericRange;
+  // Tolerances (Phase A2)
+  heatTolerance?: ToleranceLevel;
+  droughtTolerance?: ToleranceLevel;
+  waterloggingTolerance?: ToleranceLevel;
+  // Nutrition & safety (Phase A2)
+  vitamins?: string[];
+  minerals?: string[];
+  petToxicity?: boolean;
+  feedingIntensity?: FeedingIntensity;
+  // User-extendable lists (Phase A3 UI)
+  customPests?: string[];
+  customDiseases?: string[];
+  customBeneficials?: string[];
 }
 
 export type PlantCareProfileOverride = Partial<PlantCareProfile>;
@@ -239,6 +284,8 @@ export interface JournalEntry {
   photo_urls: string[];
   // Legacy field for backward compatibility
   photo_url?: string | null;
+  // Structured tags for filtering journal entries
+  tags?: string[];
   // Enhanced Harvest tracking fields
   harvest_quantity?: number | null;
   harvest_unit?: string | null; // 'kg', 'g', 'lbs', 'pieces', 'bunches'
@@ -246,3 +293,71 @@ export interface JournalEntry {
   harvest_notes?: string | null; // Storage method, taste notes, etc.
   created_at: string;
 }
+
+// ─── Reference Screen Types (Phase A) ────────────────────────────────────────
+
+export type PestCategory =
+  | "sap_sucking"
+  | "mites"
+  | "borers_larvae"
+  | "beetles_weevils"
+  | "other";
+
+export type DiseaseCategory =
+  | "fungal"
+  | "bacterial"
+  | "viral"
+  | "physiological";
+
+export type RiskLevel = "low" | "moderate" | "high";
+export type TreatmentEffort = "easy" | "moderate" | "advanced";
+export type ControlMethod =
+  | "spray"
+  | "trap"
+  | "biocontrol"
+  | "soil"
+  | "manual"
+  | "cultural";
+
+export interface OrganicControlItem {
+  name: string;
+  method: ControlMethod;
+  effort: TreatmentEffort;
+  howToApply?: string;
+  frequency?: string;
+  timing?: string;
+  safetyNotes?: string;
+}
+
+export interface PestEntry {
+  id: string;
+  name: string;
+  tamilName?: string;
+  scientificName?: string;
+  category: PestCategory;
+  emoji: string;
+  identification: string;
+  damageDescription: string;
+  organicPrevention: string[];
+  organicTreatments: OrganicControlItem[];
+  seasonalRisk?: Partial<Record<string, RiskLevel>>;
+  plantsAffected: string[];
+  imageAsset?: string;
+}
+
+export interface DiseaseEntry {
+  id: string;
+  name: string;
+  tamilName?: string;
+  scientificName?: string;
+  category: DiseaseCategory;
+  emoji: string;
+  identification: string;
+  damageDescription: string;
+  organicPrevention: string[];
+  organicTreatments: OrganicControlItem[];
+  seasonalRisk?: Partial<Record<string, RiskLevel>>;
+  plantsAffected: string[];
+  imageAsset?: string;
+}
+

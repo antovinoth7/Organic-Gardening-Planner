@@ -714,9 +714,11 @@ export function usePlantFormState(): PlantFormStateReturn {
       if (profile) {
         autoSuggestApplied.current = true;
         setAutoSuggestFired(true);
-        setWateringFrequency(profile.wateringFrequencyDays.toString());
-        setFertilisingFrequency(profile.fertilisingFrequencyDays.toString());
-        if (profile.pruningFrequencyDays)
+        if (profile.wateringEnabled !== false && profile.wateringFrequencyDays)
+          setWateringFrequency(profile.wateringFrequencyDays.toString());
+        if (profile.fertilisingEnabled !== false && profile.fertilisingFrequencyDays)
+          setFertilisingFrequency(profile.fertilisingFrequencyDays.toString());
+        if (profile.pruningEnabled !== false && profile.pruningFrequencyDays)
           setPruningFrequency(profile.pruningFrequencyDays.toString());
         setSunlight(profile.sunlight);
         setSoilType(profile.soilType);

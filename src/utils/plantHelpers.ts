@@ -1,4 +1,5 @@
 import { GrowthStage, PlantType } from "../types/database.types";
+import { getPlantCareProfile } from "./plantCareDefaults";
 import { logger } from "./logger";
 
 // Companion planting data
@@ -85,80 +86,6 @@ const INCOMPATIBLE_PLANTS: Record<string, string[]> = {
   Sunflower: ["Potato"],
 };
 
-// Days to maturity/harvest for different plants (from planting date)
-const DAYS_TO_HARVEST: Record<string, number> = {
-  // Vegetables (days)
-  Tomato: 75,
-  Carrot: 70,
-  Lettuce: 45,
-  Cabbage: 90,
-  Broccoli: 85,
-  Cucumber: 55,
-  Pepper: 75,
-  Chilli: 85,
-  Eggplant: 80,
-  Brinjal: 80,
-  "Long Brinjal": 85,
-  "Ladies Finger": 60,
-  Tapioca: 270,
-  Drumstick: 180,
-  Amaranthus: 30,
-  Methi: 30,
-  Cowpea: 55,
-  "Bitter Gourd": 60,
-  "Snake Gourd": 70,
-  "Ridge Gourd": 65,
-  "Bottle Gourd": 75,
-  Pumpkin: 110,
-  "Ash Gourd": 120,
-  Spinach: 40,
-  Radish: 30,
-  Potato: 90,
-  Onion: 100,
-  Garlic: 180,
-  Shallot: 90,
-  Beans: 60,
-  Peas: 65,
-
-  // Herbs (days to first harvest)
-  Basil: 60,
-  Mint: 90,
-  Coriander: 45,
-  Parsley: 70,
-  Rosemary: 365,
-  Thyme: 365,
-  Oregano: 90,
-  Sage: 365,
-  Dill: 70,
-  Lemongrass: 120,
-  "Curry Leaf": 730,
-};
-
-// Days to maturity for fruit trees (years converted to days)
-const YEARS_TO_FIRST_HARVEST: Record<string, number> = {
-  Mango: 3,
-  Orange: 3,
-  Banana: 1,
-  Guava: 2,
-  Papaya: 1,
-  Lemon: 3,
-  Pomegranate: 2,
-  Fig: 2,
-  Avocado: 3,
-  Jackfruit: 4,
-  Chikoo: 3, // Sapodilla/Chikoo - 3-5 years to first harvest
-  "Custard Apple": 2,
-  Amla: 3,
-  "Water Apple": 2, // Rose apple/Jambu - 2-3 years to first harvest
-  Soursop: 3, // Graviola/Guanabana - 3-5 years to first harvest
-  Mangosteen: 8, // Mangosteen - 7-9 years to first harvest (slow growing)
-  Rambutan: 5, // Rambutan - 4-6 years to first harvest
-  "Dwarf Coconut": 3,
-  "Tall Coconut": 6,
-  "Hybrid Coconut": 4,
-  "King Coconut": 4,
-};
-
 const DEFAULT_HARVEST_SEASON_BY_TYPE: Record<PlantType, string> = {
   vegetable: "Year Round",
   herb: "Year Round",
@@ -167,60 +94,6 @@ const DEFAULT_HARVEST_SEASON_BY_TYPE: Record<PlantType, string> = {
   timber_tree: "Year Round",
   coconut_tree: "Year Round",
   shrub: "Year Round",
-};
-
-const HARVEST_SEASON_BY_VARIETY: Record<string, string> = {
-  // Fruit trees
-  Mango: "Summer (Mar-May)",
-  Banana: "Year Round",
-  Guava: "Year Round",
-  Papaya: "Year Round",
-  Lemon: "Year Round",
-  Pomegranate: "Year Round",
-  Jackfruit: "Southwest Monsoon (Jun-Sep)",
-  Chikoo: "Year Round",
-  "Water Apple": "Summer (Mar-May)",
-  "Custard Apple": "Northeast Monsoon (Oct-Dec)",
-  Amla: "Cool Dry (Jan-Feb)",
-  Orange: "Cool Dry (Jan-Feb)",
-  Fig: "Summer (Mar-May)",
-  Avocado: "Southwest Monsoon (Jun-Sep)",
-  Soursop: "Year Round",
-  Mangosteen: "Southwest Monsoon (Jun-Sep)",
-  Rambutan: "Southwest Monsoon (Jun-Sep)",
-
-  // Coconut
-  "Dwarf Coconut": "Year Round",
-  "Tall Coconut": "Year Round",
-  "Hybrid Coconut": "Year Round",
-  "King Coconut": "Year Round",
-
-  // Common vegetables/herbs
-  Tomato: "Year Round",
-  Brinjal: "Year Round",
-  "Long Brinjal": "Year Round",
-  Chilli: "Year Round",
-  "Ladies Finger": "Summer (Mar-May)",
-  Cucumber: "Summer (Mar-May)",
-  "Bitter Gourd": "Southwest Monsoon (Jun-Sep)",
-  "Snake Gourd": "Southwest Monsoon (Jun-Sep)",
-  "Ridge Gourd": "Southwest Monsoon (Jun-Sep)",
-  "Bottle Gourd": "Southwest Monsoon (Jun-Sep)",
-  Pumpkin: "Southwest Monsoon (Jun-Sep)",
-  "Ash Gourd": "Southwest Monsoon (Jun-Sep)",
-  Cabbage: "Cool Dry (Jan-Feb)",
-  Cauliflower: "Cool Dry (Jan-Feb)",
-  Carrot: "Cool Dry (Jan-Feb)",
-  Radish: "Cool Dry (Jan-Feb)",
-  Onion: "Cool Dry (Jan-Feb)",
-  Garlic: "Cool Dry (Jan-Feb)",
-  Potato: "Cool Dry (Jan-Feb)",
-  Spinach: "Year Round",
-  Amaranthus: "Year Round",
-  Methi: "Year Round",
-  Coriander: "Year Round",
-  Mint: "Year Round",
-  Basil: "Year Round",
 };
 
 /**
@@ -239,17 +112,19 @@ export function calculateExpectedHarvestDate(
 
   let daysToAdd = 0;
 
+  const profile = getPlantCareProfile(plantVariety, plantType);
+
   // Check if it's a fruit tree or coconut tree
   if (plantType === "fruit_tree" || plantType === "coconut_tree") {
-    const years = YEARS_TO_FIRST_HARVEST[plantVariety];
+    const years = profile?.yearsToFirstHarvest;
     if (years && years > 0) {
       daysToAdd = years * 365;
     }
   } else {
-    // For vegetables and herbs
-    const days = DAYS_TO_HARVEST[plantVariety];
-    if (days && days > 0) {
-      daysToAdd = days;
+    // For vegetables and herbs — use midpoint of daysToHarvest range
+    const range = profile?.daysToHarvest;
+    if (range) {
+      daysToAdd = Math.round((range.min + range.max) / 2);
     }
   }
 
@@ -1075,9 +950,9 @@ export function getDefaultHarvestSeason(
   if (!plantType) return null;
 
   if (plantVariety) {
-    const season = HARVEST_SEASON_BY_VARIETY[plantVariety];
-    if (season) {
-      return season;
+    const profile = getPlantCareProfile(plantVariety, plantType);
+    if (profile?.growingSeason) {
+      return profile.growingSeason;
     }
   }
 
@@ -1405,4 +1280,79 @@ export function getCoconutNutrientDeficiencies(): CoconutNutrientDeficiency[] {
       ],
     },
   ];
+}
+
+const PLANT_EMOJI_MAP: Record<string, string> = {
+  Tomato: "🍅",
+  Chilli: "🌶️",
+  Pepper: "🌶️",
+  Carrot: "🥕",
+  Lettuce: "🥬",
+  Cabbage: "🥬",
+  Broccoli: "🥦",
+  Cucumber: "🥒",
+  Eggplant: "🍆",
+  Brinjal: "🍆",
+  "Long Brinjal": "🍆",
+  "Ladies Finger": "🌿",
+  Pumpkin: "🎃",
+  Spinach: "🥬",
+  Radish: "🥕",
+  Potato: "🥔",
+  Onion: "🧅",
+  Garlic: "🧄",
+  Shallot: "🧅",
+  Beans: "🫘",
+  Peas: "🫛",
+  Corn: "🌽",
+  Basil: "🌿",
+  Mint: "🌿",
+  Coriander: "🌿",
+  Parsley: "🌿",
+  Rosemary: "🌿",
+  Thyme: "🌿",
+  Oregano: "🌿",
+  Sage: "🌿",
+  Dill: "🌿",
+  Lemongrass: "🌾",
+  Methi: "🌿",
+  Mango: "🥭",
+  Banana: "🍌",
+  Guava: "🍈",
+  Papaya: "🍈",
+  Pomegranate: "🍎",
+  Lemon: "🍋",
+  Lime: "🍋",
+  Orange: "🍊",
+  Grape: "🍇",
+  Apple: "🍎",
+  Strawberry: "🍓",
+  Watermelon: "🍉",
+  Pineapple: "🍍",
+  Coconut: "🥥",
+  Rose: "🌹",
+  Sunflower: "🌻",
+  Marigold: "🌼",
+  Jasmine: "🌸",
+  Hibiscus: "🌺",
+  Tulip: "🌷",
+  Drumstick: "🌿",
+  Amaranthus: "🌿",
+  Cowpea: "🫘",
+  Tapioca: "🥔",
+  "Bitter Gourd": "🥒",
+  "Snake Gourd": "🥒",
+  "Ridge Gourd": "🥒",
+  "Bottle Gourd": "🥒",
+  "Ash Gourd": "🥒",
+};
+
+export function getPlantEmoji(name: string): string {
+  if (PLANT_EMOJI_MAP[name]) return PLANT_EMOJI_MAP[name]!;
+  const canonical = getCanonicalPlantKey(name);
+  if (canonical) {
+    const titled = canonical.charAt(0).toUpperCase() + canonical.slice(1);
+    if (PLANT_EMOJI_MAP[titled]) return PLANT_EMOJI_MAP[titled]!;
+  }
+  return "🌱";
 }

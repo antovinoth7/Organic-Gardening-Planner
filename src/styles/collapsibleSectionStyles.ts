@@ -22,6 +22,11 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       padding: 16,
       backgroundColor: theme.card,
     },
+    headerMain: {
+      flex: 1,
+      minWidth: 0,
+      marginRight: 8,
+    },
     headerError: {
       backgroundColor: theme.errorLight,
       borderLeftWidth: 4,
@@ -31,14 +36,50 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       flexDirection: "row",
       alignItems: "center",
       flex: 1,
+      minWidth: 0,
     },
     headerIcon: {
       marginRight: 8,
+    },
+    headerTextBlock: {
+      flex: 1,
+      minWidth: 0,
+    },
+    headerTitleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 8,
+      minWidth: 0,
     },
     headerTitle: {
       fontSize: 16,
       fontWeight: "600",
       color: theme.text,
+      flexShrink: 1,
+    },
+    headerSummary: {
+      fontSize: 12,
+      lineHeight: 18,
+      color: theme.textSecondary,
+      marginTop: 4,
+    },
+    headerRight: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginLeft: 8,
+    },
+    headerActionSlot: {
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    chevronButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
     },
     headerTitleError: {
       color: theme.error,

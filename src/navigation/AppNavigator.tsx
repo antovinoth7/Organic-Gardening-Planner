@@ -20,7 +20,12 @@ import JournalFormScreen from "../screens/JournalFormScreen";
 import MoreScreen from "../screens/MoreScreen";
 import ManageLocationsScreen from "../screens/ManageLocationsScreen";
 import ManagePlantCatalogScreen from "../screens/ManagePlantCatalogScreen";
+import CatalogPlantDetailScreen from "../screens/CatalogPlantDetailScreen";
 import SettingsScreen from "../screens/SettingsScreen";
+import PestListScreen from "../screens/PestListScreen";
+import PestDetailScreen from "../screens/PestDetailScreen";
+import DiseaseListScreen from "../screens/DiseaseListScreen";
+import DiseaseDetailScreen from "../screens/DiseaseDetailScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -45,10 +50,12 @@ const MoreStack = (): React.JSX.Element => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="MoreHome" component={MoreScreen} />
     <Stack.Screen name="ManageLocations" component={ManageLocationsScreen} />
-    <Stack.Screen
-      name="ManagePlantCatalog"
-      component={ManagePlantCatalogScreen}
-    />
+    <Stack.Screen name="ManagePlantCatalog" component={ManagePlantCatalogScreen} />
+    <Stack.Screen name="CatalogPlantDetail" component={CatalogPlantDetailScreen} />
+    <Stack.Screen name="PestList" component={PestListScreen} />
+    <Stack.Screen name="PestDetail" component={PestDetailScreen} />
+    <Stack.Screen name="DiseaseList" component={DiseaseListScreen} />
+    <Stack.Screen name="DiseaseDetail" component={DiseaseDetailScreen} />
     <Stack.Screen name="Settings" component={SettingsScreen} />
   </Stack.Navigator>
 );

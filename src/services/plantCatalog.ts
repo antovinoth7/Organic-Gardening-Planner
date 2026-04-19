@@ -90,6 +90,78 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
         "Ash Plantain": ["Vazhakkai", "Green Plantain", "Local"],
         Colocasia: ["Purple Stem", "Green Stem", "Seppan"],
       },
+      tamilNames: {
+        Brinjal: "கத்தரிக்காய்",
+        "Long Brinjal": "நீள கத்தரிக்காய்",
+        "Ladies Finger": "வெண்டைக்காய்",
+        Tomato: "தக்காளி",
+        Chilli: "மிளகாய்",
+        Tapioca: "மரவள்ளிக்கிழங்கு",
+        Drumstick: "முருங்கை",
+        Amaranthus: "அரைக்கீரை",
+        Methi: "வெந்தயக்கீரை",
+        Cowpea: "காராமணி",
+        Beans: "பீன்ஸ்",
+        "Bitter Gourd": "பாகற்காய்",
+        "Snake Gourd": "புடலங்காய்",
+        "Ridge Gourd": "பீர்க்கங்காய்",
+        "Bottle Gourd": "சுரைக்காய்",
+        Pumpkin: "பரங்கிக்காய்",
+        "Ash Gourd": "வெள்ளைப்பூசணி",
+        Cucumber: "வெள்ளரிக்காய்",
+        Spinach: "பசலைக்கீரை",
+        Radish: "முள்ளங்கி",
+        Onion: "வெங்காயம்",
+        Shallot: "சின்ன வெங்காயம்",
+        Garlic: "பூண்டு",
+        Cabbage: "முட்டைக்கோஸ்",
+        Cauliflower: "காலிஃபிளவர்",
+        Carrot: "கேரட்",
+        Potato: "உருளைக்கிழங்கு",
+        Eggplant: "கத்திரிக்காய்",
+        Pepper: "குடைமிளகாய்",
+        Taro: "சேப்பங்கிழங்கு",
+        "Elephant Yam": "கருணைக்கிழங்கு",
+        "Sweet Potato": "சர்க்கரைவள்ளிக்கிழங்கு",
+        "Ash Plantain": "நேந்திரம் வாழை",
+        Colocasia: "சேம்பு",
+      },
+      descriptions: {
+        Brinjal: "Versatile tropical nightshade yielding glossy purple fruit for curries and grills",
+        "Long Brinjal": "Elongated purple eggplant variety favoured in South Indian sambar and stir-fries",
+        "Ladies Finger": "Heat-loving mucilaginous pod vegetable essential in South Indian cooking",
+        Tomato: "Prolific warm-season fruit used fresh, in sambar, rasam, and chutneys",
+        Chilli: "Pungent hot pepper central to South Indian spice blends and daily cooking",
+        Tapioca: "Starchy root crop grown widely in Kanyakumari for kappa and traditional dishes",
+        Drumstick: "Fast-growing tropical tree providing nutrient-dense pods, leaves, and flowers",
+        Amaranthus: "Quick-growing leafy green rich in iron, popular as keerai in Tamil cuisine",
+        Methi: "Aromatic legume grown for its iron-rich leaves and bitter-sweet flavour",
+        Cowpea: "Heat-tolerant nitrogen-fixing legume yielding protein-rich pods and beans",
+        Beans: "Versatile climbing legume producing tender pods for stir-fries and curries",
+        "Bitter Gourd": "Warty-skinned climbing cucurbit prized for its medicinal bitter flavour",
+        "Snake Gourd": "Long striped cucurbit vine producing mild-flavoured gourds for sambar",
+        "Ridge Gourd": "Ridged climbing vine bearing tender gourds widely used in kootu and poriyal",
+        "Bottle Gourd": "Vigorous trailing vine producing mild watery gourds for kootu and sweets",
+        Pumpkin: "Sprawling cucurbit yielding large sweet-fleshed fruit for kootu and aviyal",
+        "Ash Gourd": "Wax-coated trailing cucurbit used in petha, kootu, and traditional medicine",
+        Cucumber: "Fast-growing warm-season vine producing crisp, refreshing fruits",
+        Spinach: "Nutrient-dense leafy green rich in iron and vitamins",
+        Radish: "One of the fastest-maturing root vegetables, excellent beginner crop",
+        Onion: "Essential kitchen staple grown as a bulb crop",
+        Shallot: "Small, pungent bulb onion widely used in South Indian cooking",
+        Garlic: "Pungent bulb with potent medicinal and culinary value",
+        Cabbage: "Cool-season brassica forming dense leafy heads",
+        Cauliflower: "Cool-season brassica producing compact white curds",
+        Carrot: "Popular root vegetable rich in beta-carotene",
+        Potato: "Versatile tuberous crop grown worldwide",
+        Eggplant: "Heat-loving fruiting vegetable closely related to brinjal",
+        Pepper: "Warm-season fruiting plant producing sweet or mildly hot fruits",
+        Taro: "Tropical tuber crop with edible corms and leaves",
+        "Elephant Yam": "Large tropical tuber crop valued in South Indian cuisine",
+        "Sweet Potato": "Nutritious tropical vine producing sweet tuberous roots",
+        "Ash Plantain": "Starchy cooking banana widely used in South Indian cuisine",
+        Colocasia: "Versatile aroid grown for both corms and leaves",
+      },
     },
     herb: {
       plants: [
@@ -119,6 +191,38 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
         Ginger: ["Maran", "Rio-de-Janeiro", "Nadia", "Local"],
         "Betel Leaf": ["Vetrilai", "Kapur", "Local"],
       },
+      tamilNames: {
+        Coriander: "கொத்தமல்லி",
+        Mint: "புதினா",
+        "Curry Leaf": "கறிவேப்பிலை",
+        Lemongrass: "எலுமிச்சைப்புல்",
+        Tulsi: "துளசி",
+        Basil: "திருநீற்றுப்பச்சிலை",
+        Dill: "சதகுப்பை",
+        Parsley: "பார்சிலி",
+        Rosemary: "ரோஸ்மேரி",
+        Thyme: "தைம்",
+        Oregano: "ஓரிகானோ",
+        Turmeric: "மஞ்சள்",
+        Ginger: "இஞ்சி",
+        "Betel Leaf": "வெற்றிலை",
+      },
+      descriptions: {
+        Coriander: "Fast-growing cool-season herb prized for its aromatic leaves and seeds",
+        Mint: "Vigorous spreading herb that thrives in moist, partially shaded spots",
+        "Curry Leaf": "Essential South Indian culinary tree producing intensely aromatic leaves",
+        Lemongrass: "Tall aromatic grass used in teas and South-East Asian cuisine",
+        Tulsi: "Sacred herb of Indian households valued for medicinal and spiritual significance",
+        Basil: "Aromatic culinary herb used in Italian and Thai cooking",
+        Dill: "Feathery herb with a mild anise flavour, popular in pickles and rice dishes",
+        Parsley: "Slow-germinating biennial herb used as a garnish and flavouring",
+        Rosemary: "Woody Mediterranean perennial with needle-like leaves and a piney fragrance",
+        Thyme: "Low-growing perennial herb with tiny aromatic leaves",
+        Oregano: "Hardy perennial with peppery, slightly bitter leaves",
+        Turmeric: "Tropical rhizomatous herb yielding the golden spice of Indian cooking",
+        Ginger: "Pungent rhizome staple in South Indian cooking and Ayurvedic medicine",
+        "Betel Leaf": "Tropical climbing vine prized for its glossy heart-shaped leaves",
+      },
     },
     flower: {
       plants: [
@@ -137,6 +241,30 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
         Marigold: ["African", "French", "Local Orange"],
         Jasmine: ["Malli", "Mullai", "Jathi Malli"],
         Hibiscus: ["Red", "Yellow", "Double Petal"],
+      },
+      tamilNames: {
+        Marigold: "செண்டுமல்லி",
+        Jasmine: "மல்லிகை",
+        Hibiscus: "செம்பருத்தி",
+        Rose: "ரோஜா",
+        Chrysanthemum: "சாமந்தி",
+        Crossandra: "கனகாம்பரம்",
+        Ixora: "வெட்சி",
+        Sunflower: "சூரியகாந்தி",
+        Dahlia: "டேலியா",
+        Orchid: "ஆர்க்கிட்",
+      },
+      descriptions: {
+        Marigold: "Bright orange-yellow blooms that repel nematodes and attract pollinators",
+        Jasmine: "Intensely fragrant evergreen shrub producing white flowers integral to Tamil culture",
+        Hibiscus: "Showy tropical shrub producing large colourful blooms for hair oil and offerings",
+        Rose: "Classic garden shrub grown for fragrant blooms",
+        Chrysanthemum: "Popular festival flower grown for bright disc-shaped blooms",
+        Crossandra: "Low-growing perennial bearing vibrant orange flowers for garlands",
+        Ixora: "Evergreen tropical shrub with dense clusters of tiny tubular flowers",
+        Sunflower: "Tall, cheerful annual grown for large composite flower heads",
+        Dahlia: "Tuberous perennial producing spectacular multi-petalled blooms",
+        Orchid: "Exotic epiphytic perennial grown for elegant long-lasting blooms",
       },
     },
     fruit_tree: {
@@ -183,6 +311,56 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
         "Star Fruit": ["Sweet", "Sour", "Local"],
         Arecanut: ["Mangala", "Sumangala", "Local Tall"],
       },
+      tamilNames: {
+        Banana: "வாழை",
+        Mango: "மாம்பழம்",
+        Guava: "கொய்யா",
+        Papaya: "பப்பாளி",
+        Lemon: "எலுமிச்சை",
+        Pomegranate: "மாதுளை",
+        Jackfruit: "பலாப்பழம்",
+        Chikoo: "சப்போட்டா",
+        "Water Apple": "நாவல்",
+        "Custard Apple": "சீதாப்பழம்",
+        Amla: "நெல்லிக்காய்",
+        Orange: "ஆரஞ்சு",
+        Fig: "அத்திப்பழம்",
+        Avocado: "வெண்ணெய்ப்பழம்",
+        Soursop: "முள்ளு சீதா",
+        Mangosteen: "மாங்குஸ்தான்",
+        Rambutan: "ரம்புட்டான்",
+        "Red Banana": "செவ்வாழை",
+        Breadfruit: "பிரெட்ஃப்ரூட்",
+        Pineapple: "அன்னாசி",
+        "Passion Fruit": "பேஷன் ஃப்ரூட்",
+        "Star Fruit": "கமரகம்",
+        Arecanut: "பாக்கு",
+      },
+      descriptions: {
+        Banana: "Fast-growing tropical fruit producing large bunches rich in potassium",
+        Mango: "King of fruits — long-lived tropical tree bearing sweet, aromatic drupes",
+        Guava: "Hardy tropical tree producing vitamin-C-rich fruits year-round",
+        Papaya: "Fast-growing single-trunk tree bearing melon-like fruits rich in papain",
+        Lemon: "Evergreen citrus tree producing tangy fruits year-round",
+        Pomegranate: "Drought-tolerant shrubby tree producing antioxidant-rich fruits",
+        Jackfruit: "Massive tropical tree producing the world's largest tree-borne fruit",
+        Chikoo: "Evergreen tropical tree producing sweet, malty-flavoured fruits",
+        "Water Apple": "Tropical evergreen tree producing crisp, mildly sweet bell-shaped fruits",
+        "Custard Apple": "Deciduous tropical tree bearing soft, creamy-sweet segmented fruits",
+        Amla: "Hardy deciduous tree producing tart, vitamin-C-rich berries revered in Ayurveda",
+        Orange: "Evergreen citrus tree producing sweet, juicy fruits",
+        Fig: "Deciduous tree producing soft, sweet, fibre-rich fruits",
+        Avocado: "Evergreen tropical tree producing nutrient-dense, high-fat fruits",
+        Soursop: "Tropical evergreen tree producing large spiny fruits with creamy, tangy pulp",
+        Mangosteen: "Ultra-tropical tree bearing prized purple fruits with sweet-tangy segments",
+        Rambutan: "Tropical evergreen tree producing hairy-skinned fruits with translucent sweet flesh",
+        "Red Banana": "Striking red-skinned banana variety with creamy, slightly raspberry-flavoured flesh",
+        Breadfruit: "Large tropical tree producing starchy fruits used as a carbohydrate staple",
+        Pineapple: "Low-growing monocarpic bromeliad producing sweet, acidic tropical fruits",
+        "Passion Fruit": "Vigorous tropical vine producing aromatic, tangy-sweet fruits",
+        "Star Fruit": "Small tropical evergreen tree producing distinctive star-shaped waxy fruits",
+        Arecanut: "Tall, slender tropical palm cultivated for its betel nut",
+      },
     },
     timber_tree: {
       plants: [
@@ -195,6 +373,24 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
         "Wild Jack",
       ],
       varieties: {},
+      tamilNames: {
+        Neem: "வேம்பு",
+        Teak: "தேக்கு",
+        Mahogany: "மகாகனி",
+        Rosewood: "ரோஸ்வுட்",
+        Sandalwood: "சந்தனம்",
+        Bamboo: "மூங்கில்",
+        "Wild Jack": "ஐயன்பலா",
+      },
+      descriptions: {
+        Neem: "Fast-growing evergreen valued for pest-repellent properties and durable timber",
+        Teak: "Premier hardwood timber tree with large deciduous leaves",
+        Mahogany: "High-value tropical timber with a straight trunk and broad canopy",
+        Rosewood: "Prized hardwood with dark fragrant heartwood, a nitrogen-fixing legume",
+        Sandalwood: "Aromatic heartwood tree and hemi-parasite that needs a host plant nearby",
+        Bamboo: "Giant clumping grass producing strong culms for construction and crafts",
+        "Wild Jack": "Large evergreen tree native to the Western Ghats yielding durable timber",
+      },
     },
     coconut_tree: {
       plants: [
@@ -206,6 +402,18 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
       varieties: {
         "Dwarf Coconut": ["COD", "Malayan Dwarf"],
         "Tall Coconut": ["West Coast Tall", "East Coast Tall"],
+      },
+      tamilNames: {
+        "Dwarf Coconut": "குட்டைத் தென்னை",
+        "Tall Coconut": "உயரத் தென்னை",
+        "Hybrid Coconut": "கலப்பினத் தென்னை",
+        "King Coconut": "ராஜ தென்னை",
+      },
+      descriptions: {
+        "Dwarf Coconut": "Compact coconut palm ideal for small plots, bears early",
+        "Tall Coconut": "Traditional tall coconut grown along the Kanyakumari coast",
+        "Hybrid Coconut": "Cross between Dwarf and Tall combining early bearing with high copra yield",
+        "King Coconut": "Orange-skinned coconut prized for its naturally sweet water",
       },
     },
     shrub: {
@@ -222,6 +430,26 @@ export const DEFAULT_PLANT_CATALOG: PlantCatalog = {
       varieties: {
         Hibiscus: ["Single", "Double", "Red"],
         Ixora: ["Red", "Yellow", "Orange"],
+      },
+      tamilNames: {
+        Hibiscus: "செம்பருத்தி",
+        Ixora: "இட்லிப்பூ",
+        Nandiyavattai: "நந்தியாவட்டை",
+        Bougainvillea: "பூகன்வில்லியா",
+        Jasmine: "மல்லிகை",
+        Crossandra: "கனகாம்பரம்",
+        Lantana: "உன்னிச்செடி",
+        Gardenia: "கொண்டை கத்தரி",
+      },
+      descriptions: {
+        Hibiscus: "Bushy hedge variety producing showy blooms year-round",
+        Ixora: "Dense evergreen shrub bearing clusters of scarlet flowers",
+        Nandiyavattai: "Fragrant white-flowered shrub sacred in Tamil temple gardens",
+        Bougainvillea: "Vigorous thorny shrub-vine smothered in papery bracts",
+        Jasmine: "Vigorous woody shrub producing intensely fragrant white flowers",
+        Crossandra: "Low-growing evergreen hedge shrub bearing fan-shaped orange flowers",
+        Lantana: "Extremely hardy flowering shrub that thrives on neglect and attracts butterflies",
+        Gardenia: "Compact evergreen shrub with waxy, intensely fragrant white blooms",
       },
     },
   },
@@ -344,6 +572,8 @@ const normalizeCategory = (
   defaultVarieties: Record<string, string[]>,
   requiredPlants: string[],
   hasCategory: boolean,
+  defaultTamilNames?: Record<string, string>,
+  defaultDescriptions?: Record<string, string>,
 ): PlantCatalogCategory => {
   const plants = normalizeList(category?.plants);
   const resolvedPlants = hasCategory ? [...plants] : [...defaultPlants];
@@ -372,13 +602,34 @@ const normalizeCategory = (
     }
   });
 
-  return {
+  // Merge tamilNames: incoming overrides defaults
+  const mergedTamilNames: Record<string, string> = {
+    ...defaultTamilNames,
+    ...category?.tamilNames,
+  };
+
+  // Merge descriptions: incoming overrides defaults
+  const mergedDescriptions: Record<string, string> = {
+    ...defaultDescriptions,
+    ...category?.descriptions,
+  };
+
+  const result: PlantCatalogCategory = {
     plants: resolvedPlants,
     varieties: mergedVarieties,
   };
+
+  if (Object.keys(mergedTamilNames).length > 0) {
+    result.tamilNames = mergedTamilNames;
+  }
+  if (Object.keys(mergedDescriptions).length > 0) {
+    result.descriptions = mergedDescriptions;
+  }
+
+  return result;
 };
 
-const normalizeCatalog = (catalog?: PlantCatalog | null): PlantCatalog => {
+export const normalizeCatalog = (catalog?: PlantCatalog | null): PlantCatalog => {
   const categories = {} as Record<PlantType, PlantCatalogCategory>;
   const incomingCategories =
     catalog?.categories ?? ({} as Record<PlantType, PlantCatalogCategory>);
@@ -393,6 +644,8 @@ const normalizeCatalog = (catalog?: PlantCatalog | null): PlantCatalog => {
       defaultCategory.varieties,
       REQUIRED_LOCAL_PLANTS[type] ?? [],
       hasCategory,
+      defaultCategory.tamilNames,
+      defaultCategory.descriptions,
     );
   });
 
