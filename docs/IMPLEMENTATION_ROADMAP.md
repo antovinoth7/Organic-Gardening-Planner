@@ -1,7 +1,8 @@
 # Organic Gardening Planner — Implementation Roadmap
 
 > Generated: April 12, 2026
-> Last updated: April 18, 2026 — Phase A2 shipped; roadmap restructured from priority-based to screen-by-screen approach; F2/F3 expanded + F9 Planter-style form enrichment (2.10–2.13) + F10 Garden Reference Guide (2.14–2.16) + hybrid configurability for pests/diseases/beneficials; F11 Pest & Disease Reference Screens (2.17–2.18) added
+> Last updated: April 25, 2026 — Phase A3 deferred to after Phase H; F6 expanded to auto-computation + annual cycling for fruit trees; Phase B2 Bed Management added (generic farm layout, 12 sub-phases, cross-cuts 16 existing files)
+> Previous: April 18, 2026 — Phase A2 shipped; roadmap restructured from priority-based to screen-by-screen approach; F2/F3 expanded + F9 Planter-style form enrichment (2.10–2.13) + F10 Garden Reference Guide (2.14–2.16) + hybrid configurability for pests/diseases/beneficials; F11 Pest & Disease Reference Screens (2.17–2.18) added
 > Status: Phase 0 shipped; Phase A shipped; Phase A2 shipped
 > Scope: Solo developer, iterative build, Firebase free-tier
 
@@ -14,14 +15,15 @@
 | Phase 0 — Stabilization                      | ✅ Complete | 2026-04-16 |
 | Phase A — Config: Pest & Disease Reference   | ✅ Complete | 2026-04-18 |
 | Phase A2 — Config: Catalog Enrichment        | ✅ Complete | 2026-04-18 |
-| Phase A3 — Config: Beneficials + Custom CRUD | ⚪ Planned  | —          |
 | Phase B — Plants                             | ⚪ Planned  | —          |
+| Phase B2 — Bed Management                    | ⚪ Planned  | —          |
 | Phase C — Home                               | ⚪ Planned  | —          |
 | Phase D — Calendar                           | ⚪ Planned  | —          |
 | Phase E — Journal                            | ⚪ Planned  | —          |
 | Phase F — Settings & Cross-Cutting           | ⚪ Planned  | —          |
 | Phase G — Tamil i18n                         | ⚪ Planned  | —          |
 | Phase H — Advanced                           | ⚪ Planned  | —          |
+| Phase A3 — Config: Beneficials + Custom CRUD | ⏭ Deferred | —          |
 
 **Phase 0 delivered:**
 
@@ -93,7 +95,7 @@
 | Harvest Tracking      | `JournalEntry` has `harvest_quantity`, `harvest_unit`, `harvest_quality`, `harvest_notes`; `HarvestHistorySection` component exists | No yield analysis, no income tracking, no per-tree harvest logging                             |
 | Companion Planting UI | Functions in `plantHelpers.ts`, surfaces on `PlantDetailScreen`                                                                     | No zone-aware warnings, no intercropping planner                                               |
 | Soil Profiles         | `LocationProfile` has pH/NPK/drainage/soil_type fields                                                                              | Data stored but no recommendation engine, no amendment suggestions                             |
-| Growth Stages         | Static `growth_stage` field on `Plant`, 6 stages defined                                                                            | No progression tracking, no stage history, no lifecycle economics                              |
+| Growth Stages         | Static `growth_stage` field on `Plant`, 6 stages defined; `getCoconutAgeInfo()` computes coconut age stages from planting date         | No auto-progression, no stage history, no per-variety stage durations, no annual cycling for fruit trees |
 | Default Catalog       | `DEFAULT_PLANT_CATALOG` exists with ~100 Kanyakumari crops                                                                          | ✅ Tamil names, descriptions, spacing/yield data enriched (Phase A2). No planting windows yet. |
 
 ---
@@ -130,14 +132,14 @@
 | G3  | Season-Aware Planting Calendar ("What to Plant Now")  | Season model exists, no planting windows                       | High-Value           | S      | High      | Phase C    |
 | G4  | Weather Integration (Open-Meteo)                      | None                                                           | High-Value           | S      | Medium    | Phase C    |
 | G5  | Enhanced Harvest Tracking & Yield Dashboard           | Journal has harvest fields, no analysis                        | High-Value           | M      | High      | Phase B    |
-| G6  | Growth Stage Progression                              | Static field, no history                                       | High-Value           | S      | Medium    | Phase B    |
-| G7  | Multi-Layer / Zone-Based Planting                     | No zone concept                                                | High-Value           | L      | High      | Phase B    |
-| G8  | Organic Pest & Disease Advisor (enriched)             | 160+ treatments exist, no recipes/calendar                     | High-Value           | M      | Medium    | Phase A/A3 |
+| G6  | Growth Stage Progression (Auto + Annual Cycling)      | Static field, no history, no auto-computation                  | High-Value           | M      | High      | Phase B    |
+| G7  | Multi-Layer / Zone-Based Planting                     | No zone concept                                                | High-Value           | L      | High      | Phase B2   |
+| G8  | Organic Pest & Disease Advisor (enriched)             | 160+ treatments exist, no recipes/calendar                     | High-Value           | M      | Medium    | Phase A (done) / A3 (deferred) |
 | G9  | Coconut Individual Tree Tracking                      | Coconut fields exist, per-tree not streamlined                 | High-Value           | M      | High      | Phase B    |
 | G10 | Voice-to-Text (Tamil)                                 | None (expo-speech available)                                   | High-Value           | S      | Medium    | Phase E    |
 | G11 | Journal Tags                                          | No structured tags                                             | Nice-to-Have         | S      | Medium    | Phase 0 ✅ |
-| G12 | Crop Rotation Planner                                 | No rotation logic                                              | High-Value           | M      | Medium    | Phase H    |
-| G13 | Organic Input Recipes (static reference)              | FertiliserType enum exists                                     | High-Value           | S      | Medium    | Phase A3   |
+| G12 | Crop Rotation Planner                                 | No rotation logic                                              | High-Value           | M      | Medium    | Phase B2 (subsumed) |
+| G13 | Organic Input Recipes (static reference)              | FertiliserType enum exists                                     | High-Value           | S      | Medium    | Phase A3 (deferred) |
 | G14 | Seed Source & Variety Log                             | `plant_variety` exists, no `seed_source`                       | Nice-to-Have         | S      | Low       | Phase B    |
 | G15 | Seasonal Labour Calendar (Farmer's Almanac)           | None                                                           | Nice-to-Have         | S      | Medium    | Phase C    |
 | G16 | Tamil i18n                                            | None                                                           | Critical (for scale) | L      | High      | Phase G    |
@@ -146,15 +148,16 @@
 | G19 | Data Abstraction Layer                                | Direct Firestore coupling                                      | Nice-to-Have         | L      | Low       | Defer      |
 | G20 | Multi-User / RBAC                                     | Single-user `user_id` scoping                                  | Nice-to-Have         | XL     | Low       | Defer      |
 | G21 | Financial Ledger                                      | None                                                           | Nice-to-Have         | L      | Medium    | Defer      |
-| G22 | Land & Plot Mapping                                   | Locations are string labels                                    | Nice-to-Have         | L      | Medium    | Phase H    |
+| G22 | Land & Plot Mapping                                   | Locations are string labels                                    | Nice-to-Have         | L      | Medium    | Phase H (partially addressed by B2) |
 | G23 | Soil Health Recommendations                           | Profile stored, no engine                                      | Nice-to-Have         | M      | Medium    | Phase H    |
 | G24 | Labour Tracking                                       | None                                                           | Nice-to-Have         | M      | Low       | Defer      |
 | G25 | Water Management                                      | None                                                           | Nice-to-Have         | M      | Low       | Defer      |
 | G26 | Lifecycle Economics                                   | Age calc exists, no ROI projection                             | Nice-to-Have         | M      | Medium    | Phase H    |
 | G27 | Zone-Aware Config (State-Level Expansion)             | Hardcoded Kanyakumari                                          | Nice-to-Have         | XL     | Low (now) | Defer      |
 | G28 | Test Coverage (30% minimum)                           | ~2%                                                            | Critical             | L      | High      | Ongoing    |
-| G29 | Pest/Disease/Beneficial Reference (detail pages)      | 160+ treatments exist, no detail pages or browseable reference | High-Value           | M      | High      | Phase A/A3 |
-| G30 | Per-Variety Custom Pests/Diseases/Beneficials         | Static lists only, no user customisation per variety           | High-Value           | S      | Medium    | Phase A3   |
+| G29 | Pest/Disease/Beneficial Reference (detail pages)      | 160+ treatments exist, no detail pages or browseable reference | High-Value           | M      | High      | Phase A (done) / A3 (deferred) |
+| G30 | Per-Variety Custom Pests/Diseases/Beneficials         | Static lists only, no user customisation per variety           | High-Value           | S      | Medium    | Phase A3 (deferred) |
+| G31 | Bed Management                                        | Free-text `bed_name` on Plant, no bed entity or rotation       | High-Value           | XL     | High      | Phase B2   |
 
 ---
 
@@ -296,9 +299,11 @@ Shared foundations (types, services, config files) are built in the phase that f
 
 ---
 
-### Phase A3: Config — Beneficials + Custom Entry CRUD (F10)
+### Phase A3: Config — Beneficials + Custom Entry CRUD (F10) — ⏭ DEFERRED (after Phase H)
 
 **Goal**: Beneficials reference as separate More menu item. Custom entry CRUD for pests/diseases/beneficials. Organic input recipes reference. No unified hub screen.
+
+> **Deferred**: Skipping A3 now — Beneficials and custom CRUD are not blocking for Phase B/B2. Will revisit after Phase H.
 **Screens**: BeneficialListScreen (NEW), BeneficialDetailScreen (NEW)
 
 | Step | Feature                                                                                          | Effort | Risk | Dependencies    |
@@ -332,8 +337,8 @@ Shared foundations (types, services, config files) are built in the phase that f
 | B.1  | F9 form components — EditBotanicalIdentitySection, EditQuickInfoSection, EditRelationshipsSection, EditBeneficialsSection, EditNutritionSection, EditCareGuidanceSection, EditSafetySection | M      | Low    | Phase A2 (catalog data)       |
 | B.2  | Deep-links (2.15) — pest/disease/beneficial chips navigate to reference detail screens                                                                                                      | S      | Low    | Phase A/A3 + B.1              |
 | B.3  | F5 harvest tracking — HarvestLog type, `harvests.ts` service, migration 003, yield chart on PlantDetailScreen                                                                               | M      | Medium | Phase 0                       |
-| B.4  | F6 growth stage progression — `growth_stage_history` on Plant, `updateGrowthStage()`, timeline on PlantDetailScreen, migration 004                                                          | S      | Low    | Phase 0                       |
-| B.5  | F7 zone-based planting — `planting_zone` field, `zoneCompanionRules.ts`, zone picker on form, companion warnings                                                                            | M      | Medium | Phase 0                       |
+| B.4  | F6 growth stage auto-progression — computed on-the-fly from `planting_date` + per-variety `growthStageDurations` on `PlantCareProfile`. New fields: `growthStageDurations`, `annualCycleDurations`, `floweringStartMonth` on profile; `growth_stage_pinned`, `growth_stage_history` on Plant. Functions: `computeExpectedGrowthStage()`, `computeAnnualCycleStage()`, `getEffectiveGrowthStage()`. Pin/unpin override. Fruit tree annual cycling after `yearsToFirstHarvest`. Coconut exempt (existing `getCoconutAgeInfo()`). Timeline UI on PlantDetailScreen. Migration 004 seeds history from existing data. | M      | Medium | Phase 0, Phase A2 (durations data) |
+| B.5  | F7 zone-based planting — `planting_zone` field, `zoneCompanionRules.ts`, zone picker on form, companion warnings. **Note: Subsumed by Phase B2 bed light zones + guild layers — implement B2 instead.**                                                                                | M      | Medium | Phase 0                       |
 | B.6  | Coconut per-tree tracking (2.5) — `tree_number` on HarvestLog, per-tree yield trend                                                                                                         | M      | Medium | B.3                           |
 | B.7  | Seed source (2.8) — `seed_source` field on Plant                                                                                                                                            | S      | Low    | Phase 0                       |
 | B.8  | PlantNowBanner component (F3) — "Plant now ✅ / Wait until X" badge on plant form (shared with Phase C)                                                                                     | S      | Low    | Phase A2 (growingSeason data) |
@@ -344,12 +349,58 @@ Shared foundations (types, services, config files) are built in the phase that f
 - Plant form shows 7 new sections (botanical identity, quick info, relationships, beneficials, nutrition, care guidance, safety)
 - Pest chip "Fruit Borer" → navigates to PestDetailScreen
 - Harvest log entries accumulate, PlantDetailScreen shows yield-per-season chart
-- Growth stage transitions logged with timestamps, timeline visible
+- Growth stage auto-computed from `planting_date` + variety durations (tomato planted 30 days ago shows "Vegetative")
+- Manual pin overrides computed stage; unpin reverts to computed
+- Fruit tree (mango) past `yearsToFirstHarvest` shows annual cycle: Flowering → Fruiting → Harvest → Dormancy
+- Coconut shows age stage from `getCoconutAgeInfo()`, not growth stage engine
+- `growth_stage_history` records each transition with timestamp
+- Timeline visualization on PlantDetailScreen shows all stage transitions
 - Adding sun-loving plant under coconut canopy zone shows warning
 - Plant form shows Beneficial Critters chip row (e.g. moringa → honeybees, parakeets)
 - Plant form shows Nutrition section with vitamins/minerals chips
 - Plant form shows expandable Growing / Feeding / Harvesting / Storage / Pruning narrative blocks
 - Plant form shows red "Toxic to pets" warning for chives/onions; hidden for pet-safe plants
+
+---
+
+### Phase B2: Bed Management (F12, G7, G12, G31)
+
+**Goal**: First-class bed entities with crop rotation engine, companion/guild validation, and cross-cutting integration across all existing screens. Generic farm layout — not locked to coconut intercrop. `has_coconut_canopy` is an optional boolean property on any bed, not a bed type.
+**Screens**: BedListScreen (NEW), BedDetailScreen (NEW), BedFormScreen (NEW), BedPlantPickerScreen (NEW) + modifications to 10 existing screens/components.
+
+| Step | Feature                                                                                                                                                                                             | Effort | Risk   | Dependencies                  |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------ | ----------------------------- |
+| B2.1  | Schema + Types — `Bed`, `BedType`, `LightZone`, `CropFamily`, `BedLayer`, `BedStatus`, `BedPosition`, `CropFamilyEntry` types; extend `Plant` with optional bed fields (`bed_id`, `bed_layer`, `sow_date`, `crop_family`, `spacing_cm`, `position_in_bed`, `light_requirement`, `season_suitability`); extend `JournalEntry` with optional `bed_id` | S      | Low    | None                          |
+| B2.2  | Bed Config Data — `src/config/beds/` (6 files): `bedRecommendations.ts` (land area → bed count), `guildDefaults.ts` (4-layer defaults), `companionRules.ts` (beneficial/harmful pairs + guild validation), `bedPlantCatalog.ts` (25+ KK bed plants), `rotationRules.ts` (Leafy→Fruiting→Legume→Root, Solanaceae 730d rule, 40% legume buffer), `index.ts` | M      | Low    | B2.1                          |
+| B2.3  | Service + Domain Helpers — `beds.ts` (10 CRUD functions: `getBeds`, `getBedById`, `createBed`, `updateBed`, `deleteBed`, `assignPlantToBed`, `removePlantFromBed`, `getRotationSuggestion`, `markBedResting`, `getLegumeCoveragePercent`); `bedHelpers.ts` (10 pure functions: rotation, companion, validation, guild warnings); extend `plants.ts` with `getPlantsByBed(bedId)`; extend `storage.ts`, `dataCache.ts`, `firestore.rules` | M-L    | Medium | B2.1, B2.2                    |
+| B2.4  | Hooks — `useBedData.ts` (beds list + legume coverage + `useFocusEffect`), `useBedDetail.ts` (single bed + plants + rotation suggestion)                                                            | S      | Low    | B2.3                          |
+| B2.5  | Navigation + Screens — `BedsStackParamList` in `navigation.types.ts`, `BedStack` navigator, new Beds tab (6th tab, icon: `grid-outline`); `BedListScreen` (FlatList + legume banner + FAB), `BedFormScreen` (create/edit with width ≤ 1.2m validation, coconut distance ≥ 2.0m), `BedCard` component + style files                                  | M      | Medium | B2.3, B2.4                    |
+| B2.6  | Plant Form Integration — modify `usePlantFormState` (`bedId`/`bedLayer` state, bed picker dropdown); `EditLocationSection` bed dropdown replacing free-text `bedName`; `WizardStep2` bed picker; `BedPlantPickerScreen` (multi-step: filter → layer → spacing → rotation guard → confirm)                                                               | M      | Medium | B2.3, B2.5                    |
+| B2.7  | Plant Display Cross-Cutting — `PlantCard` shows bed tag from `bed_id`; `PlantDetailScreen` adds Bed Context section (bed name, dimensions, layer, bed-mates, companion indicators); `TaskCard` shows bed subtitle                                                                                                                                      | S-M    | Low    | B2.3, B2.5                    |
+| B2.8  | Filtering + Grouping Cross-Cutting — `PlantFilterSheet` adds bed filter chips; `PlantsScreen` adds "Group by bed" option; `CalendarScreen` adds `"bed"` to `GROUP_OPTIONS`                                                                                                                                                                             | S      | Low    | B2.5, B2.7                    |
+| B2.9  | Home + Journal Cross-Cutting — `TodayScreen` bed overview card (count, occupancy %, legume coverage, beds needing rotation); `JournalFormScreen` bed picker; `JournalScreen` bed filter chip                                                                                                                                                           | S-M    | Low    | B2.5                          |
+| B2.10 | Rotation Engine — wire rotation advisor into `BedDetailScreen` (next family, top 3 crops, Solanaceae violation); legume coverage banner on `BedListScreen`; L1/L2 stagger warnings; "Mark as resting" creates 45-day chop-and-drop task via `tasks.ts`                                                                                                  | M      | Medium | B2.5, B2.6                    |
+| B2.11 | SVG Top-View Diagram *(DEFERRED)* — `BedDiagram.tsx` using `react-native-svg`, plant positions at grid by `position_in_bed` + `spacing_cm`, color-coded by layer. Implement only after B2.1–B2.10 stable.                                                                                                                                             | M-L    | High   | B2.5                          |
+| B2.12 | Tests + PGS Export — `bedHelpers.test.ts` (rotation, companion, validation), `beds.test.ts` (service CRUD); extend `backup.ts` for beds collection                                                                                                                                                                                                    | M      | Low    | B2.3                          |
+
+**Verification**:
+
+- `npx tsc --noEmit` passes after B2.1 type additions
+- Beds tab visible in navigation, all 4 screens accessible, back navigation works
+- Create bed → list shows it → edit → delete → verify cascade nulls plant `bed_id`
+- BedFormScreen rejects width > 1.2m on save; warns when `distance_from_trunk_m` < 2.0 with `has_coconut_canopy`
+- Plant form shows bed picker dropdown (replaces free-text `bedName`); selecting bed auto-fills light zone
+- `PlantCard` shows bed tag badge; `PlantDetailScreen` shows Bed Context section with bed-mates
+- `PlantFilterSheet` shows bed filter chips; `PlantsScreen` groups by bed correctly
+- `CalendarScreen` groups tasks by bed when selected
+- `TodayScreen` shows bed overview card with legume coverage %
+- `JournalFormScreen` offers bed picker; `JournalScreen` filters by bed
+- Rotation guard blocks Solanaceae reassignment within 730 days (with user override)
+- Light mismatch shows hard warning for full_sun plant in low_light bed
+- Legume coverage % visible; warning banner appears when < 40%
+- "Mark as resting" sets bed status, creates 45-day task template
+- Firestore rules block unauthenticated access to `beds` collection
+- `npm run lint` + `npm test` pass with zero errors
 
 ---
 
@@ -450,8 +501,8 @@ Shared foundations (types, services, config files) are built in the phase that f
 
 | Step | Feature                                                                                           | Effort | Risk   | Dependencies                                        |
 | ---- | ------------------------------------------------------------------------------------------------- | ------ | ------ | --------------------------------------------------- |
-| H.1  | Crop Rotation Planner (G12) — family-based rotation rules, "what to plant next" after harvest     | M      | Low    | Phase B (zone model) + Phase A2 (`taxonomicFamily`) |
-| H.2  | Farm Zone Mapping (G22) — zone → bed hierarchy, current/historical plantings per bed              | L      | Medium | Phase B (zone model)                                |
+| H.1  | Crop Rotation Planner (G12) — **Subsumed by Phase B2.10** (rotation engine). Remainder: advanced multi-season rotation planning UI, rotation history analytics | M      | Low    | Phase B2                                             |
+| H.2  | Farm Zone Mapping (G22) — **Partially addressed by Phase B2** (beds with dimensions + location_id). Remainder: inter-bed spatial layout, full farm SVG map     | L      | Medium | Phase B2                                             |
 | H.3  | Soil Health Recommendations (G23) — pH-based liming/amendment suggestions from LocationProfile    | M      | Low    | None                                                |
 | H.4  | Lifecycle Economics (G26) — maintenance cost vs. yield projection for perennials, replacement ROI | M      | Medium | Phase B (harvest data, coconut tracking)            |
 | H.5  | Zone-Aware Config System (G27) — full parameterization for 7 TN agro-climatic zones               | XL     | High   | Phase 0, Phase G                                    |
@@ -660,26 +711,113 @@ interface HarvestLog {
 
 ---
 
-### F6: Growth Stage Progression (Phase B)
+### F6: Growth Stage Auto-Progression + Annual Cycling (Phase B)
+
+**Approach**: Computed on-the-fly from `planting_date` + per-variety stage durations stored on `PlantCareProfile`. No background jobs, no timers. The function `getEffectiveGrowthStage(plant, careProfile)` is called at render time on `PlantDetailScreen` and `PlantCard`. Manual pin/unpin allows the user to override the computed stage (e.g. "I see flowers" → pin to Flowering).
+
+**Design Decisions**:
+- **Computed, not stored**: The "current" growth stage is derived from elapsed days since `planting_date` + profile durations. Only explicit manual overrides (`growth_stage_pinned`) and historical transitions (`growth_stage_history`) are persisted to Firestore.
+- **Pin/unpin**: When a user manually selects a stage, `growth_stage_pinned` is set to that stage. `getEffectiveGrowthStage()` returns pinned stage if set, otherwise computes. User can "Clear override" to unpin.
+- **Annual cycling for fruit trees**: After `yearsToFirstHarvest` elapses, fruit trees enter a repeating annual cycle: Flowering → Fruiting → Harvest → Dormancy. The cycle start month varies by species (mango: Dec, jackfruit: Dec, lemon: Feb, guava: continuous).
+- **Coconut exempt**: Coconut trees use the existing `getCoconutAgeInfo()` function which computes 6 age stages. They are excluded from the growth stage engine.
+- **Timber trees**: Progress through Seedling → Vegetative → Mature, then stay at Mature permanently.
 
 **Data Model Changes** (`database.types.ts`):
 
 ```typescript
-// Add to Plant interface
+// Extend PlantCareProfile
+growthStageDurations?: Partial<Record<GrowthStage, number>>;  // days per stage
+annualCycleDurations?: Partial<Record<GrowthStage, number>>;  // days per annual cycle stage (fruit trees)
+floweringStartMonth?: number;  // 1-12, month when annual cycle begins (e.g. 12 for mango)
+
+// Extend Plant interface
+growth_stage_pinned?: GrowthStage | false;  // manual override, false = use computed
 growth_stage_history?: Array<{
   stage: GrowthStage;
-  entered_at: string;  // ISO date
+  entered_at: string;   // ISO date
+  source: 'computed' | 'manual';
   notes?: string;
 }>;
 ```
 
+**Stage Sequences by PlantType**:
+
+| PlantType      | Linear Stages                                        | Annual Cycle (after maturity)           |
+| -------------- | ---------------------------------------------------- | --------------------------------------- |
+| `vegetable`    | Seedling → Vegetative → Flowering → Fruiting → Harvest | None (replant)                          |
+| `herb`         | Seedling → Vegetative → Harvest                        | None (continuous harvest perennials)    |
+| `flower`       | Seedling → Vegetative → Flowering → Harvest            | None (replant annuals)                  |
+| `fruit_tree`   | Seedling → Vegetative → Mature                         | Flowering → Fruiting → Harvest → Dormancy |
+| `timber_tree`  | Seedling → Vegetative → Mature                         | None (stays Mature)                     |
+| `shrub`        | Seedling → Vegetative → Flowering → Fruiting           | Optional annual if deciduous            |
+| `coconut_tree` | _Exempt — uses `getCoconutAgeInfo()`_                 | N/A                                     |
+
+**Annual Cycling Data** (Kanyakumari fruit trees):
+
+| Variety      | floweringStartMonth | Cycle                                    | Notes                          |
+| ------------ | ------------------- | ---------------------------------------- | ------------------------------ |
+| Mango        | 12 (Dec)            | Flower(60d) → Fruit(90d) → Harvest(30d) → Dormant(185d) | One main season                |
+| Jackfruit    | 12 (Dec)            | Flower(45d) → Fruit(120d) → Harvest(45d) → Dormant(155d) | Long fruiting                 |
+| Banana       | —                   | One-shot: Flower → Fruit → Harvest → **replant** | No cycling, sucker replant     |
+| Papaya       | continuous           | Flower(30d) → Fruit(120d) → Harvest(30d) → repeat | Near-continuous after maturity |
+| Guava        | continuous           | Flower(30d) → Fruit(90d) → Harvest(30d) → repeat  | Two flushes per year           |
+| Lemon/Lime   | 2 (Feb)             | Flower(30d) → Fruit(150d) → Harvest(60d) → Dormant(125d) | Main + minor flush            |
+| Pomegranate  | 2 (Feb)             | Flower(30d) → Fruit(150d) → Harvest(30d) → Dormant(155d) | Monsoon harvest                |
+
+**Computation Engine**:
+
+```typescript
+// New file: src/utils/growthStageHelpers.ts
+
+/** Compute the expected linear growth stage from planting_date + durations */
+export function computeExpectedGrowthStage(
+  plantingDate: string,
+  plantType: PlantType,
+  durations: Partial<Record<GrowthStage, number>>
+): { stage: GrowthStage; daysInStage: number; daysRemaining: number };
+
+/** For fruit trees past yearsToFirstHarvest, compute annual cycle position */
+export function computeAnnualCycleStage(
+  plantingDate: string,
+  yearsToFirstHarvest: number,
+  floweringStartMonth: number,
+  cycleDurations: Partial<Record<GrowthStage, number>>
+): { stage: GrowthStage; daysInStage: number; daysRemaining: number } | null;
+
+/** Top-level: returns pinned stage if set, otherwise computed (linear or annual) */
+export function getEffectiveGrowthStage(
+  plant: Plant,
+  careProfile: PlantCareProfile
+): { stage: GrowthStage; source: 'pinned' | 'computed' | 'annual_cycle'; daysInStage: number; daysRemaining: number };
+```
+
+**Stage Duration Derivation** (for profiles lacking explicit `growthStageDurations`):
+- `seedling` = `germinationDays.max + 7` (or 21 days default)
+- Remaining days (`daysToHarvest.max - seedling`) split by plant type:
+  - Vegetables: Vegetative 40%, Flowering 25%, Fruiting+Harvest 35%
+  - Herbs: Vegetative 60%, Harvest 40%
+  - Flowers: Vegetative 40%, Flowering 40%, Harvest 20%
+  - Fruit trees: Vegetative until `yearsToFirstHarvest`, then Mature + annual cycle
+
 **Files Modified**:
+- `src/types/database.types.ts` — new fields on `PlantCareProfile` and `Plant`
+- `src/utils/plantCareDefaults.ts` — add `growthStageDurations` / `annualCycleDurations` / `floweringStartMonth` for 40+ varieties
+- `src/utils/growthStageHelpers.ts` — **NEW** (3 exported functions above)
+- `src/services/plants.ts` — `pinGrowthStage(plantId, stage)`, `unpinGrowthStage(plantId)`, `appendGrowthStageHistory(plantId, entry)`
+- `src/screens/PlantDetailScreen.tsx` — growth timeline visualization, pin/unpin button, annual cycle indicator
+- `src/components/PlantCard.tsx` — show computed stage badge
+- `src/__tests__/utils/growthStageHelpers.test.ts` — **NEW** unit tests
 
-- `src/services/plants.ts` — `updateGrowthStage(plantId, stage, notes?)` function
-- `src/screens/PlantDetailScreen.tsx` — growth timeline visualization
-- `src/utils/plantHelpers.ts` — `getDaysToHarvest(plant)` using stage history + expected dates
+**Migration**: `004_growthStageHistory.ts`:
+- For each plant with `growth_stage` and `created_at`, seed `growth_stage_history` with one entry `{ stage, entered_at: created_at, source: 'computed' }`
+- Set `growth_stage_pinned = false` on all plants
 
-**Migration**: `004_growthStageHistory.ts` — initializes `growth_stage_history` with current `growth_stage` and `created_at`
+**Edge Cases**:
+- No `planting_date` → show "Set planting date to track growth" prompt, no computation
+- No `growthStageDurations` on profile → derive from `daysToHarvest` using split ratios above
+- Dormancy → manual stage only (user marks "I'm overwintering this plant")
+- Banana → one-shot lifecycle, no annual cycling, prompt "Replant sucker?" after harvest
+- Pre-bearing perennials (fruit tree < yearsToFirstHarvest) → show "X years until first harvest" instead of annual cycle
 
 ---
 
@@ -702,6 +840,152 @@ planting_zone?: 'under_canopy' | 'partial_shade' | 'open_sun' | 'border_fence' |
 **New Files**:
 
 - `src/utils/zoneCompanionRules.ts` — zone-specific companion/antagonist matrix (pepper loves coconut shade, turmeric under banana, etc.)
+
+> **Note**: F7 Zone-Based Planting is subsumed by Phase B2 Bed Management (bed light zones + guild layers). See F12 below.
+
+---
+
+### F12: Bed Management (Phase B2)
+
+**Design**: Generic farm bed layout — works for any organic garden, not locked to coconut intercrop. The `has_coconut_canopy` field is an optional boolean property on any bed, not a bed type. Beds are first-class Firestore entities linked to plants via `bed_id`.
+
+**Cross-Cutting Impact** — 16 existing screens/components need bed awareness:
+
+| Existing File                  | Integration                                                                                       |
+| ------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `PlantFormScreen` / `usePlantFormState` | Bed picker dropdown replaces free-text `bedName`; `bedId`/`bedLayer` state; auto-fill light zone from bed |
+| `EditLocationSection.tsx`      | Bed dropdown (populated from `getBeds()`) when `spaceType === "bed"`                              |
+| `WizardStep2.tsx`              | Bed picker in wizard step 2 location section                                                      |
+| `PlantCard.tsx`                | Bed tag badge from `bed_id` (replaces static `bed_name` display)                                  |
+| `PlantDetailScreen.tsx`        | New "Bed Context" section: bed name, dimensions, layer, bed-mates, companion indicators            |
+| `TaskCard.tsx`                 | Bed subtitle below plant name (e.g. "Tomato #3 · Bed A")                                         |
+| `PlantFilterSheet.tsx`         | New "Bed" filter section with chips per bed name + plant counts                                    |
+| `PlantsScreen.tsx`             | "Group by bed" option in sort/group controls                                                       |
+| `CalendarScreen.tsx`           | Add `"bed"` to `GROUP_OPTIONS` for bed-grouped task view                                           |
+| `TodayScreen.tsx`              | Bed overview card: bed count, occupancy %, legume coverage %, beds needing rotation                 |
+| `JournalFormScreen.tsx`        | Bed picker (bed-level observations: soil prep, mulching, rotation notes)                           |
+| `JournalScreen.tsx`            | "Filter by bed" chip; bed badge on entry cards                                                     |
+| `plants.ts` (service)          | `getPlantsByBed(bedId)` — new query with composite index `user_id + bed_id`                       |
+| `storage.ts`                   | Add `KEYS.BEDS_CACHE`                                                                              |
+| `dataCache.ts`                 | Add `CACHE_KEYS.BEDS`, `CACHE_KEYS.BED_DETAIL`                                                    |
+| `firestore.rules`              | Add `beds/{bedId}` owner-only read/write rules                                                     |
+
+**Data Model Changes** (`database.types.ts`):
+
+```typescript
+// New types
+type BedType = 'leafy' | 'fruiting' | 'spice' | 'root_legume' | 'climber' | 'herb' | 'mixed';
+type LightZone = 'full_sun' | 'partial_shade' | 'low_light';
+type CropFamily = 'leafy' | 'solanaceae' | 'legume' | 'root' | 'spice' | 'cucurbit' | 'allium' | 'rest';
+type BedLayer = 'canopy' | 'mid' | 'ground_cover' | 'root';
+type BedStatus = 'active' | 'resting' | 'preparing' | 'empty';
+interface BedPosition { row: number; col: number; }
+interface CropFamilyEntry { family: CropFamily; startDate: string; endDate: string | null; }
+
+// Bed interface (new Firestore collection: beds)
+interface Bed {
+  id: string;
+  user_id: string;
+  bed_tag: string;                    // e.g. "L1", "F2", "R1"
+  bed_type: BedType;
+  name: string;
+  width_m: number;                    // max 1.2m enforced
+  length_m: number;
+  light_zone: LightZone;
+  sun_hours?: number;
+  has_coconut_canopy?: boolean;       // optional — generic, not a bed type
+  distance_from_trunk_m?: number;     // relevant only when has_coconut_canopy
+  is_permanent?: boolean;
+  current_crop_family?: CropFamily | null;
+  crop_family_history: CropFamilyEntry[];
+  last_rotation_date?: string | null;
+  rotation_due_date?: string | null;
+  status: BedStatus;
+  rest_crop?: string | null;
+  chop_drop_due_date?: string | null;
+  location_id?: string | null;        // links to existing location hierarchy
+  notes?: string;
+  is_deleted?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Extend Plant interface (all optional — no migration needed)
+bed_id?: string | null;               // foreign key to Bed.id
+bed_layer?: BedLayer | null;
+sow_date?: string | null;
+crop_family?: CropFamily | null;
+spacing_cm?: number | null;
+position_in_bed?: BedPosition | null;
+light_requirement?: LightZone | null;
+season_suitability?: string[];
+
+// Extend JournalEntry (optional — no migration)
+bed_id?: string | null;
+```
+
+**Config Data** — new `src/config/beds/` directory:
+
+| File                      | Content                                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------------------- |
+| `bedRecommendations.ts`   | Land area (cents) → recommended bed count/size/path width lookup table                      |
+| `guildDefaults.ts`        | Permaculture 4-layer defaults per bed type (canopy/mid/ground/root plant examples)           |
+| `companionRules.ts`       | `BENEFICIAL_PAIRS`, `HARMFUL_PAIRS` arrays; guild validation constants (max 1 canopy/2m, tulsi 60cm, marigold in fruiting beds, fennel isolation) |
+| `bedPlantCatalog.ts`      | 25+ Kanyakumari bed plants with `crop_family`, `light_requirement`, `spacing_cm`, `season_suitability`, `tamil_name`, `bed_layer` defaults. Separate from existing `plantCareDefaults.ts`. |
+| `rotationRules.ts`        | Rotation sequence (Leafy→Fruiting→Legume→Root→repeat), Solanaceae 730-day rule, 40% legume buffer, L1/L2 stagger logic |
+| `index.ts`                | Re-exports                                                                                   |
+
+**Service Functions** (`src/services/beds.ts`) — follows `plants.ts` pattern (cache → `refreshAuthToken()` → `withTimeoutAndRetry()` → update cache → AsyncStorage fallback):
+
+| Function                    | Purpose                                                                    |
+| --------------------------- | -------------------------------------------------------------------------- |
+| `getBeds()`                 | Paginated, offline-first, cache key `CACHE_KEYS.BEDS`                     |
+| `getBedById(bedId)`         | Single fetch with dataCache freshness                                      |
+| `createBed(bedData)`        | Write to `beds` collection, invalidate cache                               |
+| `updateBed(bedId, updates)` | Partial update, invalidate                                                 |
+| `deleteBed(bedId)`          | Soft delete, cascade: set `bed_id = null` on all plants in that bed        |
+| `assignPlantToBed(...)`     | Updates plant `bed_id` + `bed_layer` + updates bed `current_crop_family`   |
+| `removePlantFromBed(plantId)` | Sets plant `bed_id = null`                                              |
+| `getRotationSuggestion(bedId)` | Reads `crop_family_history`, returns next family + top 3 crops          |
+| `markBedResting(bedId, restCrop)` | Sets status = resting, creates 45-day task via `createTaskTemplate()` |
+| `getLegumeCoveragePercent()` | `(beds in legume/rest) / (total non-permanent beds)`                      |
+
+**Domain Helpers** (`src/utils/bedHelpers.ts`) — pure functions, no Firestore:
+
+| Function                          | Purpose                                                                    |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| `getNextRotationFamily(current, history)` | Returns next family in rotation sequence                           |
+| `isSolanaceaeViolation(history)`  | Checks 730-day window for repeat Solanaceae                                |
+| `getCompanionCompatibility(a, b)` | Returns `"beneficial" \| "harmful" \| "neutral"`                           |
+| `getSuggestedCropsForBed(bed, season)` | Top 5 crops filtered by light zone + season + rotation                |
+| `calculateHarvestGap(L1, L2)`     | Days gap warning for staggered leafy beds                                  |
+| `getRecommendedBedCount(cents)`   | `{ beds, bedSize, pathWidth, notes }`                                      |
+| `validateBedWidth(widthM)`        | Error string if > 1.2m                                                     |
+| `validateCoconutDistance(distM)`  | Error string if < 2.0m with canopy                                         |
+| `getLightZoneFromSunHours(hours)` | Derives `LightZone` from numeric sun hours                                 |
+| `getGuildValidationWarnings(bed, plants)` | Canopy count, tulsi spacing, marigold missing, etc.                |
+
+**New Files** (22):
+
+- `src/config/beds/` — 6 config files
+- `src/services/beds.ts` — CRUD service
+- `src/utils/bedHelpers.ts` — pure domain logic
+- `src/hooks/useBedData.ts`, `src/hooks/useBedDetail.ts` — data hooks
+- `src/screens/BedListScreen.tsx`, `BedDetailScreen.tsx`, `BedFormScreen.tsx`, `BedPlantPickerScreen.tsx`
+- `src/components/BedCard.tsx`
+- `src/styles/bedListStyles.ts`, `bedDetailStyles.ts`, `bedFormStyles.ts`, `bedPlantPickerStyles.ts`, `bedCardStyles.ts`
+- `src/__tests__/utils/bedHelpers.test.ts`, `src/__tests__/services/beds.test.ts`
+
+**Decisions**:
+
+- **Generic, not coconut-intercrop**: `has_coconut_canopy` is optional boolean. Any farm layout works.
+- **New top-level Beds tab**: 6th tab via FloatingTabBar, icon `grid-outline`. Verify layout on narrow screens (320dp) during B2.5.
+- **Separate bed catalog**: `src/config/beds/bedPlantCatalog.ts` does NOT modify existing `plantCareDefaults.ts`.
+- **No migration needed**: All Plant/JournalEntry extensions are optional fields (null default). Beds collection is new.
+- **SVG deferred**: B2.11 not implemented until B2.1–B2.10 verified stable. Data integrity before cosmetics.
+- **Solanaceae 2-year rule**: Blocking warning with user override, not a hard block.
+- **`area_sqm`**: Computed client-side (`width_m × length_m`), not stored in Firestore.
+- **Existing phase overlaps subsumed**: G7 (zone planting) → B2 light zones; G12 (crop rotation) → B2.10 rotation engine; B.5 (zone-based planting) → B2 bed light zones + guild layers; H.1 partially → B2.10; H.2 partially → B2 bed entities.
 
 ---
 
@@ -843,7 +1127,7 @@ _Recording an actual pest incident (per-plant history)_:
 
 ---
 
-### F10: Beneficials + Custom Entry CRUD (Phase A3)
+### F10: Beneficials + Custom Entry CRUD (Phase A3) — ⏭ DEFERRED
 
 **Goal**: Browseable reference pages for beneficial critters as a separate More menu item, plus custom entry CRUD for pests/diseases/beneficials — adapted for organic gardening in Kanyakumari. Consolidates the existing scattered data (~52 `ORGANIC_TREATMENTS`, ~140 `TREATMENT_DETAILS`, ~37 `PEST_CATEGORY_MAP`/`DISEASE_CATEGORY_MAP`, 14 crops in `TAMIL_NADU_CROP_SPECIFIC_ISSUES`) into structured reference types with detail screens.
 
@@ -1354,18 +1638,19 @@ Add 6 convenience prop types: `PestListScreenNavigationProp`, `PestDetailScreenN
 
 ## 8. Final Recommendations
 
-### DO NOW (Phase A–A2 — Config)
+### DO NOW (Phase A–A2 — Config) ✅ SHIPPED
 
-1. **Build Pest & Disease reference screens (F11)** — static config, no Firestore, simplest standalone start
-2. **Enrich default catalog (F2)** — highest-ROI content work, data foundation for everything. Pest/disease chips deep-link to Phase A screens.
-3. **Build Beneficials + custom entry CRUD (F10)** — separate More menu item, completes reference set
+1. ~~**Build Pest & Disease reference screens (F11)**~~ — ✅ shipped Phase A
+2. ~~**Enrich default catalog (F2)**~~ — ✅ shipped Phase A2
+3. ~~**Build Beneficials + custom entry CRUD (F10)**~~ — ⏭ deferred to after Phase H (not blocking)
 
-### DO NEXT (Phase B–C — Plants & Home)
+### DO NEXT (Phase B–B2–C — Plants, Beds & Home)
 
 1. **Planter-style form depth (F9)** — 7 new sections, high perceived polish
 2. **Harvest tracking (F5)** — concrete value farmers care about
-3. **Growth stage + zone-based planting (F6, F7)** — tracks living plant progress
-4. **Deep-links from forms to reference screens (2.15)** — connects form chips to detail pages
+3. **Growth stage auto-progression + annual cycling (F6)** — computed stages, fruit tree cycling, pin/unpin override
+4. **Bed Management (F12, Phase B2)** — first-class bed entities, crop rotation engine, guild validation, cross-cuts 16 existing files. Subsumes F7 zone-based planting, G7, G12.
+5. **Deep-links from forms to reference screens (2.15)** — connects form chips to detail pages
 5. **"What to Plant Now" on TodayScreen (F3)** — farmers' #1 question, leverages enriched profiles
 6. **Weather card (F4)** — simple API call, high daily-use value
 
@@ -1379,7 +1664,7 @@ Add 6 convenience prop types: `PestListScreenNavigationProp`, `PestDetailScreenN
 ### DO LATER (Phase G–H)
 
 1. **Tamil i18n** — only after all screens feature-complete (extracting strings from moving targets is waste)
-2. **Crop rotation, farm mapping, soil recs, lifecycle economics** — deeper domain intelligence
+2. **Farm mapping remainder, soil recs, lifecycle economics** — deeper domain intelligence (crop rotation moved to Phase B2)
 
 ### DO NOT BUILD (Current Stage)
 
