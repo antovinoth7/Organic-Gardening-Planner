@@ -1,7 +1,7 @@
 # Organic Gardening Planner — Implementation Roadmap
 
 > Generated: April 12, 2026
-> Last updated: April 25, 2026 — Phase A3 deferred to after Phase H; F6 expanded to auto-computation + annual cycling for fruit trees; Phase B2 Bed Management added (generic farm layout, 12 sub-phases, cross-cuts 16 existing files)
+> Last updated: April 25, 2026 — Phase A3 deferred to after Phase H; F6 expanded to auto-computation + annual cycling for fruit trees; Phase B2 Bed Management added (generic farm layout, 12 sub-phases, cross-cuts 16 existing files); B.9 care task enable/disable toggles added (watering/fertilising/pruning per-plant ON/OFF, no migration required)
 > Previous: April 18, 2026 — Phase A2 shipped; roadmap restructured from priority-based to screen-by-screen approach; F2/F3 expanded + F9 Planter-style form enrichment (2.10–2.13) + F10 Garden Reference Guide (2.14–2.16) + hybrid configurability for pests/diseases/beneficials; F11 Pest & Disease Reference Screens (2.17–2.18) added
 > Status: Phase 0 shipped; Phase A shipped; Phase A2 shipped
 > Scope: Solo developer, iterative build, Firebase free-tier
@@ -342,8 +342,8 @@ Shared foundations (types, services, config files) are built in the phase that f
 | B.6  | Coconut per-tree tracking (2.5) — `tree_number` on HarvestLog, per-tree yield trend                                                                                                         | M      | Medium | B.3                           |
 | B.7  | Seed source (2.8) — `seed_source` field on Plant                                                                                                                                            | S      | Low    | Phase 0                       |
 | B.8  | PlantNowBanner component (F3) — "Plant now ✅ / Wait until X" badge on plant form (shared with Phase C)                                                                                     | S      | Low    | Phase A2 (growingSeason data) |
-| B.9  | Tests for new services + components                                                                                                                                                         | M      | Low    | B.1–B.7                       |
-
+B.9  | Care task enable/disable toggles — add `watering_enabled`, `fertilising_enabled`, `pruning_enabled` (optional boolean, default true) to `Plant` type. Expose as state in `usePlantFormState` (load from plant data; auto-set from `PlantCareProfile.wateringEnabled`/`fertilisingEnabled`/`pruningEnabled` when smart defaults fire). Inline ON/OFF toggle in each stepper card header in `EditCareScheduleSection` (all 3) and `WizardStep3` (watering + fertilising only). When OFF: hide frequency stepper, show "No task · rain-fed or manual" helper text, force frequency to null on save. `syncCareTasksForPlant` in `tasks.ts` checks `plant.watering_enabled !== false` (etc.) before adding each task type to `desiredFrequencies`. No migration needed — optional fields, treated as `true` when absent. Reuse existing `settingSwitchTrack`/`settingSwitchThumb` styles. | S      | Low    | Phase 0                       |
+| B.10 | Tests for new services + components                                                                                                                                                         | M      | Low    | B.1–B.9     
 **Verification**:
 
 - Plant form shows 7 new sections (botanical identity, quick info, relationships, beneficials, nutrition, care guidance, safety)
@@ -360,7 +360,11 @@ Shared foundations (types, services, config files) are built in the phase that f
 - Plant form shows Nutrition section with vitamins/minerals chips
 - Plant form shows expandable Growing / Feeding / Harvesting / Storage / Pruning narrative blocks
 - Plant form shows red "Toxic to pets" warning for chives/onions; hidden for pet-safe plants
-
+Watering toggle OFF in wizard or edit → no water task created after save; ON → water task created as normal
+- Fertilising toggle OFF → no fertilise task; saved state persists across edit / reload
+- Pruning toggle OFF for a fruit_tree → no prune task template generated
+- Smart defaults: selecting a variety whose `PlantCareProfile` has `wateringEnabled: false` auto-sets toggle to OFF
+- Existing plants without the new fields continue to behave as fully enabled (no data change required)
 ---
 
 ### Phase B2: Bed Management (F12, G7, G12, G31)
