@@ -11,7 +11,9 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       paddingHorizontal: 20,
       paddingTop: 16,
       paddingBottom: 20,
-      backgroundColor: theme.primary,
+      backgroundColor: theme.tabBarBackground,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
     },
     headerRow: {
       flexDirection: "row",
@@ -21,11 +23,11 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
     heroGreeting: {
       fontSize: 28,
       fontWeight: "bold",
-      color: theme.textInverse,
+      color: theme.text,
     },
     heroDate: {
       fontSize: 14,
-      color: theme.textInverse + "CC",
+      color: theme.textSecondary,
       marginTop: 4,
     },
     heroThemeToggle: {
@@ -34,7 +36,7 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: theme.textInverse + "33",
+      backgroundColor: theme.primary,
     },
     // Task Donut Card
     donutCard: {

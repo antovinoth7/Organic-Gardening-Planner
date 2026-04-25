@@ -10,7 +10,7 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       backgroundColor: theme.backgroundSecondary,
     },
     header: {
-      backgroundColor: theme.card,
+      backgroundColor: theme.tabBarBackground,
       paddingTop: 12,
       paddingHorizontal: 16,
       paddingBottom: 10,
@@ -36,7 +36,7 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: theme.primaryLight,
+      backgroundColor: theme.primary,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -47,7 +47,7 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       width: 7,
       height: 7,
       borderRadius: 4,
-      backgroundColor: theme.primary,
+      backgroundColor: theme.accent,
     },
     searchExpandedRow: {
       flex: 1,
@@ -59,6 +59,7 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       width: 40,
       height: 40,
       borderRadius: 20,
+      backgroundColor: theme.primary,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -86,7 +87,7 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       borderRadius: 20,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: theme.primaryLight,
+      backgroundColor: theme.primary,
     },
     filterToggleButton: {
       width: 40,
@@ -94,10 +95,10 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       borderRadius: 20,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: theme.primaryLight,
+      backgroundColor: theme.primary,
     },
     filterToggleButtonActive: {
-      backgroundColor: theme.primary,
+      backgroundColor: theme.accent,
     },
     filterBadge: {
       position: "absolute",

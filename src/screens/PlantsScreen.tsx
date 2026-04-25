@@ -553,7 +553,7 @@ export default function PlantsScreen(): React.JSX.Element {
                 }
               }}
             >
-              <Ionicons name="arrow-back" size={22} color={theme.text} />
+              <Ionicons name="chevron-back" size={22} color={theme.textInverse} />
             </TouchableOpacity>
             <View style={styles.searchExpandedWrapper}>
               <Ionicons name="search" size={16} color={theme.textSecondary} />
@@ -594,14 +594,14 @@ export default function PlantsScreen(): React.JSX.Element {
                 setSearchActive(true);
               }}
               >
-                <Ionicons name="search" size={20} color={theme.primary} />
+                <Ionicons name="search" size={20} color={theme.textInverse} />
                 {searchInput.trim() !== "" && <View style={styles.searchActiveDot} />}
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.headerIconBtn}
                 onPress={() => navigation.navigate("ArchivedPlants")}
               >
-                <Ionicons name="archive" size={20} color={theme.primary} />
+                <Ionicons name="archive" size={20} color={theme.textInverse} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
@@ -613,7 +613,7 @@ export default function PlantsScreen(): React.JSX.Element {
                 <Ionicons
                   name="funnel"
                   size={20}
-                  color={showFilters ? "#fff" : theme.primary}
+                  color={showFilters ? theme.primary : theme.textInverse}
                 />
                 {activeFilterCount > 0 && !showFilters && (
                   <View style={styles.filterBadge}>
@@ -777,7 +777,7 @@ export default function PlantsScreen(): React.JSX.Element {
           ) : hasMore && displayedPlants.length > 0 ? (
             <TouchableOpacity style={styles.loadMoreButton} onPress={loadMore}>
               <Text style={styles.loadMoreText}>Load More</Text>
-              <Ionicons name="chevron-down" size={16} color="#2e7d32" />
+              <Ionicons name="chevron-down" size={16} color={theme.primary} />
             </TouchableOpacity>
           ) : null
         }

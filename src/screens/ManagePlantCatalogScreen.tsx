@@ -148,7 +148,7 @@ export default function ManagePlantCatalogScreen(): React.JSX.Element {
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={22} color={theme.text} />
+          <Ionicons name="chevron-back" size={22} color={theme.textInverse} />
         </TouchableOpacity>
         <Text style={styles.title}>Manage Plant Catalog</Text>
         <View style={styles.headerSpacer} />

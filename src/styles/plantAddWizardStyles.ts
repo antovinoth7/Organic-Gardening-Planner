@@ -148,7 +148,7 @@ export const createWizardStyles = (theme: Theme): ReturnType<typeof StyleSheet.c
     wizardSaveBtn: {
       height: 48,
       flex: 1,
-      backgroundColor: theme.success,
+      backgroundColor: theme.primary,
       borderRadius: 24,
       alignItems: "center",
       justifyContent: "center",

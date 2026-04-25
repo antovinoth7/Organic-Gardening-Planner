@@ -592,7 +592,7 @@ export default function CalendarScreen(): React.JSX.Element {
                     if (!searchQuery.trim()) setSearchQuery("");
                   }}
                 >
-                  <Ionicons name="arrow-back" size={22} color={theme.text} />
+                  <Ionicons name="chevron-back" size={22} color={theme.textInverse} />
                 </TouchableOpacity>
                 <View style={styles.searchExpandedWrapper}>
                   <Ionicons name="search" size={16} color={theme.textSecondary} />
@@ -623,7 +623,7 @@ export default function CalendarScreen(): React.JSX.Element {
                     style={styles.searchIconBtn}
                     onPress={() => setSearchActive(true)}
                   >
-                    <Ionicons name="search" size={20} color={theme.primary} />
+                    <Ionicons name="search" size={20} color={theme.textInverse} />
                     {searchQuery.trim() !== "" && <View style={styles.searchActiveDot} />}
                   </TouchableOpacity>
                   {!isViewingToday && (
@@ -646,7 +646,7 @@ export default function CalendarScreen(): React.JSX.Element {
                     <Ionicons
                       name={selectedView === "week" ? "list" : "calendar"}
                       size={18}
-                      color={theme.primary}
+                      color={theme.textInverse}
                     />
                     <Text style={styles.viewToggleText}>
                       {selectedView === "week" ? "Week" : "Month"}
@@ -662,7 +662,7 @@ export default function CalendarScreen(): React.JSX.Element {
                     <Ionicons
                       name="options-outline"
                       size={20}
-                      color={(showGroupMenu || (groupBy !== "none" && filterTaskTypes.size === 0 && !filterOverdueOnly)) ? theme.textInverse : theme.primary}
+                      color={theme.textInverse}
                     />
                     {(filterTaskTypes.size > 0 || filterOverdueOnly) && !showGroupMenu && (
                       <View style={styles.filterBadge}>

@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import FloatingLabelInput from "../FloatingLabelInput";
 import { TaskTemplate } from "../../types/database.types";
 import { createStyles } from "../../styles/calendarStyles";
+import { useTheme } from "../../theme";
 
 interface TaskCompletionModalProps {
   visible: boolean;
@@ -34,6 +35,7 @@ export default function TaskCompletionModal({
   onClose,
   onConfirm,
 }: TaskCompletionModalProps): React.JSX.Element {
+  const theme = useTheme();
   return (
     <Modal
       visible={visible}
@@ -46,7 +48,7 @@ export default function TaskCompletionModal({
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Complete Task</Text>
             <TouchableOpacity onPress={onClose} disabled={isCompleting}>
-              <Ionicons name="close" size={24} color="#333" />
+              <Ionicons name="close" size={24} color={theme.text} />
             </TouchableOpacity>
           </View>
 

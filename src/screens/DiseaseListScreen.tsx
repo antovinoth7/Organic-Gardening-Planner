@@ -99,9 +99,10 @@ export default function DiseaseListScreen(): React.JSX.Element {
           onPress={navigation.goBack}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
+          <Ionicons name="chevron-back" size={24} color={theme.textInverse} />
         </TouchableOpacity>
         <Text style={styles.title}>Diseases</Text>
+        <View style={styles.headerSpacer} />
       </View>
 
       <View style={styles.searchContainer}>

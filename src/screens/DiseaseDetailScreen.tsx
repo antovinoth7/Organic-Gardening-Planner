@@ -55,7 +55,7 @@ export default function DiseaseDetailScreen(): React.JSX.Element {
       <View style={styles.container}>
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
           <TouchableOpacity style={styles.backButton} onPress={navigation.goBack}>
-            <Ionicons name="arrow-back" size={24} color={theme.text} />
+            <Ionicons name="chevron-back" size={24} color={theme.textInverse} />
           </TouchableOpacity>
           <View style={styles.headerContent}>
             <Text style={styles.title}>Not Found</Text>
@@ -79,7 +79,7 @@ export default function DiseaseDetailScreen(): React.JSX.Element {
           onPress={navigation.goBack}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
+          <Ionicons name="chevron-back" size={24} color={theme.textInverse} />
         </TouchableOpacity>
         <Text style={styles.headerEmoji}>{disease.emoji}</Text>
         <View style={styles.headerContent}>

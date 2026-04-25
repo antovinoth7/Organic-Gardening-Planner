@@ -10,7 +10,9 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
     header: {
       padding: 24,
       paddingTop: 12,
-      backgroundColor: theme.primary,
+      backgroundColor: theme.tabBarBackground,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
     },
     accountHeader: {
       flexDirection: "row",
@@ -21,7 +23,7 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: theme.textInverse + "33",
+      backgroundColor: theme.primary,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -31,7 +33,7 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
     accountLabel: {
       fontSize: 12,
       fontWeight: "600",
-      color: theme.textInverse + "B3",
+      color: theme.textTertiary,
       textTransform: "uppercase",
       letterSpacing: 1,
       marginBottom: 2,
@@ -39,7 +41,7 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
     accountEmail: {
       fontSize: 18,
       fontWeight: "700",
-      color: theme.textInverse,
+      color: theme.text,
     },
     content: {
       padding: 16,

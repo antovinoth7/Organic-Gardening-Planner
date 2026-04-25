@@ -13,9 +13,9 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       alignItems: "center",
       paddingHorizontal: 8,
       paddingVertical: 12,
-      backgroundColor: theme.backgroundSecondary,
+      backgroundColor: theme.tabBarBackground,
       borderBottomWidth: 1,
-      borderBottomColor: theme.borderLight,
+      borderBottomColor: theme.border,
     },
     headerIconButton: {
       width: 40,
@@ -23,7 +23,7 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       borderRadius: 20,
       alignItems: "center" as const,
       justifyContent: "center" as const,
-      backgroundColor: theme.borderLight,
+      backgroundColor: theme.primary,
     },
     title: {
       fontSize: 17,
@@ -1032,6 +1032,14 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       justifyContent: "space-between",
       alignItems: "center",
       marginBottom: 20,
+    },
+    modalCloseButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: theme.primary,
+      alignItems: "center",
+      justifyContent: "center",
     },
     modalTitle: {
       fontSize: 20,

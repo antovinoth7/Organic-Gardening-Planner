@@ -4,29 +4,29 @@
 
 export const lightTheme = {
   // Background colors
-  background: '#f5f5f5',
+  background: '#faf6f0',
   backgroundSecondary: '#ffffff',
-  backgroundTertiary: '#e8f5e9',
-  
+  backgroundTertiary: '#edf7f2',
+
   // Text colors
-  text: '#1a1a1a',
-  textSecondary: '#2f2f2f',
-  textTertiary: '#4a4a4a',
+  text: '#1a110a',
+  textSecondary: '#4a3828',
+  textTertiary: '#7a6858',
   textInverse: '#ffffff',
-  
+
   // Primary colors
-  primary: '#2e7d32',
-  primaryLight: '#e8f5e9',
-  primaryDark: '#1b5e20',
+  primary: '#1a4a2e',
+  primaryLight: '#edf7f2',
+  primaryDark: '#0f2d1a',
 
   // Accent colors
-  accent: '#e07a3f',
-  accentLight: '#fde7d6',
-  
+  accent: '#c8842a',
+  accentLight: '#fff8ed',
+
   // Border colors
-  border: '#dddddd',
-  borderLight: '#eeeeee',
-  borderDark: '#e0e0e0',
+  border: '#e8ddd4',
+  borderLight: '#f0e8dc',
+  borderDark: '#ddd0c4',
   
   // Status colors
   success: '#4caf50',
@@ -48,18 +48,18 @@ export const lightTheme = {
   // Input colors
   inputBackground: '#ffffff',
   inputText: '#1a1a1a',
-  inputPlaceholder: '#5f5f5f',
-  inputBorder: '#dddddd',
-  
+  inputPlaceholder: '#7a6858',
+  inputBorder: '#e8ddd4',
+
   // Picker colors
   pickerBackground: '#ffffff',
-  pickerText: '#333',
-  pickerBorder: '#dddddd',
-  
+  pickerText: '#1a110a',
+  pickerBorder: '#e8ddd4',
+
   // Tab bar
-  tabBarActive: '#2e7d32',
-  tabBarInactive: 'gray',
-  tabBarBackground: '#ffffff',
+  tabBarActive: '#1a4a2e',
+  tabBarInactive: '#7a6858',
+  tabBarBackground: '#faf6f0',
 };
 
 export const darkTheme = {
@@ -72,7 +72,7 @@ export const darkTheme = {
   text: '#fafafa',
   textSecondary: '#d6d6d6',
   textTertiary: '#b8b8b8',
-  textInverse: '#000000',
+  textInverse: '#ffffff',
   
   // Primary colors
   primary: '#4caf50',
@@ -103,7 +103,7 @@ export const darkTheme = {
 
   // Card & button
   card: '#1e1e1e',
-  buttonText: '#000',
+  buttonText: '#ffffff',
   
   // Input colors
   inputBackground: '#222',

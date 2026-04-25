@@ -262,8 +262,8 @@ export default function PestDiseaseModal({
                   ? "Edit Pest/Disease Record"
                   : "Add Pest/Disease Record"}
               </Text>
-              <TouchableOpacity onPress={handleClose}>
-                <Ionicons name="close" size={24} color="#333" />
+              <TouchableOpacity style={styles.modalCloseButton} onPress={handleClose}>
+                <Ionicons name="close" size={20} color={theme.textInverse} />
               </TouchableOpacity>
             </View>
 
@@ -296,7 +296,7 @@ export default function PestDiseaseModal({
                     name="bug"
                     size={20}
                     color={
-                      currentRecord.type === "pest" ? "#2e7d32" : "#666"
+                      currentRecord.type === "pest" ? theme.primary : theme.textTertiary
                     }
                   />
                   <Text
@@ -329,7 +329,7 @@ export default function PestDiseaseModal({
                     name="medical"
                     size={20}
                     color={
-                      currentRecord.type === "disease" ? "#2e7d32" : "#666"
+                      currentRecord.type === "disease" ? theme.primary : theme.textTertiary
                     }
                   />
                   <Text
@@ -404,7 +404,7 @@ export default function PestDiseaseModal({
                 style={styles.dateButton}
                 onPress={() => setShowDatePicker(true)}
               >
-                <Ionicons name="calendar-outline" size={20} color="#666" />
+                <Ionicons name="calendar-outline" size={20} color={theme.textSecondary} />
                 <Text
                   style={
                     currentRecord.occurredAt
@@ -727,7 +727,7 @@ export default function PestDiseaseModal({
                   </View>
                 ) : (
                   <View style={styles.pestPhotoPlaceholder}>
-                    <Ionicons name="camera" size={24} color="#999" />
+                    <Ionicons name="camera" size={24} color={theme.textTertiary} />
                     <Text style={styles.pestPhotoPlaceholderText}>
                       Add Photo
                     </Text>

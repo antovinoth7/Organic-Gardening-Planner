@@ -10,20 +10,31 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
     header: {
       flexDirection: "row",
       alignItems: "center",
+      justifyContent: "space-between",
       paddingHorizontal: 16,
       paddingTop: 12,
       paddingBottom: 16,
-      backgroundColor: theme.backgroundSecondary,
+      backgroundColor: theme.tabBarBackground,
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
     },
     backButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: theme.primary,
+      alignItems: "center",
+      justifyContent: "center",
       marginRight: 12,
+    },
+    headerSpacer: {
+      width: 24,
     },
     title: {
       fontSize: 20,
       fontWeight: "700",
       color: theme.text,
+      textAlign: "center",
       flex: 1,
     },
     searchContainer: {

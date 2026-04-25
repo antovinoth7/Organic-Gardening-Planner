@@ -14,9 +14,17 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       paddingHorizontal: 16,
       paddingTop: 12,
       paddingBottom: 16,
-      backgroundColor: theme.backgroundSecondary,
+      backgroundColor: theme.tabBarBackground,
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
+    },
+    backButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: theme.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     headerSpacer: {
       width: 24,

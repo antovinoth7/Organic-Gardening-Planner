@@ -118,7 +118,7 @@ export function PlantEditForm({ formState }: Props): React.JSX.Element {
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="arrow-back" size={22} color={theme.text} />
+            <Ionicons name="chevron-back" size={22} color={theme.textInverse} />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={styles.title}>Edit Plant</Text>

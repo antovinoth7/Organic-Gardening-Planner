@@ -759,7 +759,7 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.headerActionSlot}>
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={22} color={theme.text} />
+            <Ionicons name="chevron-back" size={22} color={theme.textInverse} />
           </TouchableOpacity>
         </View>
         <View style={styles.headerContent}>
@@ -1508,7 +1508,7 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
               </TouchableOpacity>
             </View>
             <Text style={styles.modalHint}>
-              Remove "{initialName}" from the catalog? This cannot be undone.
+              Remove &quot;{initialName}&quot; from the catalog? This cannot be undone.
             </Text>
             <View style={styles.modalActions}>
               <TouchableOpacity

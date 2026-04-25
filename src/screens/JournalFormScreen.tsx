@@ -329,8 +329,8 @@ export default function JournalFormScreen(): React.JSX.Element {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="close" size={28} color={theme.text} />
+        <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
+          <Ionicons name="close" size={24} color={theme.textInverse} />
         </TouchableOpacity>
         <Text style={styles.title}>
           {isEditing ? "Edit Entry" : "New Entry"}
@@ -479,7 +479,7 @@ export default function JournalFormScreen(): React.JSX.Element {
         )}
 
         <TouchableOpacity style={styles.addPhotoButton} onPress={pickImage}>
-          <Ionicons name="camera" size={20} color="#2e7d32" />
+          <Ionicons name="camera" size={20} color={theme.primary} />
           <Text style={styles.addPhotoText}>
             {photoItems.length > 0
               ? `Add More Photos (${photoItems.length})`

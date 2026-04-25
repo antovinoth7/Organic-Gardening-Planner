@@ -14,7 +14,7 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       paddingHorizontal: 16,
       paddingTop: 12,
       paddingBottom: 16,
-      backgroundColor: theme.backgroundSecondary,
+      backgroundColor: theme.tabBarBackground,
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
     },
@@ -22,11 +22,9 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       width: 36,
       height: 36,
       borderRadius: 18,
-      backgroundColor: theme.background,
+      backgroundColor: theme.primary,
       alignItems: "center",
       justifyContent: "center",
-      borderWidth: 1,
-      borderColor: theme.border,
     },
     headerSpacer: {
       width: 36,
@@ -104,12 +102,12 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       marginTop: 12,
     },
     exportButton: {
-      backgroundColor: theme.success,
+      backgroundColor: theme.primary,
     },
     importButton: {
-      backgroundColor: theme.textInverse,
+      backgroundColor: theme.background,
       borderWidth: 2,
-      borderColor: theme.success,
+      borderColor: theme.primary,
     },
     backupButtonText: {
       fontSize: 16,
@@ -132,6 +130,6 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       lineHeight: 18,
     },
     backupButtonTextSuccess: {
-      color: theme.success,
+      color: theme.primary,
     },
   });

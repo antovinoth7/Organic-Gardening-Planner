@@ -103,9 +103,9 @@ export function PlantAddWizard({ formState }: Props): React.JSX.Element {
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Ionicons
-            name={wizardStep > 1 ? "arrow-back" : "close"}
+            name={wizardStep > 1 ? "chevron-back" : "close"}
             size={22}
-            color={theme.text}
+            color={theme.textInverse}
           />
         </TouchableOpacity>
         <View style={formStyles.headerCenter}>

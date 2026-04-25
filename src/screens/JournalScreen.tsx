@@ -328,7 +328,7 @@ export default function JournalScreen(): React.JSX.Element {
                   if (!searchQuery.trim()) setSearchQuery("");
                 }}
               >
-                <Ionicons name="arrow-back" size={22} color={theme.text} />
+                <Ionicons name="chevron-back" size={22} color={theme.textInverse} />
               </TouchableOpacity>
               <View style={styles.searchExpandedWrapper}>
                 <Ionicons name="search" size={16} color={theme.textSecondary} />
@@ -363,7 +363,7 @@ export default function JournalScreen(): React.JSX.Element {
                   style={styles.searchIconBtn}
                   onPress={() => setSearchActive(true)}
                 >
-                  <Ionicons name="search" size={20} color={theme.primary} />
+                  <Ionicons name="search" size={20} color={theme.textInverse} />
                   {searchQuery !== "" && (
                     <View style={styles.searchActiveDot} />
                   )}
@@ -378,7 +378,7 @@ export default function JournalScreen(): React.JSX.Element {
                   <Ionicons
                     name="funnel"
                     size={20}
-                    color={showFilters ? "#fff" : theme.primary}
+                    color={theme.textInverse}
                   />
                   {activeFilterCount > 0 && !showFilters && (
                     <View style={styles.filterBadge}>
@@ -397,7 +397,7 @@ export default function JournalScreen(): React.JSX.Element {
                   <Ionicons
                     name={viewMode === "list" ? "grid" : "list"}
                     size={20}
-                    color={theme.primary}
+                    color={theme.textInverse}
                   />
                 </TouchableOpacity>
               </View>

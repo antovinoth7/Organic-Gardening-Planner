@@ -104,8 +104,8 @@ export default function ArchivedPlantsScreen(): React.JSX.Element {
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={24} color={theme.textInverse} />
         </TouchableOpacity>
         <Text style={styles.title}>Archived Plants</Text>
         <View style={styles.headerSpacer} />

@@ -152,7 +152,7 @@ export default function SettingsScreen(): React.JSX.Element {
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={22} color={theme.text} />
+          <Ionicons name="chevron-back" size={22} color={theme.textInverse} />
         </TouchableOpacity>
         <Text style={styles.title}>Settings</Text>
         <View style={styles.headerSpacer} />

@@ -17,6 +17,7 @@ import { createTaskTemplate } from "../../services/tasks";
 import { Plant, TaskType } from "../../types/database.types";
 import { getErrorMessage } from "../../utils/errorLogging";
 import { createStyles } from "../../styles/calendarStyles";
+import { useTheme } from "../../theme";
 
 const TASK_TYPE_ITEMS: DropdownItem[] = [
   { label: "💧 Water", value: "water" },
@@ -46,6 +47,7 @@ export default function CreateTaskModal({
   onClose,
   onCreated,
 }: CreateTaskModalProps): React.JSX.Element {
+  const theme = useTheme();
   const [taskType, setTaskType] = useState<TaskType>("water");
   const [selectedPlant, setSelectedPlant] = useState("");
   const [frequencyDays, setFrequencyDays] = useState("7");
@@ -136,8 +138,8 @@ export default function CreateTaskModal({
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Create Task</Text>
-            <TouchableOpacity onPress={handleClose}>
-              <Ionicons name="close" size={24} color="#333" />
+            <TouchableOpacity style={styles.modalCloseButton} onPress={handleClose}>
+              <Ionicons name="close" size={20} color={theme.textInverse} />
             </TouchableOpacity>
           </View>
 
@@ -174,7 +176,7 @@ export default function CreateTaskModal({
                 style={styles.dateButton}
                 onPress={() => setShowDatePicker(true)}
               >
-                <Ionicons name="calendar-outline" size={20} color="#666" />
+                <Ionicons name="calendar-outline" size={20} color={theme.textSecondary} />
                 <Text style={styles.dateButtonText}>
                   {startDate.toLocaleDateString("en-US", {
                     month: "short",
