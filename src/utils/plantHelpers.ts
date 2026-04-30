@@ -1,4 +1,11 @@
-import { GrowthStage, PlantType } from "../types/database.types";
+import {
+  GrowthStage,
+  GrowthStageDurations,
+  AnnualCycleDurations,
+  Plant,
+  PlantCareProfile,
+  PlantType,
+} from "../types/database.types";
 import { getPlantCareProfile } from "./plantCareDefaults";
 import { logger } from "./logger";
 
@@ -1355,4 +1362,261 @@ export function getPlantEmoji(name: string): string {
     if (PLANT_EMOJI_MAP[titled]) return PLANT_EMOJI_MAP[titled]!;
   }
   return "🌱";
+}
+
+// ── Growth Stage Auto-Progression (Phase B.4) ─────────────────────────
+
+/** Ordered stage progression for walking durations. */
+export const STAGE_ORDER: GrowthStage[] = [
+  "seedling",
+  "vegetative",
+  "flowering",
+  "fruiting",
+  "dormant",
+  "mature",
+];
+
+export interface ComputedGrowthStage {
+  stage: GrowthStage;
+  daysSinceStageStart: number;
+  daysUntilNextStage: number | null;
+  percentComplete: number;
+}
+
+/**
+ * Compute the expected growth stage for a plant based on elapsed days since
+ * planting and the per-variety stage durations.
+ *
+ * Returns null if plantingDate is missing/invalid or no durations provided.
+ */
+export function computeExpectedGrowthStage(
+  plantingDate: string | null | undefined,
+  durations: GrowthStageDurations | undefined,
+): ComputedGrowthStage | null {
+  if (!plantingDate || !durations) return null;
+
+  const planted = new Date(plantingDate + "T12:00:00");
+  if (isNaN(planted.getTime())) return null;
+
+  const now = new Date();
+  const elapsedDays = Math.floor(
+    (now.getTime() - planted.getTime()) / (24 * 60 * 60 * 1000),
+  );
+  if (elapsedDays < 0) return null;
+
+  // Walk stages in order, accumulating days
+  let accumulated = 0;
+  const definedStages = STAGE_ORDER.filter(
+    (s) => durations[s] !== undefined && durations[s]! > 0,
+  );
+
+  if (definedStages.length === 0) return null;
+
+  for (let i = 0; i < definedStages.length; i++) {
+    const stage = definedStages[i]!;
+    const stageDuration = durations[stage]!;
+    const stageEnd = accumulated + stageDuration;
+
+    if (elapsedDays < stageEnd || i === definedStages.length - 1) {
+      const daysSinceStageStart = elapsedDays - accumulated;
+      const isLastStage = i === definedStages.length - 1;
+      const daysUntilNextStage = isLastStage
+        ? null
+        : Math.max(0, stageEnd - elapsedDays);
+      const percentComplete = isLastStage
+        ? Math.min(100, Math.round((daysSinceStageStart / stageDuration) * 100))
+        : Math.min(100, Math.round((daysSinceStageStart / stageDuration) * 100));
+
+      return {
+        stage,
+        daysSinceStageStart,
+        daysUntilNextStage,
+        percentComplete,
+      };
+    }
+
+    accumulated = stageEnd;
+  }
+
+  // Should not reach here, but fallback to last stage
+  const lastStage = definedStages[definedStages.length - 1]!;
+  return {
+    stage: lastStage,
+    daysSinceStageStart: elapsedDays - accumulated,
+    daysUntilNextStage: null,
+    percentComplete: 100,
+  };
+}
+
+/**
+ * Compute the current annual cycle stage for a mature fruit tree.
+ *
+ * Only applies after `yearsToFirstHarvest` years have passed since planting.
+ * Uses `floweringStartMonth` as the cycle start and walks through the
+ * annualCycleDurations to determine the current position.
+ *
+ * Returns null if the tree is too young or data is missing.
+ */
+export function computeAnnualCycleStage(
+  plantingDate: string | null | undefined,
+  yearsToFirstHarvest: number | undefined,
+  annualCycleDurations: AnnualCycleDurations | undefined,
+  floweringStartMonth: number | undefined,
+): ComputedGrowthStage | null {
+  if (
+    !plantingDate ||
+    !annualCycleDurations ||
+    !floweringStartMonth ||
+    yearsToFirstHarvest === undefined
+  ) {
+    return null;
+  }
+
+  const planted = new Date(plantingDate + "T12:00:00");
+  if (isNaN(planted.getTime())) return null;
+
+  const now = new Date();
+  const elapsedDays = Math.floor(
+    (now.getTime() - planted.getTime()) / (24 * 60 * 60 * 1000),
+  );
+  const maturityDays = yearsToFirstHarvest * 365;
+
+  // Tree not yet mature enough for annual cycling
+  if (elapsedDays < maturityDays) return null;
+
+  // Compute day-of-year offset from floweringStartMonth
+  const cycleStartDate = new Date(
+    now.getFullYear(),
+    floweringStartMonth - 1,
+    1,
+  );
+  let dayInCycle = Math.floor(
+    (now.getTime() - cycleStartDate.getTime()) / (24 * 60 * 60 * 1000),
+  );
+  // Wrap to positive (handle months before cycle start)
+  const totalCycleDays = Object.values(annualCycleDurations).reduce(
+    (sum, d) => sum + (d ?? 0),
+    0,
+  );
+  if (totalCycleDays <= 0) return null;
+  dayInCycle = ((dayInCycle % totalCycleDays) + totalCycleDays) % totalCycleDays;
+
+  // Walk cycle stages
+  const cycleStages = STAGE_ORDER.filter(
+    (s) =>
+      annualCycleDurations[s] !== undefined && annualCycleDurations[s]! > 0,
+  );
+  if (cycleStages.length === 0) return null;
+
+  let accumulated = 0;
+  for (let i = 0; i < cycleStages.length; i++) {
+    const stage = cycleStages[i]!;
+    const stageDuration = annualCycleDurations[stage]!;
+    const stageEnd = accumulated + stageDuration;
+
+    if (dayInCycle < stageEnd || i === cycleStages.length - 1) {
+      const daysSinceStageStart = dayInCycle - accumulated;
+      const isLastStage = i === cycleStages.length - 1;
+      const daysUntilNextStage = isLastStage
+        ? Math.max(0, totalCycleDays - dayInCycle)
+        : Math.max(0, stageEnd - dayInCycle);
+
+      return {
+        stage,
+        daysSinceStageStart,
+        daysUntilNextStage,
+        percentComplete: Math.min(
+          100,
+          Math.round((daysSinceStageStart / stageDuration) * 100),
+        ),
+      };
+    }
+
+    accumulated = stageEnd;
+  }
+
+  return null;
+}
+
+export type GrowthStageSource =
+  | "pinned"
+  | "coconut"
+  | "annual_cycle"
+  | "computed"
+  | "manual";
+
+export interface EffectiveGrowthStage {
+  stage: GrowthStage;
+  source: GrowthStageSource;
+  daysSinceStageStart?: number;
+  daysUntilNextStage?: number | null;
+  percentComplete?: number;
+}
+
+/**
+ * Return the effective growth stage for a plant using the priority chain:
+ *   1. Pinned override (user set)
+ *   2. Coconut age info (coconut_tree)
+ *   3. Annual cycle (mature fruit trees)
+ *   4. Computed linear progression
+ *   5. Manual fallback (plant.growth_stage)
+ */
+export function getEffectiveGrowthStage(
+  plant: Plant,
+  careProfile: PlantCareProfile | null | undefined,
+): EffectiveGrowthStage {
+  // 1. Pinned override
+  if (plant.growth_stage_pinned) {
+    return { stage: plant.growth_stage_pinned, source: "pinned" };
+  }
+
+  // 2. Coconut — delegate to existing getCoconutAgeInfo()
+  if (plant.plant_type === "coconut_tree" && plant.planting_date) {
+    const ageInfo = getCoconutAgeInfo(plant.planting_date);
+    if (ageInfo) {
+      return { stage: ageInfo.growthStage, source: "coconut" };
+    }
+  }
+
+  if (careProfile) {
+    // 3. Annual cycle for mature fruit trees
+    if (careProfile.annualCycleDurations && careProfile.floweringStartMonth) {
+      const cycleResult = computeAnnualCycleStage(
+        plant.planting_date,
+        careProfile.yearsToFirstHarvest,
+        careProfile.annualCycleDurations,
+        careProfile.floweringStartMonth,
+      );
+      if (cycleResult) {
+        return {
+          stage: cycleResult.stage,
+          source: "annual_cycle",
+          daysSinceStageStart: cycleResult.daysSinceStageStart,
+          daysUntilNextStage: cycleResult.daysUntilNextStage,
+          percentComplete: cycleResult.percentComplete,
+        };
+      }
+    }
+
+    // 4. Computed linear progression
+    const linearResult = computeExpectedGrowthStage(
+      plant.planting_date,
+      careProfile.growthStageDurations,
+    );
+    if (linearResult) {
+      return {
+        stage: linearResult.stage,
+        source: "computed",
+        daysSinceStageStart: linearResult.daysSinceStageStart,
+        daysUntilNextStage: linearResult.daysUntilNextStage,
+        percentComplete: linearResult.percentComplete,
+      };
+    }
+  }
+
+  // 5. Manual fallback
+  return {
+    stage: plant.growth_stage ?? "seedling",
+    source: "manual",
+  };
 }

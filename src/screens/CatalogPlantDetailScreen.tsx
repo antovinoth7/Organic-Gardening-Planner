@@ -9,6 +9,8 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -42,6 +44,7 @@ import {
   SoilType,
   SunlightLevel,
   ToleranceLevel,
+  VarietyDetail,
   WaterRequirement,
 } from "../types/database.types";
 import { MoreStackParamList } from "../types/navigation.types";
@@ -55,6 +58,7 @@ import {
   getPestDiseaseEmoji,
 } from "../utils/plantHelpers";
 import {
+  CATEGORY_LABELS,
   FEEDING_INTENSITY_LABELS,
   FEEDING_INTENSITY_SUGGESTED_DAYS,
   FERTILISER_LABELS,
@@ -235,7 +239,7 @@ function formatCount(count: number, singular: string, plural = `${singular}s`): 
 export default function CatalogPlantDetailScreen(): React.JSX.Element {
   const navigation = useNavigation<NavProp>();
   const route = useRoute<RouteParam>();
-  const { plantName: initialName, plantType } = route.params;
+  const { plantName: initialName, plantType, isCreating = false } = route.params;
 
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -257,10 +261,14 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
   const [showDiseasePicker, setShowDiseasePicker] = useState(false);
   const [pestSearch, setPestSearch] = useState("");
   const [diseaseSearch, setDiseaseSearch] = useState("");
+  const [editingVariety, setEditingVariety] = useState<string | null>(null);
+  const [varietyDetailDraft, setVarietyDetailDraft] = useState<VarietyDetail>({});
 
   const categoryData = catalog.categories[plantType];
   const categoryPlants = categoryData?.plants ?? [];
   const categoryVarieties = categoryData?.varieties ?? {};
+  const categoryVarietyDetails: Record<string, Record<string, VarietyDetail>> =
+    categoryData?.varietyDetails ?? {};
   const categoryCareProfiles = careProfiles[plantType] ?? {};
   const varieties: string[] = categoryVarieties[initialName] ?? [];
 
@@ -379,23 +387,21 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
 
   // ─── Variety helpers ──────────────────────────────────────────────────────
 
+  const hasVarietyDetail = (v: string): boolean => {
+    const d = categoryVarietyDetails[initialName]?.[v];
+    if (!d) return false;
+    return (
+      d.daysToMaturity !== undefined ||
+      (d.seasonSuitability?.length ?? 0) > 0 ||
+      Boolean(d.seedSource?.trim()) ||
+      Boolean(d.notes?.trim())
+    );
+  };
+
   const handleAddVariety = (): void => {
-    const v = sanitizeName(newVariety);
-    if (!v) return;
-    const current = categoryVarieties[initialName] ?? [];
-    if (current.some((x) => x.toLowerCase() === v.toLowerCase())) {
-      setNewVariety("");
-      return;
-    }
-    const nextVarieties = { ...categoryVarieties, [initialName]: [...current, v] };
-    setCatalog((prev) => ({
-      ...prev,
-      categories: {
-        ...prev.categories,
-        [plantType]: { plants: categoryPlants, varieties: nextVarieties },
-      },
-    }));
     setNewVariety("");
+    setVarietyDetailDraft({});
+    setEditingVariety("");
   };
 
   const handleRemoveVariety = (v: string): void => {
@@ -404,13 +410,96 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
     const nextVarieties = { ...categoryVarieties };
     if (filtered.length === 0) delete nextVarieties[initialName];
     else nextVarieties[initialName] = filtered;
+    const nextPlantDetails = { ...(categoryVarietyDetails[initialName] ?? {}) };
+    delete nextPlantDetails[v];
+    const nextVarietyDetails = { ...categoryVarietyDetails, [initialName]: nextPlantDetails };
     setCatalog((prev) => ({
       ...prev,
       categories: {
         ...prev.categories,
-        [plantType]: { plants: categoryPlants, varieties: nextVarieties },
+        [plantType]: {
+          ...prev.categories[plantType],
+          plants: categoryPlants,
+          varieties: nextVarieties,
+          varietyDetails: nextVarietyDetails,
+        },
       },
     }));
+  };
+
+  const handleEditVarietyDetail = (v: string): void => {
+    setEditingVariety(v);
+    setVarietyDetailDraft(categoryVarietyDetails[initialName]?.[v] ?? {});
+  };
+
+  const handleSaveVarietyDetail = (): void => {
+    if (editingVariety === null) return;
+
+    if (editingVariety === "") {
+      const v = sanitizeName(newVariety);
+      if (!v) { setEditingVariety(null); return; }
+      const current = categoryVarieties[initialName] ?? [];
+      if (current.some((x) => x.toLowerCase() === v.toLowerCase())) {
+        setNewVariety("");
+        setEditingVariety(null);
+        return;
+      }
+      const draft: VarietyDetail = {
+        ...varietyDetailDraft,
+        seedSource: varietyDetailDraft.seedSource?.trim(),
+        notes: varietyDetailDraft.notes?.trim(),
+      };
+      const hasContent =
+        draft.daysToMaturity !== undefined ||
+        (draft.seasonSuitability?.length ?? 0) > 0 ||
+        Boolean(draft.seedSource) ||
+        Boolean(draft.notes);
+      const nextVarieties = { ...categoryVarieties, [initialName]: [...current, v] };
+      const nextPlantDetails = { ...(categoryVarietyDetails[initialName] ?? {}) };
+      if (hasContent) nextPlantDetails[v] = draft;
+      const nextVarietyDetails = { ...categoryVarietyDetails, [initialName]: nextPlantDetails };
+      setCatalog((prev) => ({
+        ...prev,
+        categories: {
+          ...prev.categories,
+          [plantType]: {
+            ...prev.categories[plantType],
+            plants: categoryPlants,
+            varieties: nextVarieties,
+            varietyDetails: nextVarietyDetails,
+          },
+        },
+      }));
+      setNewVariety("");
+      setEditingVariety(null);
+      return;
+    }
+
+    const draft: VarietyDetail = {
+      ...varietyDetailDraft,
+      seedSource: varietyDetailDraft.seedSource?.trim(),
+      notes: varietyDetailDraft.notes?.trim(),
+    };
+    const hasContent =
+      draft.daysToMaturity !== undefined ||
+      (draft.seasonSuitability?.length ?? 0) > 0 ||
+      Boolean(draft.seedSource) ||
+      Boolean(draft.notes);
+    const next = { ...(categoryVarietyDetails[initialName] ?? {}) };
+    if (hasContent) next[editingVariety] = draft;
+    else delete next[editingVariety];
+    const nextVarietyDetails = { ...categoryVarietyDetails, [initialName]: next };
+    setCatalog((prev) => ({
+      ...prev,
+      categories: {
+        ...prev.categories,
+        [plantType]: {
+          ...prev.categories[plantType],
+          varietyDetails: nextVarietyDetails,
+        },
+      },
+    }));
+    setEditingVariety(null);
   };
 
   // ─── Save ─────────────────────────────────────────────────────────────────
@@ -466,12 +555,19 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
       // ── Catalog update (rename + varieties) ─────────────────────────────
       let updatedPlants = categoryPlants;
       const updatedVarieties = { ...(catalog.categories[plantType]?.varieties ?? {}) };
+      const updatedVarietyDetails = { ...(catalog.categories[plantType]?.varietyDetails ?? {}) };
 
       if (trimmedName !== initialName) {
-        updatedPlants = categoryPlants.map((p) => (p === initialName ? trimmedName : p));
+        updatedPlants = isCreating
+          ? [...categoryPlants, trimmedName]
+          : categoryPlants.map((p) => (p === initialName ? trimmedName : p));
         if (updatedVarieties[initialName]) {
           updatedVarieties[trimmedName] = updatedVarieties[initialName]!;
           delete updatedVarieties[initialName];
+        }
+        if (updatedVarietyDetails[initialName]) {
+          updatedVarietyDetails[trimmedName] = updatedVarietyDetails[initialName]!;
+          delete updatedVarietyDetails[initialName];
         }
         const targets = plants.filter(
           (p) => p.plant_type === plantType && p.plant_variety === initialName,
@@ -492,7 +588,12 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
         ...catalog,
         categories: {
           ...catalog.categories,
-          [plantType]: { plants: updatedPlants, varieties: updatedVarieties },
+          [plantType]: {
+            ...catalog.categories[plantType],
+            plants: updatedPlants,
+            varieties: updatedVarieties,
+            varietyDetails: updatedVarietyDetails,
+          },
         },
       };
       await savePlantCatalog(nextCatalog);
@@ -618,13 +719,17 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
       }
       const nextVarieties = { ...(catalog.categories[plantType]?.varieties ?? {}) };
       delete nextVarieties[initialName];
+      const nextVarietyDetails = { ...(catalog.categories[plantType]?.varietyDetails ?? {}) };
+      delete nextVarietyDetails[initialName];
       const nextCatalog: PlantCatalog = {
         ...catalog,
         categories: {
           ...catalog.categories,
           [plantType]: {
+            ...catalog.categories[plantType],
             plants: categoryPlants.filter((p) => p !== initialName),
             varieties: nextVarieties,
+            varietyDetails: nextVarietyDetails,
           },
         },
       };
@@ -665,7 +770,7 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
   }
 
   const toleranceItems = Object.entries(TOLERANCE_LABELS).map(([value, label]) => ({ label, value }));
-  const displayName = name.trim() || initialName;
+  const displayName = name.trim() || (isCreating ? `New ${CATEGORY_LABELS[plantType]}` : initialName);
   const lifecycleLabel = careForm?.lifecycle
     ? LIFECYCLE_LABELS[careForm.lifecycle as Lifecycle]
     : undefined;
@@ -764,31 +869,35 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
         </View>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle} numberOfLines={1}>{displayName}</Text>
-          <View style={styles.headerMetaRow}>
-            <Text style={styles.headerMetaText} numberOfLines={1}>{usageSummary}</Text>
-            <View
-              style={[
-                styles.headerStatePill,
-                hasOverride ? styles.headerStatePillCustom : styles.headerStatePillDefault,
-              ]}
-            >
-              <Text
+          {!isCreating && (
+            <View style={styles.headerMetaRow}>
+              <Text style={styles.headerMetaText} numberOfLines={1}>{usageSummary}</Text>
+              <View
                 style={[
-                  styles.headerStatePillText,
-                  hasOverride
-                    ? styles.headerStatePillTextCustom
-                    : styles.headerStatePillTextDefault,
+                  styles.headerStatePill,
+                  hasOverride ? styles.headerStatePillCustom : styles.headerStatePillDefault,
                 ]}
               >
-                {hasOverride ? "Custom" : "App defaults"}
-              </Text>
+                <Text
+                  style={[
+                    styles.headerStatePillText,
+                    hasOverride
+                      ? styles.headerStatePillTextCustom
+                      : styles.headerStatePillTextDefault,
+                  ]}
+                >
+                  {hasOverride ? "Custom" : "App defaults"}
+                </Text>
+              </View>
             </View>
-          </View>
+          )}
         </View>
         <View style={styles.headerActionSlot}>
-          <TouchableOpacity style={styles.btnDangerIcon} onPress={handleDeleteRequest}>
-            <Ionicons name="trash-outline" size={18} color={theme.error} />
-          </TouchableOpacity>
+          {!isCreating && (
+            <TouchableOpacity style={styles.btnDangerIcon} onPress={handleDeleteRequest}>
+              <Ionicons name="trash-outline" size={18} color={theme.error} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -823,21 +932,23 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
               autoCorrect={false}
             />
           </View>
-          <View style={styles.careStatusBanner}>
-            <View style={styles.careStatus}>
-              <Ionicons
-                name={hasOverride ? "settings" : "leaf-outline"}
-                size={15}
-                color={hasOverride ? theme.primary : theme.textSecondary}
-              />
-              <Text style={styles.careStatusText}>
-                {hasOverride ? "Custom defaults active" : "Using shared app defaults"}
+          {!isCreating && (
+            <View style={styles.careStatusBanner}>
+              <View style={styles.careStatus}>
+                <Ionicons
+                  name={hasOverride ? "settings" : "leaf-outline"}
+                  size={15}
+                  color={hasOverride ? theme.primary : theme.textSecondary}
+                />
+                <Text style={styles.careStatusText}>
+                  {hasOverride ? "Custom defaults active" : "Using shared app defaults"}
+                </Text>
+              </View>
+              <Text style={styles.careStatusNote}>
+                New garden plants created from this catalog entry will inherit these values.
               </Text>
             </View>
-            <Text style={styles.careStatusNote}>
-              New garden plants created from this catalog entry will inherit these values.
-            </Text>
-          </View>
+          )}
           {careForm?.description !== undefined && (
             <View style={styles.fieldGroup}>
               <FieldLabelWithHelp
@@ -1248,7 +1359,7 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
                     style={styles.fieldLabelRow}
                   />
                   <View style={baseProfile.petToxicity ? styles.toxicBadge : styles.safeBadge}>
-                    <Text style={styles.badgeText}>
+                    <Text style={baseProfile.petToxicity ? styles.badgeText : styles.safeBadgeText}>
                       {baseProfile.petToxicity ? "⚠️ Pet Toxic" : "✓ Pet Safe"}
                     </Text>
                   </View>
@@ -1442,31 +1553,37 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
           icon="albums-outline"
           defaultExpanded={false}
           summary={varietiesSummary}
+          headerAction={
+            <TouchableOpacity
+              style={styles.sectionHeaderAction}
+              onPress={handleAddVariety}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Add variety"
+            >
+              <Ionicons name="add" size={16} color={theme.primary} />
+            </TouchableOpacity>
+          }
         >
           <View style={styles.fieldGroup}>
-            <View style={styles.addRow}>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter custom variety"
-                placeholderTextColor={theme.textTertiary}
-                value={newVariety}
-                onChangeText={setNewVariety}
-                selectionColor={theme.primary}
-                cursorColor={theme.primary}
-                underlineColorAndroid="transparent"
-              />
-              <TouchableOpacity style={styles.addInlineButton} onPress={handleAddVariety}>
-                <Ionicons name="add" size={20} color={theme.textInverse} />
-              </TouchableOpacity>
-            </View>
             <View style={styles.chipRow}>
               {varieties.length === 0 ? (
                 <Text style={styles.emptyText}>No varieties yet.</Text>
               ) : (
                 varieties.map((v) => (
                   <View key={v} style={styles.chip}>
-                    <Text style={styles.chipText}>{v}</Text>
-                    <TouchableOpacity onPress={() => handleRemoveVariety(v)}>
+                    <TouchableOpacity
+                      style={styles.chipLabelArea}
+                      onPress={() => handleEditVarietyDetail(v)}
+                      activeOpacity={0.7}
+                    >
+                      {hasVarietyDetail(v) && <View style={styles.chipDot} />}
+                      <Text style={styles.chipText}>{v}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleRemoveVariety(v)}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                    >
                       <Ionicons name="close-circle" size={16} color={theme.textSecondary} />
                     </TouchableOpacity>
                   </View>
@@ -1480,7 +1597,7 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
       {/* Footer */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
         <View style={styles.footerActions}>
-          {hasOverride && (
+          {!isCreating && hasOverride && (
             <TouchableOpacity style={styles.btnResetPill} onPress={handleResetCare}>
               <Text style={styles.btnResetPillText}>Reset</Text>
             </TouchableOpacity>
@@ -1490,6 +1607,119 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Variety detail modal */}
+      <Modal
+        visible={editingVariety !== null}
+        transparent
+        animationType="slide"
+        hardwareAccelerated
+        onRequestClose={() => setEditingVariety(null)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {editingVariety === "" ? "Add Variety" : editingVariety}
+              </Text>
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setEditingVariety(null)}>
+                <Ionicons name="close" size={16} color={theme.textInverse} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalHint}>
+              {editingVariety === "" ? "Enter a name and optional details" : "Optional details for this variety"}
+            </Text>
+
+            {editingVariety === "" && (
+              <FloatingLabelInput
+                label="Variety name *"
+                value={newVariety}
+                onChangeText={setNewVariety}
+                autoFocus
+                autoCorrect={false}
+              />
+            )}
+
+            <FloatingLabelInput
+              label="Days to maturity"
+              keyboardType="numeric"
+              value={
+                varietyDetailDraft.daysToMaturity !== undefined
+                  ? String(varietyDetailDraft.daysToMaturity)
+                  : ""
+              }
+              onChangeText={(t) => {
+                const n = parseInt(sanitizeNum(t), 10);
+                setVarietyDetailDraft((d) => ({
+                  ...d,
+                  daysToMaturity: Number.isNaN(n) ? undefined : n,
+                }));
+              }}
+            />
+
+            <Text style={styles.pruningTipsLabel}>Season suitability</Text>
+            <View style={styles.seasonPillRow}>
+              {GROWING_SEASON_OPTIONS.map((opt) => {
+                const active = (varietyDetailDraft.seasonSuitability ?? []).includes(opt.value);
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[styles.seasonPill, active && styles.seasonPillActive]}
+                    onPress={() =>
+                      setVarietyDetailDraft((d) => {
+                        const cur = d.seasonSuitability ?? [];
+                        return {
+                          ...d,
+                          seasonSuitability: active
+                            ? cur.filter((s) => s !== opt.value)
+                            : [...cur, opt.value],
+                        };
+                      })
+                    }
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[styles.seasonPillText, active && styles.seasonPillTextActive]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <FloatingLabelInput
+              label="Seed source (e.g. TNAU, saved seed)"
+              value={varietyDetailDraft.seedSource ?? ""}
+              onChangeText={(t) => setVarietyDetailDraft((d) => ({ ...d, seedSource: t }))}
+              autoCorrect={false}
+            />
+
+            <Text style={styles.pruningTipsLabel}>Notes</Text>
+            <TextInput
+              style={styles.varietyNotesInput}
+              value={varietyDetailDraft.notes ?? ""}
+              onChangeText={(t) => setVarietyDetailDraft((d) => ({ ...d, notes: t }))}
+              multiline
+              numberOfLines={3}
+              placeholder="Farmer observations, soil preference, yield notes..."
+              placeholderTextColor={theme.textTertiary}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonPrimary]}
+                onPress={handleSaveVarietyDetail}
+              >
+                <Text style={styles.modalButtonTextPrimary}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* Delete confirmation modal */}
       <Modal
@@ -1503,8 +1733,8 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Delete Plant</Text>
-              <TouchableOpacity onPress={() => setShowDeleteConfirm(false)}>
-                <Ionicons name="close" size={20} color={theme.textSecondary} />
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowDeleteConfirm(false)}>
+                <Ionicons name="close" size={16} color={theme.textInverse} />
               </TouchableOpacity>
             </View>
             <Text style={styles.modalHint}>
@@ -1543,8 +1773,8 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Move Plants & Delete</Text>
-              <TouchableOpacity onPress={() => setShowReassign(false)}>
-                <Ionicons name="close" size={20} color={theme.textSecondary} />
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowReassign(false)}>
+                <Ionicons name="close" size={16} color={theme.textInverse} />
               </TouchableOpacity>
             </View>
             <Text style={styles.modalHint}>
@@ -1603,8 +1833,8 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
           <View style={[styles.modalContent, styles.pickerModalContent]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Pest</Text>
-              <TouchableOpacity onPress={() => { setShowPestPicker(false); setPestSearch(""); }}>
-                <Ionicons name="close" size={22} color={theme.textSecondary} />
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => { setShowPestPicker(false); setPestSearch(""); }}>
+                <Ionicons name="close" size={16} color={theme.textInverse} />
               </TouchableOpacity>
             </View>
             <TextInput
@@ -1653,8 +1883,8 @@ export default function CatalogPlantDetailScreen(): React.JSX.Element {
           <View style={[styles.modalContent, styles.pickerModalContent]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Link Disease</Text>
-              <TouchableOpacity onPress={() => { setShowDiseasePicker(false); setDiseaseSearch(""); }}>
-                <Ionicons name="close" size={22} color={theme.textSecondary} />
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => { setShowDiseasePicker(false); setDiseaseSearch(""); }}>
+                <Ionicons name="close" size={16} color={theme.textInverse} />
               </TouchableOpacity>
             </View>
             <TextInput

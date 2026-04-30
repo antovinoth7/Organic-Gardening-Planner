@@ -9,6 +9,7 @@ import {
 } from "../../hooks/usePlantFormState";
 import { createStyles } from "../../styles/plantFormStyles";
 import { createEditStyles } from "../../styles/plantEditFormStyles";
+import { createEnrichedSectionStyles } from "../../styles/enrichedSectionStyles";
 import CollapsibleSection from "../CollapsibleSection";
 import ThemedDropdown from "../ThemedDropdown";
 import { getPruningTechniques } from "../../utils/plantCareDefaults";
@@ -45,10 +46,17 @@ export function EditCareScheduleSection({ formState }: Props): React.JSX.Element
     setMulchingUsed,
     pruningFrequency,
     setPruningFrequency,
+    wateringEnabled,
+    setWateringEnabled,
+    fertilisingEnabled,
+    setFertilisingEnabled,
+    pruningEnabled,
+    setPruningEnabled,
   } = formState;
 
   const styles = useMemo(() => createStyles(theme), [theme]);
   const editStyles = useMemo(() => createEditStyles(theme), [theme]);
+  const enrichedStyles = useMemo(() => createEnrichedSectionStyles(theme), [theme]);
 
   return (
     <CollapsibleSection
@@ -150,14 +158,28 @@ export function EditCareScheduleSection({ formState }: Props): React.JSX.Element
       <View style={styles.fieldGroupDivider} />
       <Text style={styles.fieldGroupLabel}>{"\uD83D\uDCC5"} Watering & Feeding Schedule</Text>
 
-      <View style={styles.stepperCard}>
-        <View style={styles.stepperHeader}>
-          <View style={styles.stepperIconWrap}>
-            <Ionicons name="water" size={18} color={theme.primary} />
+      <View style={[styles.stepperCard, !wateringEnabled && enrichedStyles.stepperCardDisabled]}>
+        <View style={enrichedStyles.toggleHeader}>
+          <View style={enrichedStyles.toggleHeaderLeft}>
+            <View style={styles.stepperIconWrap}>
+              <Ionicons name="water" size={18} color={wateringEnabled ? theme.primary : theme.textTertiary} />
+            </View>
+            <Text style={styles.stepperLabel}>Water every</Text>
           </View>
-          <Text style={styles.stepperLabel}>Water every</Text>
+          <TouchableOpacity
+            onPress={() => setWateringEnabled(!wateringEnabled)}
+            activeOpacity={0.85}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: wateringEnabled }}
+          >
+            <View style={[styles.settingSwitchTrack, wateringEnabled && styles.settingSwitchTrackActive]}>
+              <View style={[styles.settingSwitchThumb, wateringEnabled && styles.settingSwitchThumbActive]} />
+            </View>
+          </TouchableOpacity>
         </View>
-        <View style={styles.stepperRow}>
+        {wateringEnabled ? (
+          <>
+            <View style={styles.stepperRow}>
           <TouchableOpacity
             style={styles.stepperButton}
             onPress={() => adjustFrequency(wateringFrequency, -1, setWateringFrequency)}
@@ -193,15 +215,33 @@ export function EditCareScheduleSection({ formState }: Props): React.JSX.Element
             {getFrequencyLabel(wateringFrequency)}
           </Text>
         ) : null}
+          </>
+        ) : (
+          <Text style={enrichedStyles.toggleDisabledText}>No task · rain-fed or manual</Text>
+        )}
       </View>
 
-      <View style={styles.stepperCard}>
-        <View style={styles.stepperHeader}>
-          <View style={[styles.stepperIconWrap, { backgroundColor: theme.accentLight }]}>
-            <Ionicons name="nutrition" size={18} color={theme.accent} />
+      <View style={[styles.stepperCard, !fertilisingEnabled && enrichedStyles.stepperCardDisabled]}>
+        <View style={enrichedStyles.toggleHeader}>
+          <View style={enrichedStyles.toggleHeaderLeft}>
+            <View style={[styles.stepperIconWrap, { backgroundColor: theme.accentLight }]}>
+              <Ionicons name="nutrition" size={18} color={fertilisingEnabled ? theme.accent : theme.textTertiary} />
+            </View>
+            <Text style={styles.stepperLabel}>Feed every</Text>
           </View>
-          <Text style={styles.stepperLabel}>Feed every</Text>
+          <TouchableOpacity
+            onPress={() => setFertilisingEnabled(!fertilisingEnabled)}
+            activeOpacity={0.85}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: fertilisingEnabled }}
+          >
+            <View style={[styles.settingSwitchTrack, fertilisingEnabled && styles.settingSwitchTrackActive]}>
+              <View style={[styles.settingSwitchThumb, fertilisingEnabled && styles.settingSwitchThumbActive]} />
+            </View>
+          </TouchableOpacity>
         </View>
+        {fertilisingEnabled ? (
+          <>
         <View style={styles.stepperRow}>
           <TouchableOpacity
             style={[styles.stepperButton, { borderColor: theme.accent }]}
@@ -238,6 +278,10 @@ export function EditCareScheduleSection({ formState }: Props): React.JSX.Element
             {getFrequencyLabel(fertilisingFrequency)}
           </Text>
         ) : null}
+          </>
+        ) : (
+          <Text style={enrichedStyles.toggleDisabledText}>No task · manual feeding only</Text>
+        )}
       </View>
 
       <View style={editStyles.spacerMedium} />
@@ -287,7 +331,23 @@ export function EditCareScheduleSection({ formState }: Props): React.JSX.Element
       {["fruit_tree", "shrub", "herb"].includes(plantType) && (
         <>
           <View style={styles.fieldGroupDivider} />
-          <Text style={styles.fieldGroupLabel}>{"\u2702\uFE0F"} Pruning</Text>
+          <View style={enrichedStyles.toggleHeader}>
+            <View style={enrichedStyles.toggleHeaderLeft}>
+              <Text style={styles.fieldGroupLabel}>{"\u2702\uFE0F"} Pruning</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setPruningEnabled(!pruningEnabled)}
+              activeOpacity={0.85}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: pruningEnabled }}
+            >
+              <View style={[styles.settingSwitchTrack, pruningEnabled && styles.settingSwitchTrackActive]}>
+                <View style={[styles.settingSwitchThumb, pruningEnabled && styles.settingSwitchThumbActive]} />
+              </View>
+            </TouchableOpacity>
+          </View>
+          {pruningEnabled ? (
+          <>
           <View style={editStyles.pruningFrequencyRow}>
             <Text style={[styles.frequencyCardLabel, editStyles.noMarginBottom]}>Every</Text>
             <View style={[styles.frequencyInputWrap, editStyles.frequencyInputWrapCompact]}>
@@ -352,6 +412,10 @@ export function EditCareScheduleSection({ formState }: Props): React.JSX.Element
               </View>
             ) : null;
           })()}
+          </>
+          ) : (
+            <Text style={enrichedStyles.toggleDisabledText}>No pruning task scheduled</Text>
+          )}
         </>
       )}
     </CollapsibleSection>

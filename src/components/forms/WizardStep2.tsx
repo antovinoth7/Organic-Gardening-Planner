@@ -146,7 +146,6 @@ export function WizardStep2({ formState }: Props): React.JSX.Element {
             value={name}
             onChangeText={(text) => setName(sanitizeAlphaNumericSpaces(text))}
             placeholderTextColor={theme.inputPlaceholder}
-            autoFocus
           />
           <View style={formStyles.nameCustomActions}>
             {name.trim().length > 0 && (

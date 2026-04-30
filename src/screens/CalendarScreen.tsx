@@ -655,14 +655,14 @@ export default function CalendarScreen(): React.JSX.Element {
                   <TouchableOpacity
                     style={[
                       styles.groupMenuButton,
-                      (showGroupMenu || (groupBy !== "none" && filterTaskTypes.size === 0 && !filterOverdueOnly)) && styles.groupMenuButtonActive,
+                      (showGroupMenu || isFilterActive || groupBy !== "none") && styles.groupMenuButtonActive,
                     ]}
                     onPress={() => setShowGroupMenu(!showGroupMenu)}
                   >
                     <Ionicons
-                      name="options-outline"
+                      name="funnel"
                       size={20}
-                      color={theme.textInverse}
+                      color={isFilterActive ? theme.primary : theme.textInverse}
                     />
                     {(filterTaskTypes.size > 0 || filterOverdueOnly) && !showGroupMenu && (
                       <View style={styles.filterBadge}>

@@ -1,15 +1,11 @@
-import FloatingLabelInput from '../components/FloatingLabelInput';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   Alert,
-  Modal,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,22 +22,13 @@ import {
   DEFAULT_PLANT_CATALOG,
   PLANT_CATEGORIES,
   getPlantCatalog,
-  savePlantCatalog,
 } from '../services/plantCatalog';
 import { getAllPlants } from '../services/plants';
 import { Plant, PlantCatalog, PlantType } from '../types/database.types';
 import { MoreStackParamList } from '../types/navigation.types';
 import { getPlantEmoji } from '../utils/plantHelpers';
 import { CATEGORY_LABELS } from '../utils/plantLabels';
-import { sanitizeLandmarkText } from '../utils/textSanitizer';
 import { getErrorMessage } from '../utils/errorLogging';
-
-const sanitizePlantName = (value: string): string => sanitizeLandmarkText(value).trim();
-
-const isDuplicate = (list: string[], value: string): boolean => {
-  const needle = value.toLowerCase();
-  return list.some((item) => item.toLowerCase() === needle);
-};
 
 export default function ManagePlantCatalogScreen(): React.JSX.Element {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -53,10 +40,7 @@ export default function ManagePlantCatalogScreen(): React.JSX.Element {
   const [catalog, setCatalog] = useState<PlantCatalog>(DEFAULT_PLANT_CATALOG);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [activeCategory, setActiveCategory] = useState<PlantType>('vegetable');
-  const [newPlantName, setNewPlantName] = useState('');
-  const [showAddInput, setShowAddInput] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -80,11 +64,6 @@ export default function ManagePlantCatalogScreen(): React.JSX.Element {
     }, [loadData])
   );
 
-  useEffect(() => {
-    setShowAddInput(false);
-    setNewPlantName('');
-  }, [activeCategory]);
-
   const plantCounts = useMemo(() => {
     const counts: Record<PlantType, Record<string, number>> = {
       vegetable: {},
@@ -105,44 +84,6 @@ export default function ManagePlantCatalogScreen(): React.JSX.Element {
   }, [plants]);
 
   const categoryPlants = catalog.categories[activeCategory]?.plants ?? [];
-  const categoryVarieties = catalog.categories[activeCategory]?.varieties ?? {};
-
-  const handleAddPlant = async (): Promise<void> => {
-    const name = sanitizePlantName(newPlantName);
-    if (!name) {
-      Alert.alert('Name Required', 'Enter a plant name.');
-      return;
-    }
-    if (isDuplicate(categoryPlants, name)) {
-      Alert.alert('Already Exists', 'That plant already exists.');
-      return;
-    }
-    const nextCatalog: PlantCatalog = {
-      ...catalog,
-      categories: {
-        ...catalog.categories,
-        [activeCategory]: {
-          plants: [...categoryPlants, name],
-          varieties: { ...categoryVarieties },
-        },
-      },
-    };
-    setSaving(true);
-    try {
-      const saved = await savePlantCatalog(nextCatalog);
-      setCatalog(saved);
-      setNewPlantName('');
-      setShowAddInput(false);
-      moreNav.navigate('CatalogPlantDetail', {
-        plantName: name,
-        plantType: activeCategory,
-      });
-    } catch (error: unknown) {
-      Alert.alert('Error', getErrorMessage(error) ?? 'Failed to save.');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <View style={styles.container}>
@@ -213,7 +154,6 @@ export default function ManagePlantCatalogScreen(): React.JSX.Element {
             </ScrollView>
 
             <View style={styles.section}>
-              {/* Plant list */}
               {categoryPlants.length === 0 ? (
                 <Text style={styles.emptyText}>No plants yet. Tap + to add one.</Text>
               ) : (
@@ -258,68 +198,19 @@ export default function ManagePlantCatalogScreen(): React.JSX.Element {
           {/* FAB */}
           <TouchableOpacity
             style={[styles.fab, { bottom: Math.max(insets.bottom, 16) + 16 }]}
-            onPress={() => setShowAddInput(true)}
-            disabled={saving}
+            onPress={() =>
+              moreNav.navigate('CatalogPlantDetail', {
+                plantName: '',
+                plantType: activeCategory,
+                isCreating: true,
+              })
+            }
             activeOpacity={0.85}
           >
             <Ionicons name="add" size={28} color={theme.textInverse} />
           </TouchableOpacity>
         </View>
       )}
-
-      <Modal
-        visible={showAddInput}
-        transparent
-        animationType="slide"
-        hardwareAccelerated
-        onRequestClose={() => {
-          setShowAddInput(false);
-          setNewPlantName('');
-        }}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add {CATEGORY_LABELS[activeCategory]}</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowAddInput(false);
-                  setNewPlantName('');
-                }}
-              >
-                <Ionicons name="close" size={22} color={theme.textSecondary} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.modalHint}>
-              You can add varieties and care details after saving.
-            </Text>
-            <FloatingLabelInput
-              label="Plant name"
-              value={newPlantName}
-              onChangeText={setNewPlantName}
-              autoFocus
-              autoCorrect={false}
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonPrimary]}
-                onPress={handleAddPlant}
-                disabled={saving}
-              >
-                {saving ? (
-                  <ActivityIndicator size="small" color={theme.textInverse} />
-                ) : (
-                  <Text style={styles.modalButtonTextPrimary}>Add</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
     </View>
   );
 }

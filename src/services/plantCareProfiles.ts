@@ -242,6 +242,30 @@ const normalizeOverride = (
   const customBeneficials = normalizeStringArray(override.customBeneficials);
   if (customBeneficials) normalized.customBeneficials = customBeneficials;
 
+  // B.4 fields — growth stage auto-progression
+  if (override.growthStageDurations && typeof override.growthStageDurations === "object") {
+    const durations: Partial<Record<GrowthStage, number>> = {};
+    for (const key of GROWTH_STAGES) {
+      const val = normalizeNumber((override.growthStageDurations as Record<string, unknown>)[key]);
+      if (val && val > 0) durations[key] = val;
+    }
+    if (Object.keys(durations).length > 0) normalized.growthStageDurations = durations;
+  }
+
+  if (override.annualCycleDurations && typeof override.annualCycleDurations === "object") {
+    const durations: Partial<Record<GrowthStage, number>> = {};
+    for (const key of GROWTH_STAGES) {
+      const val = normalizeNumber((override.annualCycleDurations as Record<string, unknown>)[key]);
+      if (val && val > 0) durations[key] = val;
+    }
+    if (Object.keys(durations).length > 0) normalized.annualCycleDurations = durations;
+  }
+
+  const floweringStartMonth = normalizeNumber(override.floweringStartMonth);
+  if (floweringStartMonth && floweringStartMonth >= 1 && floweringStartMonth <= 12) {
+    normalized.floweringStartMonth = floweringStartMonth;
+  }
+
   return normalized;
 };
 

@@ -59,9 +59,7 @@ export function WizardStep1({ formState }: Props): React.JSX.Element {
             />
             <View style={formStyles.photoHeroEditBadge}>
               <Ionicons name="camera" size={14} color="#fff" />
-              <Text style={formStyles.photoHeroEditBadgeText}>
-                Change Photo
-              </Text>
+              <Text style={formStyles.photoHeroEditBadgeText}>Change Photo</Text>
             </View>
           </>
         ) : (
@@ -242,7 +240,7 @@ export function WizardStep1({ formState }: Props): React.JSX.Element {
                 >
                   {plantingDate
                     ? formatDateDisplay(plantingDate)
-                    : ""}
+                    : "Tap to select date"}
                 </Text>
               </View>
               {plantingDate ? (

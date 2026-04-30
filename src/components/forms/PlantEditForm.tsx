@@ -27,12 +27,10 @@ import { EditBasicInfoSection } from "./EditBasicInfoSection";
 import { EditLocationSection } from "./EditLocationSection";
 import { EditCareScheduleSection } from "./EditCareScheduleSection";
 import { EditCoconutSection } from "./EditCoconutSection";
+import { EditSafetySection } from "./EditSafetySection";
+import { EditRelationshipsSection } from "./EditRelationshipsSection";
 import { sanitizeAlphaNumericSpaces } from "../../utils/textSanitizer";
 import { toLocalDateString, formatDateDisplay } from "../../utils/dateHelpers";
-import {
-  getCompanionSuggestions,
-  getIncompatiblePlants,
-} from "../../utils/plantHelpers";
 import { HealthStatus, GrowthStage } from "../../types/database.types";
 
 interface Props {
@@ -178,6 +176,12 @@ export function PlantEditForm({ formState }: Props): React.JSX.Element {
 
           {/* Care & Schedule */}
           <EditCareScheduleSection formState={formState} />
+
+          {/* Safety — pet toxicity warning (read-only) */}
+          <EditSafetySection formState={formState} />
+
+          {/* Companion Plants (read-only) */}
+          <EditRelationshipsSection formState={formState} />
 
           <CollapsibleSection
             title="Plant Health"
@@ -365,40 +369,6 @@ export function PlantEditForm({ formState }: Props): React.JSX.Element {
                 {notes.length}/{NOTES_MAX_LENGTH}
               </Text>
             </View>
-
-            {plantVariety && getCompanionSuggestions(plantVariety).length > 0 && (
-              <View style={styles.infoCard}>
-                <View style={styles.infoCardHeader}>
-                  <Ionicons name="leaf" size={20} color="#4CAF50" />
-                  <Text style={styles.infoCardTitle}>Companion Plants</Text>
-                </View>
-                <Text style={styles.infoCardSubtext}>Good companion plants for {plantVariety}:</Text>
-                <View style={styles.chipContainer}>
-                  {getCompanionSuggestions(plantVariety).map((companion) => (
-                    <View key={companion} style={styles.companionChip}>
-                      <Text style={styles.companionChipText}>{companion}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {plantVariety && getIncompatiblePlants(plantVariety).length > 0 && (
-              <View style={styles.infoCard}>
-                <View style={styles.infoCardHeader}>
-                  <Ionicons name="warning" size={20} color="#f57c00" />
-                  <Text style={styles.infoCardTitle}>Avoid Planting With</Text>
-                </View>
-                <Text style={styles.infoCardSubtext}>These plants can compete with {plantVariety}:</Text>
-                <View style={styles.chipContainer}>
-                  {getIncompatiblePlants(plantVariety).map((incompatible) => (
-                    <View key={incompatible} style={styles.incompatibleChip}>
-                      <Text style={styles.incompatibleChipText}>{incompatible}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
           </CollapsibleSection>
 
           <CollapsibleSection

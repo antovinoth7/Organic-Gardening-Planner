@@ -40,6 +40,7 @@ import {
   getDefaultHarvestSeason,
   CoconutAgeInfo,
   getCoconutAgeInfo,
+  computeExpectedGrowthStage,
 } from "../utils/plantHelpers";
 import {
   getPlantCareProfile,
@@ -167,6 +168,12 @@ export interface PlantFormStateReturn {
   setPruningFrequency: (v: string) => void;
   pruningNotes: string;
   setPruningNotes: (v: string) => void;
+  wateringEnabled: boolean;
+  setWateringEnabled: (v: boolean) => void;
+  fertilisingEnabled: boolean;
+  setFertilisingEnabled: (v: boolean) => void;
+  pruningEnabled: boolean;
+  setPruningEnabled: (v: boolean) => void;
   coconutFrondsCount: string;
   setCoconutFrondsCount: (v: string) => void;
   nutsPerMonth: string;
@@ -296,6 +303,10 @@ export function usePlantFormState(): PlantFormStateReturn {
   const [growthStage, setGrowthStage] = useState<GrowthStage>("seedling");
   const [pruningFrequency, setPruningFrequency] = useState("");
   const [pruningNotes, setPruningNotes] = useState("");
+  // Care task enable/disable toggles (Phase B)
+  const [wateringEnabled, setWateringEnabled] = useState(true);
+  const [fertilisingEnabled, setFertilisingEnabled] = useState(true);
+  const [pruningEnabled, setPruningEnabled] = useState(true);
   const [coconutFrondsCount, setCoconutFrondsCount] = useState("");
   const [nutsPerMonth, setNutsPerMonth] = useState("");
   const [lastClimbingDate, setLastClimbingDate] = useState("");
@@ -611,6 +622,7 @@ export function usePlantFormState(): PlantFormStateReturn {
       soilType, waterRequirement, wateringFrequency, fertilisingFrequency,
       preferredFertiliser, mulchingUsed, healthStatus, expectedHarvestDate,
       pestDiseaseHistory, growthStage, pruningFrequency, pruningNotes,
+      wateringEnabled, fertilisingEnabled, pruningEnabled,
       coconutFrondsCount, nutsPerMonth, lastClimbingDate,
     ]);
     if (!initialDataLoaded.current || shouldCaptureSnapshot.current) {
@@ -627,6 +639,7 @@ export function usePlantFormState(): PlantFormStateReturn {
     soilType, waterRequirement, wateringFrequency, fertilisingFrequency,
     preferredFertiliser, mulchingUsed, healthStatus, expectedHarvestDate,
     pestDiseaseHistory, growthStage, pruningFrequency, pruningNotes,
+    wateringEnabled, fertilisingEnabled, pruningEnabled,
     coconutFrondsCount, nutsPerMonth, lastClimbingDate,
   ]);
 
@@ -714,6 +727,10 @@ export function usePlantFormState(): PlantFormStateReturn {
       if (profile) {
         autoSuggestApplied.current = true;
         setAutoSuggestFired(true);
+        // Auto-set care toggles from profile
+        setWateringEnabled(profile.wateringEnabled !== false);
+        setFertilisingEnabled(profile.fertilisingEnabled !== false);
+        setPruningEnabled(profile.pruningEnabled !== false);
         if (profile.wateringEnabled !== false && profile.wateringFrequencyDays)
           setWateringFrequency(profile.wateringFrequencyDays.toString());
         if (profile.fertilisingEnabled !== false && profile.fertilisingFrequencyDays)
@@ -741,6 +758,19 @@ export function usePlantFormState(): PlantFormStateReturn {
     careProfilesLoaded,
     plantCareProfiles,
   ]);
+
+  // B.4: Auto-compute growth stage from planting_date for new plants
+  useEffect(() => {
+    if (plantId) return; // editing — keep manual/pinned stage
+    if (plantType === "coconut_tree") return; // handled by coconut age effect
+    if (!plantingDate || !plantVariety) return;
+    const profile = getPlantCareProfile(plantVariety, plantType);
+    if (!profile?.growthStageDurations) return;
+    const result = computeExpectedGrowthStage(plantingDate, profile.growthStageDurations);
+    if (result) {
+      setGrowthStage(result.stage);
+    }
+  }, [plantId, plantType, plantingDate, plantVariety]);
 
   // Combine parent + child location
   useEffect(() => {
@@ -1019,6 +1049,9 @@ export function usePlantFormState(): PlantFormStateReturn {
         setGrowthStage(plant.growth_stage || "seedling");
         setPruningFrequency(plant.pruning_frequency_days?.toString() || "");
         setPruningNotes(plant.pruning_notes || "");
+        setWateringEnabled(plant.watering_enabled !== false);
+        setFertilisingEnabled(plant.fertilising_enabled !== false);
+        setPruningEnabled(plant.pruning_enabled !== false);
         setCoconutFrondsCount(plant.coconut_fronds_count?.toString() || "");
         setNutsPerMonth(plant.nuts_per_month?.toString() || "");
         setLastClimbingDate(plant.last_climbing_date || "");
@@ -1140,7 +1173,15 @@ export function usePlantFormState(): PlantFormStateReturn {
           ? parseInt(pruningFrequency, 10)
           : null,
         pruning_notes: pruningNotes.trim() || null,
+        watering_enabled: wateringEnabled,
+        fertilising_enabled: fertilisingEnabled,
+        pruning_enabled: pruningEnabled,
       };
+
+      // Force frequency to null when toggle is OFF
+      if (!wateringEnabled) plantData.watering_frequency_days = null;
+      if (!fertilisingEnabled) plantData.fertilising_frequency_days = null;
+      if (!pruningEnabled) plantData.pruning_frequency_days = null;
 
       if (plantType === "fruit_tree") {
         plantData.harvest_start_date = harvestStartDate.trim() || null;
@@ -1279,6 +1320,12 @@ export function usePlantFormState(): PlantFormStateReturn {
     setPruningFrequency,
     pruningNotes,
     setPruningNotes,
+    wateringEnabled,
+    setWateringEnabled,
+    fertilisingEnabled,
+    setFertilisingEnabled,
+    pruningEnabled,
+    setPruningEnabled,
     coconutFrondsCount,
     setCoconutFrondsCount,
     nutsPerMonth,

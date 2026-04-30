@@ -37,6 +37,25 @@ export const lightTheme = {
   errorLight: '#ffebee',
   coconut: '#8B5A2B',
   
+  // Semantic chip colors
+  successLight: '#E8F5E9',
+  successBorder: '#C8E6C9',
+  successDark: '#2E7D32',
+  errorDark: '#C62828',
+  errorDarkest: '#B71C1C',
+  errorBorder: '#FFCDD2',
+  warningBorder: '#FFE0B2',
+  warningDark: '#E65100',
+  cautionLight: '#FFF8E1',
+  cautionBorder: '#FFECB3',
+  cautionDark: '#F57F17',
+  infoLight: '#E3F2FD',
+  infoBorder: '#BBDEFB',
+  infoDark: '#1565C0',
+  purpleLight: '#F3E5F5',
+  purpleBorder: '#E1BEE7',
+  purpleDark: '#7B1FA2',
+  
   // Special colors
   overlay: 'rgba(0,0,0,0.5)',
   shadow: '#000',
@@ -96,6 +115,25 @@ export const darkTheme = {
   warningLight: '#4a3a1f',
   errorLight: '#4a1f1f',
   coconut: '#A67B5B',
+  
+  // Semantic chip colors
+  successLight: '#1b3a1e',
+  successBorder: '#2e5930',
+  successDark: '#81c784',
+  errorDark: '#ef9a9a',
+  errorDarkest: '#e57373',
+  errorBorder: '#5a2020',
+  warningBorder: '#5a3a10',
+  warningDark: '#ffb74d',
+  cautionLight: '#4a3a10',
+  cautionBorder: '#5a4a10',
+  cautionDark: '#fff176',
+  infoLight: '#1a3050',
+  infoBorder: '#1a4070',
+  infoDark: '#90caf9',
+  purpleLight: '#3a1a4a',
+  purpleBorder: '#4a2a5a',
+  purpleDark: '#ce93d8',
   
   // Special colors
   overlay: 'rgba(0,0,0,0.8)',

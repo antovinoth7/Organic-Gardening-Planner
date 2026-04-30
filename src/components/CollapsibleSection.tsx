@@ -70,10 +70,7 @@ export default function CollapsibleSection({
 
   return (
     <View
-      style={[
-        styles.container,
-        !hasError && sectionStatus === "complete" && styles.containerComplete,
-      ]}
+      style={styles.container}
     >
       <View style={[styles.header, hasError && styles.headerError]}>
         <TouchableOpacity

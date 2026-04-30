@@ -242,6 +242,11 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       fontWeight: "700",
       color: theme.textInverse,
     },
+    safeBadgeText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: theme.primary,
+    },
     descriptionInput: {
       borderWidth: 1,
       borderColor: theme.borderLight,
@@ -378,19 +383,6 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       backgroundColor: theme.primaryLight,
       borderWidth: 1,
       borderColor: theme.primary + "30",
-    },
-    addInlineButton: {
-      width: 42,
-      height: 42,
-      borderRadius: 21,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: theme.primary,
-    },
-    addInlineButtonText: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: theme.textInverse,
     },
     savingOverlay: {
       flex: 1,
@@ -556,5 +548,66 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       textTransform: "uppercase",
       letterSpacing: 0.5,
       marginBottom: 6,
+    },
+    modalButtonPrimary: {
+      backgroundColor: theme.primary,
+    },
+    chipDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: theme.primary,
+    },
+    chipLabelArea: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+    },
+    seasonPillRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+      marginBottom: 12,
+    },
+    seasonPill: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 14,
+      backgroundColor: theme.background,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    seasonPillActive: {
+      backgroundColor: theme.primaryLight,
+      borderColor: theme.primary,
+    },
+    seasonPillText: {
+      fontSize: 12,
+      color: theme.textSecondary,
+      fontWeight: "500",
+    },
+    seasonPillTextActive: {
+      color: theme.primary,
+      fontWeight: "600",
+    },
+    modalCloseButton: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: theme.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    varietyNotesInput: {
+      borderWidth: 1,
+      borderColor: theme.borderLight,
+      borderRadius: 8,
+      padding: 10,
+      minHeight: 72,
+      color: theme.text,
+      fontSize: 14,
+      textAlignVertical: "top",
+      backgroundColor: theme.backgroundSecondary,
+      marginBottom: 4,
     },
   });

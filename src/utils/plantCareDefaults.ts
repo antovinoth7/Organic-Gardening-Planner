@@ -2,6 +2,8 @@ import {
   PlantType,
   PlantCareProfile,
   PlantCareProfiles,
+  GrowthStageDurations,
+  AnnualCycleDurations,
 } from "../types/database.types";
 
 /**
@@ -19,6 +21,7 @@ const DEFAULT_PROFILES_BY_TYPE: Record<PlantType, PlantCareProfile> = {
     soilType: "garden_soil",
     preferredFertiliser: "compost",
     initialGrowthStage: "seedling",
+    growthStageDurations: { seedling: 18, vegetative: 25, flowering: 15, fruiting: 22 },
   },
   herb: {
     waterRequirement: "medium",
@@ -29,6 +32,7 @@ const DEFAULT_PROFILES_BY_TYPE: Record<PlantType, PlantCareProfile> = {
     soilType: "potting_mix",
     preferredFertiliser: "compost",
     initialGrowthStage: "vegetative",
+    growthStageDurations: { seedling: 14, vegetative: 30, mature: 16 },
   },
   flower: {
     waterRequirement: "medium",
@@ -39,6 +43,7 @@ const DEFAULT_PROFILES_BY_TYPE: Record<PlantType, PlantCareProfile> = {
     soilType: "potting_mix",
     preferredFertiliser: "compost",
     initialGrowthStage: "vegetative",
+    growthStageDurations: { seedling: 14, vegetative: 30, flowering: 25 },
   },
   fruit_tree: {
     waterRequirement: "medium",
@@ -49,6 +54,9 @@ const DEFAULT_PROFILES_BY_TYPE: Record<PlantType, PlantCareProfile> = {
     soilType: "garden_soil",
     preferredFertiliser: "compost",
     initialGrowthStage: "vegetative",
+    growthStageDurations: { seedling: 150, vegetative: 1310 },
+    annualCycleDurations: { flowering: 45, fruiting: 120, dormant: 200 },
+    floweringStartMonth: 2,
   },
   timber_tree: {
     waterRequirement: "low",
@@ -59,6 +67,7 @@ const DEFAULT_PROFILES_BY_TYPE: Record<PlantType, PlantCareProfile> = {
     soilType: "garden_soil",
     preferredFertiliser: "compost",
     initialGrowthStage: "vegetative",
+    growthStageDurations: { seedling: 150, vegetative: 1460, mature: 730 },
   },
   coconut_tree: {
     waterRequirement: "medium",
@@ -69,6 +78,7 @@ const DEFAULT_PROFILES_BY_TYPE: Record<PlantType, PlantCareProfile> = {
     soilType: "garden_soil",
     preferredFertiliser: "vermicompost",
     initialGrowthStage: "vegetative",
+    // Coconut growth stages handled by getCoconutAgeInfo() — no durations here
   },
   shrub: {
     waterRequirement: "medium",
@@ -79,6 +89,7 @@ const DEFAULT_PROFILES_BY_TYPE: Record<PlantType, PlantCareProfile> = {
     soilType: "garden_soil",
     preferredFertiliser: "compost",
     initialGrowthStage: "vegetative",
+    growthStageDurations: { seedling: 35, vegetative: 100, mature: 65 },
   },
 };
 
@@ -248,6 +259,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Manganese", "Potassium", "Copper"],
     petToxicity: true,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 21, vegetative: 25, flowering: 15, fruiting: 24 },
   },
   [buildProfileKey("vegetable", "Long Brinjal")]: {
     waterRequirement: "medium",
@@ -278,6 +290,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Manganese", "Potassium", "Copper"],
     petToxicity: true,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 21, vegetative: 28, flowering: 16, fruiting: 25 },
   },
   [buildProfileKey("vegetable", "Ladies Finger")]: {
     waterRequirement: "medium",
@@ -308,6 +321,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Manganese", "Magnesium", "Calcium"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 14, vegetative: 18, flowering: 10, fruiting: 15 },
   },
   [buildProfileKey("vegetable", "Tomato")]: {
     waterRequirement: "high",
@@ -338,6 +352,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Manganese"],
     petToxicity: true,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 21, vegetative: 25, flowering: 14, fruiting: 20 },
   },
   [buildProfileKey("vegetable", "Chilli")]: {
     waterRequirement: "medium",
@@ -368,6 +383,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Iron", "Copper"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 21, vegetative: 25, flowering: 14, fruiting: 20 },
   },
   [buildProfileKey("vegetable", "Tapioca")]: {
     waterRequirement: "medium",
@@ -398,6 +414,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Manganese", "Potassium", "Calcium"],
     petToxicity: true,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 30, vegetative: 200, mature: 90 },
   },
   [buildProfileKey("vegetable", "Drumstick")]: {
     waterRequirement: "medium",
@@ -428,6 +445,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Calcium", "Iron", "Potassium", "Magnesium"],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 30, vegetative: 90, flowering: 30, fruiting: 60 },
   },
   [buildProfileKey("vegetable", "Amaranthus")]: {
     waterRequirement: "high",
@@ -457,6 +475,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Manganese", "Iron", "Calcium", "Potassium"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 10, vegetative: 18, mature: 10 },
   },
   [buildProfileKey("vegetable", "Methi")]: {
     waterRequirement: "medium",
@@ -486,6 +505,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Manganese", "Magnesium"],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 7, vegetative: 13, mature: 8 },
   },
   [buildProfileKey("vegetable", "Cowpea")]: {
     waterRequirement: "medium",
@@ -516,6 +536,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Manganese", "Iron", "Phosphorus", "Potassium"],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 14, vegetative: 20, flowering: 12, fruiting: 14 },
   },
   [buildProfileKey("vegetable", "Beans")]: {
     waterRequirement: "medium",
@@ -546,6 +567,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Manganese", "Iron", "Potassium"],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 12, vegetative: 18, flowering: 12, fruiting: 13 },
   },
   [buildProfileKey("vegetable", "Bitter Gourd")]: {
     waterRequirement: "medium",
@@ -576,6 +598,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Zinc", "Iron"],
     petToxicity: true,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 14, vegetative: 18, flowering: 12, fruiting: 16 },
   },
   [buildProfileKey("vegetable", "Snake Gourd")]: {
     waterRequirement: "medium",
@@ -606,6 +629,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Calcium", "Iron", "Phosphorus"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 14, vegetative: 22, flowering: 14, fruiting: 18 },
   },
   [buildProfileKey("vegetable", "Ridge Gourd")]: {
     waterRequirement: "medium",
@@ -636,6 +660,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Manganese", "Potassium"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 12, vegetative: 18, flowering: 12, fruiting: 13 },
   },
   [buildProfileKey("vegetable", "Bottle Gourd")]: {
     waterRequirement: "high",
@@ -666,6 +691,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Calcium", "Potassium", "Zinc"],
     petToxicity: false,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 14, vegetative: 22, flowering: 14, fruiting: 18 },
   },
   [buildProfileKey("vegetable", "Pumpkin")]: {
     waterRequirement: "high",
@@ -696,6 +722,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Manganese", "Copper"],
     petToxicity: false,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 15, vegetative: 35, flowering: 20, fruiting: 35 },
   },
   [buildProfileKey("vegetable", "Ash Gourd")]: {
     waterRequirement: "medium",
@@ -726,6 +753,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Calcium", "Iron", "Phosphorus"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 15, vegetative: 35, flowering: 20, fruiting: 35 },
   },
 [buildProfileKey("vegetable", "Cucumber")]: {
     waterRequirement: "medium",
@@ -755,6 +783,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Magnesium"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 10, vegetative: 16, flowering: 12, fruiting: 14 },
   },
   [buildProfileKey("vegetable", "Spinach")]: {
     waterRequirement: "medium",
@@ -784,6 +813,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Calcium", "Magnesium"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 10, vegetative: 18, mature: 10 },
   },
   [buildProfileKey("vegetable", "Radish")]: {
     waterRequirement: "medium",
@@ -813,6 +843,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Calcium"],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 7, vegetative: 15, mature: 8 },
   },
   [buildProfileKey("vegetable", "Onion")]: {
     waterRequirement: "medium",
@@ -842,6 +873,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Manganese"],
     petToxicity: true,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 20, vegetative: 50, mature: 35 },
   },
   [buildProfileKey("vegetable", "Shallot")]: {
     waterRequirement: "medium",
@@ -871,6 +903,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Manganese"],
     petToxicity: true,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 15, vegetative: 35, mature: 25 },
   },
   [buildProfileKey("vegetable", "Garlic")]: {
     waterRequirement: "low",
@@ -900,6 +933,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Manganese", "Selenium"],
     petToxicity: true,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 20, vegetative: 70, mature: 45 },
   },
   [buildProfileKey("vegetable", "Cabbage")]: {
     waterRequirement: "high",
@@ -929,6 +963,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Manganese", "Calcium"],
     petToxicity: false,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 20, vegetative: 45, mature: 25 },
   },
   [buildProfileKey("vegetable", "Cauliflower")]: {
     waterRequirement: "high",
@@ -958,6 +993,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Manganese"],
     petToxicity: false,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 20, vegetative: 45, mature: 25 },
   },
   [buildProfileKey("vegetable", "Carrot")]: {
     waterRequirement: "medium",
@@ -987,6 +1023,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Phosphorus"],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 14, vegetative: 40, mature: 26 },
   },
   [buildProfileKey("vegetable", "Potato")]: {
     waterRequirement: "medium",
@@ -1016,6 +1053,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Phosphorus", "Magnesium"],
     petToxicity: true,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 15, vegetative: 45, mature: 28 },
   },
   [buildProfileKey("vegetable", "Eggplant")]: {
     waterRequirement: "medium",
@@ -1046,6 +1084,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Manganese"],
     petToxicity: true,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 18, vegetative: 22, flowering: 14, fruiting: 21 },
   },
   [buildProfileKey("vegetable", "Pepper")]: {
     waterRequirement: "medium",
@@ -1076,6 +1115,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Manganese"],
     petToxicity: true,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 21, vegetative: 24, flowering: 14, fruiting: 19 },
   },
   [buildProfileKey("vegetable", "Taro")]: {
     waterRequirement: "high",
@@ -1105,6 +1145,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Manganese", "Phosphorus"],
     petToxicity: true,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 25, vegetative: 130, mature: 55 },
   },
   [buildProfileKey("vegetable", "Elephant Yam")]: {
     waterRequirement: "medium",
@@ -1134,6 +1175,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Phosphorus"],
     petToxicity: true,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 30, vegetative: 170, mature: 70 },
   },
   [buildProfileKey("vegetable", "Sweet Potato")]: {
     waterRequirement: "medium",
@@ -1163,6 +1205,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Manganese"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 15, vegetative: 60, mature: 30 },
   },
   [buildProfileKey("vegetable", "Ash Plantain")]: {
     waterRequirement: "high",
@@ -1193,6 +1236,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Magnesium"],
     petToxicity: false,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 45, vegetative: 180, flowering: 30, fruiting: 60 },
   },
   [buildProfileKey("vegetable", "Colocasia")]: {
     waterRequirement: "high",
@@ -1222,6 +1266,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Manganese", "Phosphorus"],
     petToxicity: true,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 25, vegetative: 130, mature: 55 },
   },
   // ── Herbs (14) ──────────────────────────────────────────────────────────
   [buildProfileKey("herb", "Coriander")]: {
@@ -1253,6 +1298,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Manganese"],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 10, vegetative: 20, mature: 10 },
   },
   [buildProfileKey("herb", "Mint")]: {
     waterRequirement: "high",
@@ -1284,6 +1330,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Manganese"],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 14, vegetative: 30, mature: 16 },
   },
   [buildProfileKey("herb", "Curry Leaf")]: {
     waterRequirement: "medium",
@@ -1315,6 +1362,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Calcium"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 60, vegetative: 240, mature: 65 },
   },
   [buildProfileKey("herb", "Lemongrass")]: {
     waterRequirement: "medium",
@@ -1345,6 +1393,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Potassium"],
     petToxicity: true,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 14, vegetative: 50, mature: 16 },
   },
   [buildProfileKey("herb", "Tulsi")]: {
     waterRequirement: "medium",
@@ -1376,6 +1425,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Calcium", "Manganese"],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 14, vegetative: 30, mature: 16 },
   },
   [buildProfileKey("herb", "Basil")]: {
     waterRequirement: "medium",
@@ -1407,6 +1457,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Calcium", "Manganese"],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 12, vegetative: 25, mature: 13 },
   },
   [buildProfileKey("herb", "Dill")]: {
     waterRequirement: "medium",
@@ -1437,6 +1488,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Manganese"],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 10, vegetative: 25, mature: 10 },
   },
   [buildProfileKey("herb", "Parsley")]: {
     waterRequirement: "medium",
@@ -1467,6 +1519,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Potassium"],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 20, vegetative: 40, mature: 15 },
   },
   [buildProfileKey("herb", "Rosemary")]: {
     waterRequirement: "low",
@@ -1498,6 +1551,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Calcium"],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 30, vegetative: 90, mature: 60 },
   },
   [buildProfileKey("herb", "Thyme")]: {
     waterRequirement: "low",
@@ -1529,6 +1583,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Manganese"],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 21, vegetative: 60, mature: 30 },
   },
   [buildProfileKey("herb", "Oregano")]: {
     waterRequirement: "low",
@@ -1560,6 +1615,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Manganese", "Calcium"],
     petToxicity: true,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 14, vegetative: 45, mature: 21 },
   },
   [buildProfileKey("herb", "Turmeric")]: {
     waterRequirement: "high",
@@ -1590,6 +1646,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Potassium", "Manganese"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 30, vegetative: 120, mature: 90, dormant: 30 },
   },
   [buildProfileKey("herb", "Ginger")]: {
     waterRequirement: "high",
@@ -1620,6 +1677,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Magnesium", "Potassium", "Manganese"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 30, vegetative: 120, mature: 80, dormant: 25 },
   },
   [buildProfileKey("herb", "Betel Leaf")]: {
     waterRequirement: "high",
@@ -1651,6 +1709,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Calcium", "Iron"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 30, vegetative: 90, mature: 60 },
   },
   // ── Flowers (10) ─────────────────────────────────────────────────────────
   [buildProfileKey("flower", "Marigold")]: {
@@ -1683,6 +1742,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Phosphorus"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 12, vegetative: 25, flowering: 18 },
   },
   [buildProfileKey("flower", "Jasmine")]: {
     waterRequirement: "medium",
@@ -1712,6 +1772,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     waterloggingTolerance: "low",
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 45, vegetative: 180, mature: 140 },
   },
   [buildProfileKey("flower", "Hibiscus")]: {
     waterRequirement: "medium",
@@ -1743,6 +1804,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Phosphorus"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 30, vegetative: 90, mature: 60 },
   },
   [buildProfileKey("flower", "Rose")]: {
     waterRequirement: "medium",
@@ -1774,6 +1836,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron"],
     petToxicity: false,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 30, vegetative: 60, mature: 45 },
   },
   [buildProfileKey("flower", "Chrysanthemum")]: {
     waterRequirement: "medium",
@@ -1803,6 +1866,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     waterloggingTolerance: "low",
     petToxicity: true,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 14, vegetative: 45, flowering: 30 },
   },
   [buildProfileKey("flower", "Crossandra")]: {
     waterRequirement: "medium",
@@ -1832,6 +1896,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     waterloggingTolerance: "low",
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 30, vegetative: 90, mature: 60 },
   },
   [buildProfileKey("flower", "Ixora")]: {
     waterRequirement: "medium",
@@ -1861,6 +1926,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     waterloggingTolerance: "low",
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 45, vegetative: 120, mature: 75 },
   },
   [buildProfileKey("flower", "Sunflower")]: {
     waterRequirement: "medium",
@@ -1891,6 +1957,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Selenium", "Magnesium"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 10, vegetative: 30, flowering: 35 },
   },
   [buildProfileKey("flower", "Dahlia")]: {
     waterRequirement: "medium",
@@ -1920,6 +1987,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     waterloggingTolerance: "low",
     petToxicity: true,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 21, vegetative: 45, mature: 25 },
   },
   [buildProfileKey("flower", "Orchid")]: {
     waterRequirement: "medium",
@@ -1948,6 +2016,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     waterloggingTolerance: "low",
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 60, vegetative: 180, mature: 125 },
   },
   // ── Fruit Trees (23) ─────────────────────────────────────────────────
   [buildProfileKey("fruit_tree", "Banana")]: {
@@ -1981,6 +2050,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Manganese"],
     petToxicity: false,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 45, vegetative: 140, flowering: 30, fruiting: 90 },
   },
   [buildProfileKey("fruit_tree", "Mango")]: {
     waterRequirement: "medium",
@@ -2013,6 +2083,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Magnesium"],
     petToxicity: false,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 180, vegetative: 1645 },
+    annualCycleDurations: { flowering: 45, fruiting: 120, dormant: 200 },
+    floweringStartMonth: 12,
   },
   [buildProfileKey("fruit_tree", "Guava")]: {
     waterRequirement: "medium",
@@ -2045,6 +2118,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Manganese"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 120, vegetative: 975 },
+    annualCycleDurations: { flowering: 45, fruiting: 180, dormant: 140 },
+    floweringStartMonth: 2,
   },
   [buildProfileKey("fruit_tree", "Papaya")]: {
     waterRequirement: "medium",
@@ -2077,6 +2153,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Magnesium"],
     petToxicity: true,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 60, vegetative: 305 },
+    annualCycleDurations: { flowering: 60, fruiting: 240, dormant: 65 },
+    floweringStartMonth: 1,
   },
   [buildProfileKey("fruit_tree", "Lemon")]: {
     waterRequirement: "medium",
@@ -2109,6 +2188,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Calcium"],
     petToxicity: true,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 120, vegetative: 975 },
+    annualCycleDurations: { flowering: 30, fruiting: 150, dormant: 185 },
+    floweringStartMonth: 2,
   },
   [buildProfileKey("fruit_tree", "Pomegranate")]: {
     waterRequirement: "low",
@@ -2141,6 +2223,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Copper"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 120, vegetative: 975 },
+    annualCycleDurations: { flowering: 30, fruiting: 120, dormant: 215 },
+    floweringStartMonth: 6,
   },
   [buildProfileKey("fruit_tree", "Jackfruit")]: {
     waterRequirement: "medium",
@@ -2173,6 +2258,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Magnesium"],
     petToxicity: false,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 180, vegetative: 1645 },
+    annualCycleDurations: { flowering: 60, fruiting: 120, dormant: 185 },
+    floweringStartMonth: 12,
   },
   [buildProfileKey("fruit_tree", "Chikoo")]: {
     waterRequirement: "medium",
@@ -2205,6 +2293,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Potassium"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 180, vegetative: 1645 },
+    annualCycleDurations: { flowering: 45, fruiting: 180, dormant: 140 },
+    floweringStartMonth: 2,
   },
   [buildProfileKey("fruit_tree", "Water Apple")]: {
     waterRequirement: "high",
@@ -2237,6 +2328,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Calcium", "Iron"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 150, vegetative: 1310 },
+    annualCycleDurations: { flowering: 30, fruiting: 60, dormant: 275 },
+    floweringStartMonth: 3,
   },
   [buildProfileKey("fruit_tree", "Custard Apple")]: {
     waterRequirement: "low",
@@ -2269,6 +2363,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Magnesium"],
     petToxicity: true,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 150, vegetative: 1310 },
+    annualCycleDurations: { flowering: 45, fruiting: 120, dormant: 200 },
+    floweringStartMonth: 4,
   },
   [buildProfileKey("fruit_tree", "Amla")]: {
     waterRequirement: "low",
@@ -2301,6 +2398,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Calcium"],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 180, vegetative: 1645 },
+    annualCycleDurations: { flowering: 30, fruiting: 150, dormant: 185 },
+    floweringStartMonth: 3,
   },
   [buildProfileKey("fruit_tree", "Orange")]: {
     waterRequirement: "medium",
@@ -2333,6 +2433,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Calcium"],
     petToxicity: true,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 120, vegetative: 975 },
+    annualCycleDurations: { flowering: 30, fruiting: 150, dormant: 185 },
+    floweringStartMonth: 2,
   },
   [buildProfileKey("fruit_tree", "Fig")]: {
     waterRequirement: "low",
@@ -2365,6 +2468,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Manganese", "Calcium"],
     petToxicity: true,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 90, vegetative: 640 },
+    annualCycleDurations: { flowering: 30, fruiting: 90, dormant: 245 },
+    floweringStartMonth: 2,
   },
   [buildProfileKey("fruit_tree", "Avocado")]: {
     waterRequirement: "medium",
@@ -2397,6 +2503,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Magnesium"],
     petToxicity: true,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 150, vegetative: 1310 },
+    annualCycleDurations: { flowering: 45, fruiting: 150, dormant: 170 },
+    floweringStartMonth: 2,
   },
   [buildProfileKey("fruit_tree", "Soursop")]: {
     waterRequirement: "medium",
@@ -2429,6 +2538,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Magnesium"],
     petToxicity: true,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 150, vegetative: 1310 },
+    annualCycleDurations: { flowering: 45, fruiting: 150, dormant: 170 },
+    floweringStartMonth: 3,
   },
   [buildProfileKey("fruit_tree", "Mangosteen")]: {
     waterRequirement: "high",
@@ -2461,6 +2573,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Manganese", "Magnesium"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 365, vegetative: 2555 },
+    annualCycleDurations: { flowering: 45, fruiting: 150, dormant: 170 },
+    floweringStartMonth: 11,
   },
   [buildProfileKey("fruit_tree", "Rambutan")]: {
     waterRequirement: "high",
@@ -2493,6 +2608,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Phosphorus"],
     petToxicity: false,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 180, vegetative: 1645 },
+    annualCycleDurations: { flowering: 45, fruiting: 90, dormant: 230 },
+    floweringStartMonth: 12,
   },
   [buildProfileKey("fruit_tree", "Red Banana")]: {
     waterRequirement: "high",
@@ -2525,6 +2643,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Manganese"],
     petToxicity: false,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 45, vegetative: 150, flowering: 30, fruiting: 95 },
   },
   [buildProfileKey("fruit_tree", "Breadfruit")]: {
     waterRequirement: "medium",
@@ -2557,6 +2676,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Magnesium"],
     petToxicity: false,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 180, vegetative: 1645 },
+    annualCycleDurations: { flowering: 45, fruiting: 120, dormant: 200 },
+    floweringStartMonth: 1,
   },
   [buildProfileKey("fruit_tree", "Pineapple")]: {
     waterRequirement: "low",
@@ -2589,6 +2711,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Manganese", "Copper"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 60, vegetative: 670 },
+    annualCycleDurations: { flowering: 60, fruiting: 150, dormant: 155 },
+    floweringStartMonth: 5,
   },
   [buildProfileKey("fruit_tree", "Passion Fruit")]: {
     waterRequirement: "medium",
@@ -2621,6 +2746,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Potassium"],
     petToxicity: true,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 30, vegetative: 335 },
+    annualCycleDurations: { flowering: 60, fruiting: 150, dormant: 155 },
+    floweringStartMonth: 3,
   },
   [buildProfileKey("fruit_tree", "Star Fruit")]: {
     waterRequirement: "medium",
@@ -2653,6 +2781,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Potassium", "Copper"],
     petToxicity: true,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 150, vegetative: 1310 },
+    annualCycleDurations: { flowering: 30, fruiting: 90, dormant: 245 },
+    floweringStartMonth: 4,
   },
   [buildProfileKey("fruit_tree", "Arecanut")]: {
     waterRequirement: "high",
@@ -2685,6 +2816,9 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Manganese", "Iron"],
     petToxicity: true,
     feedingIntensity: "heavy",
+    growthStageDurations: { seedling: 365, vegetative: 1825 },
+    annualCycleDurations: { flowering: 45, fruiting: 180, dormant: 140 },
+    floweringStartMonth: 11,
   },
   // ── Timber Trees (7) + Coconut Trees (4) + Shrubs (8) ──────────────
 [buildProfileKey("timber_tree", "Neem")]: {
@@ -2717,6 +2851,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: [],
     petToxicity: true,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 120, vegetative: 1095, mature: 545 },
   },
   [buildProfileKey("timber_tree", "Teak")]: {
     waterRequirement: "low",
@@ -2748,6 +2883,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: [],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 150, vegetative: 1460, mature: 730 },
   },
   [buildProfileKey("timber_tree", "Mahogany")]: {
     waterRequirement: "low",
@@ -2779,6 +2915,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: [],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 150, vegetative: 1460, mature: 730 },
   },
   [buildProfileKey("timber_tree", "Rosewood")]: {
     waterRequirement: "low",
@@ -2810,6 +2947,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: [],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 180, vegetative: 1825, mature: 730 },
   },
   [buildProfileKey("timber_tree", "Sandalwood")]: {
     waterRequirement: "low",
@@ -2841,6 +2979,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: [],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 365, vegetative: 2190, mature: 1095 },
   },
   [buildProfileKey("timber_tree", "Bamboo")]: {
     waterRequirement: "medium",
@@ -2872,6 +3011,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: [],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 60, vegetative: 365, mature: 305 },
   },
   [buildProfileKey("timber_tree", "Wild Jack")]: {
     waterRequirement: "medium",
@@ -2903,6 +3043,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: [],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 150, vegetative: 1460, mature: 730 },
   },
   [buildProfileKey("coconut_tree", "Dwarf Coconut")]: {
     waterRequirement: "high",
@@ -3062,6 +3203,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: ["Iron", "Phosphorus"],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 30, vegetative: 90, mature: 60 },
   },
   [buildProfileKey("shrub", "Ixora")]: {
     waterRequirement: "medium",
@@ -3093,6 +3235,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: [],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 45, vegetative: 120, mature: 75 },
   },
   [buildProfileKey("shrub", "Nandiyavattai")]: {
     waterRequirement: "medium",
@@ -3124,6 +3267,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: [],
     petToxicity: true,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 45, vegetative: 120, mature: 75 },
   },
   [buildProfileKey("shrub", "Bougainvillea")]: {
     waterRequirement: "low",
@@ -3155,6 +3299,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: [],
     petToxicity: false,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 30, vegetative: 90, mature: 60 },
   },
   [buildProfileKey("shrub", "Jasmine")]: {
     waterRequirement: "medium",
@@ -3186,6 +3331,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: [],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 45, vegetative: 120, mature: 75 },
   },
   [buildProfileKey("shrub", "Crossandra")]: {
     waterRequirement: "medium",
@@ -3217,6 +3363,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: [],
     petToxicity: false,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 30, vegetative: 90, mature: 60 },
   },
   [buildProfileKey("shrub", "Lantana")]: {
     waterRequirement: "low",
@@ -3248,6 +3395,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: [],
     petToxicity: true,
     feedingIntensity: "light",
+    growthStageDurations: { seedling: 21, vegetative: 60, mature: 30 },
   },
   [buildProfileKey("shrub", "Gardenia")]: {
     waterRequirement: "medium",
@@ -3279,6 +3427,7 @@ const PLANT_CARE_OVERRIDES: Record<string, PlantCareProfile> = {
     minerals: [],
     petToxicity: true,
     feedingIntensity: "medium",
+    growthStageDurations: { seedling: 45, vegetative: 150, mature: 75 },
   },
 };
 Object.assign(PLANT_CARE_PROFILES, PLANT_CARE_OVERRIDES);

@@ -44,40 +44,55 @@ export const createWizardStyles = (theme: Theme): ReturnType<typeof StyleSheet.c
       width: 40,
       height: 40,
     },
+    wizardCloseButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      backgroundColor: theme.borderLight,
+    },
     stepRow: {
       flexDirection: "row",
       alignItems: "flex-start",
-      marginHorizontal: 16,
+      marginHorizontal: 24,
       paddingTop: 14,
-      paddingBottom: 6,
+      paddingBottom: 4,
     },
     stepCol: {
       alignItems: "center",
-      width: 48,
+      width: 52,
     },
-    stepDot: {
-      width: 10,
-      height: 10,
-      borderRadius: 5,
+    stepCircle: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
       backgroundColor: theme.borderLight,
-      marginBottom: 5,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      marginBottom: 4,
     },
-    stepDotActive: {
+    stepCircleActive: {
       backgroundColor: theme.primary,
-      width: 12,
-      height: 12,
-      borderRadius: 6,
     },
-    stepDotComplete: {
+    stepCircleComplete: {
       backgroundColor: theme.primaryLight,
       borderWidth: 2,
       borderColor: theme.primary,
+    },
+    stepCircleText: {
+      fontSize: 13,
+      fontWeight: "700" as const,
+      color: theme.textTertiary,
+    },
+    stepCircleTextActive: {
+      color: theme.textInverse,
     },
     stepConnector: {
       flex: 1,
       height: 2,
       backgroundColor: theme.borderLight,
-      marginTop: 4,
+      marginTop: 13,
       alignSelf: "flex-start" as const,
     },
     stepConnectorFilled: {
@@ -95,6 +110,13 @@ export const createWizardStyles = (theme: Theme): ReturnType<typeof StyleSheet.c
     stepLabelComplete: {
       color: theme.textSecondary,
     },
+    stepSubtitle: {
+      fontSize: 13,
+      color: theme.textSecondary,
+      textAlign: "center" as const,
+      marginBottom: 4,
+      marginTop: 2,
+    },
     stepContent: {
       flex: 1,
     },
@@ -106,6 +128,7 @@ export const createWizardStyles = (theme: Theme): ReturnType<typeof StyleSheet.c
     wizardNavBar: {
       flexDirection: "row",
       alignItems: "center",
+      justifyContent: "space-between" as const,
       paddingHorizontal: 16,
       paddingTop: 12,
       backgroundColor: theme.background,
@@ -113,16 +136,16 @@ export const createWizardStyles = (theme: Theme): ReturnType<typeof StyleSheet.c
       borderTopColor: theme.borderLight,
     },
     wizardStepCounter: {
-      flex: 1,
       fontSize: 13,
       color: theme.textTertiary,
       fontWeight: "500" as const,
     },
     wizardBackBtn: {
       height: 48,
-      paddingHorizontal: 20,
-      justifyContent: "center",
-      alignItems: "center",
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+      paddingHorizontal: 4,
     },
     wizardBackText: {
       fontSize: 15,
@@ -130,15 +153,15 @@ export const createWizardStyles = (theme: Theme): ReturnType<typeof StyleSheet.c
       fontWeight: "600" as const,
     },
     wizardBackSpacer: {
-      width: 80,
+      width: 60,
     },
     wizardNextBtn: {
       height: 48,
-      width: 80,
+      flex: 1,
       backgroundColor: theme.primary,
       borderRadius: 24,
-      alignItems: "center",
-      justifyContent: "center",
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
     },
     wizardNextText: {
       fontSize: 15,
@@ -198,5 +221,40 @@ export const createWizardStyles = (theme: Theme): ReturnType<typeof StyleSheet.c
     },
     wizardSaveBtnDisabled: {
       opacity: 0.6,
+    },
+    wizardPhotoCard: {
+      width: "100%",
+      height: 100,
+      borderRadius: 14,
+      overflow: "hidden" as const,
+      marginBottom: 12,
+      backgroundColor: theme.primaryLight,
+      borderWidth: 1,
+      borderColor: theme.borderLight,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    wizardPhotoCardImage: {
+      width: "100%",
+      height: "100%",
+    },
+    wizardPhotoCardIconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.backgroundSecondary,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      marginBottom: 4,
+    },
+    wizardPhotoCardText: {
+      fontSize: 13,
+      fontWeight: "600" as const,
+      color: theme.primary,
+    },
+    wizardPhotoCardHint: {
+      fontSize: 11,
+      color: theme.textTertiary,
+      marginTop: 1,
     },
   });

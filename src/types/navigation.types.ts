@@ -23,6 +23,8 @@ export type PlantsStackParamList = {
   ArchivedPlants: undefined;
   PlantDetail: { plantId: string };
   PlantForm: { plantId?: string } | undefined;
+  PestDetail: { pestId: string };
+  DiseaseDetail: { diseaseId: string };
 };
 
 export type JournalStackParamList = {
@@ -40,7 +42,7 @@ export type MoreStackParamList = {
   MoreHome: undefined;
   ManageLocations: undefined;
   ManagePlantCatalog: undefined;
-  CatalogPlantDetail: { plantName: string; plantType: import('./database.types').PlantType };
+  CatalogPlantDetail: { plantName: string; plantType: import('./database.types').PlantType; isCreating?: boolean };
   PestList: undefined;
   PestDetail: { pestId: string };
   DiseaseList: undefined;

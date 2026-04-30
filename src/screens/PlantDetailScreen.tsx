@@ -23,8 +23,8 @@ import {
 } from "react-native-gesture-handler";
 import type { HandlerStateChangeEvent } from "react-native-gesture-handler";
 import { Image } from 'expo-image';
-import { getPlant } from "../services/plants";
-import { getTaskTemplates, getSeasonalCareReminder } from "../services/tasks";
+import { getPlant, pinGrowthStage, unpinGrowthStage } from "../services/plants";
+import { getTaskTemplates } from "../services/tasks";
 import { getJournalEntries } from "../services/journal";
 import {
   Plant,
@@ -37,18 +37,22 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import { createStyles } from "../styles/plantDetailStyles";
 import { getYearsOld, formatTimestampDisplay, formatDateDisplay } from "../utils/dateHelpers";
-import { getSeasonalPestAlerts } from "../utils/seasonHelpers";
 import {
   getCompanionSuggestions,
   getIncompatiblePlants,
   calculateExpectedHarvestDate,
   getCoconutAgeInfo,
   getCoconutNutrientDeficiencies,
-  getCommonPests,
-  getCommonDiseases,
+  getEffectiveGrowthStage,
 } from "../utils/plantHelpers";
+import { getPlantCareProfile } from "../utils/plantCareDefaults";
+import GrowthStageTimeline from "../components/GrowthStageTimeline";
+import type { GrowthStage } from "../types/database.types";
 import PestDiseaseHistorySection from "../components/PestDiseaseHistorySection";
 import HarvestHistorySection from "../components/HarvestHistorySection";
+import { DetailQuickInfoSection } from "../components/DetailQuickInfoSection";
+import { DetailNutritionSection } from "../components/DetailNutritionSection";
+import { DetailCareGuidanceSection } from "../components/DetailCareGuidanceSection";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import {
   PlantDetailScreenNavigationProp,
@@ -57,6 +61,19 @@ import {
 import { getErrorMessage } from "../utils/errorLogging";
 
 const SCREEN = Dimensions.get("window");
+
+const GROWTH_STAGES: GrowthStage[] = [
+  "seedling", "vegetative", "flowering", "fruiting", "dormant", "mature",
+];
+
+const GROWTH_STAGE_ICONS: Record<GrowthStage, string> = {
+  seedling: "leaf-outline",
+  vegetative: "nutrition-outline",
+  flowering: "flower-outline",
+  fruiting: "basket-outline",
+  dormant: "moon-outline",
+  mature: "checkmark-circle-outline",
+};
 
 export default function PlantDetailScreen(): React.JSX.Element {
   const navigation = useNavigation<PlantDetailScreenNavigationProp>();
@@ -70,6 +87,7 @@ export default function PlantDetailScreen(): React.JSX.Element {
   const [harvestEntries, setHarvestEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [zoomVisible, setZoomVisible] = useState(false);
+  const [pinStageVisible, setPinStageVisible] = useState(false);
   const isMountedRef = useRef(true);
 
   // Zoom gesture animated values (Expo Go compatible — no reanimated)
@@ -254,17 +272,19 @@ export default function PlantDetailScreen(): React.JSX.Element {
     );
   }
 
-  const seasonalReminder = getSeasonalCareReminder(plant);
-  const seasonalPestAlerts = getSeasonalPestAlerts(plant.plant_type);
   const companions = getCompanionSuggestions(plant.plant_variety || plant.name);
   const incompatible = getIncompatiblePlants(plant.plant_variety || plant.name);
   const computedHarvestDate = calculateExpectedHarvestDate(plant.plant_variety || plant.name, plant.planting_date, plant.plant_type);
   const coconutAge = plant.plant_type === "coconut_tree" ? getCoconutAgeInfo(plant.planting_date) : null;
   const coconutDeficiencies = plant.plant_type === "coconut_tree" ? getCoconutNutrientDeficiencies() : [];
-  const commonPests = getCommonPests(plant.plant_type, plant.plant_variety);
-  const commonDiseases = getCommonDiseases(plant.plant_type, plant.plant_variety);
+  const careProfile = getPlantCareProfile(plant.plant_variety || "", plant.plant_type);
+  const effectiveStage = careProfile
+    ? getEffectiveGrowthStage(plant, careProfile)
+    : null;
+  const isPinned = Boolean(plant.growth_stage_pinned);
 
   return (
+    <>
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 48) + 16 }}>
       <View style={[styles.header, { top: insets.top + 12 }]}>
         <TouchableOpacity
@@ -360,6 +380,7 @@ export default function PlantDetailScreen(): React.JSX.Element {
       </Modal>
 
       <View style={styles.content}>
+        {/* ── §1 Name & Key Info ──────────────────────────────────── */}
         <Text style={styles.name}>{plant.name}</Text>
         {plant.variety && <Text style={styles.variety}>{plant.variety}</Text>}
 
@@ -377,9 +398,7 @@ export default function PlantDetailScreen(): React.JSX.Element {
           {plant.landmarks && (
             <View style={styles.infoRow}>
               <Ionicons name="flag" size={20} color={theme.textSecondary} />
-              <Text style={styles.infoText}>
-                Landmark: {plant.landmarks}
-              </Text>
+              <Text style={styles.infoText}>Landmark: {plant.landmarks}</Text>
             </View>
           )}
           <View style={styles.infoRow}>
@@ -388,8 +407,8 @@ export default function PlantDetailScreen(): React.JSX.Element {
                 plant.space_type === "pot"
                   ? "cube-outline"
                   : plant.space_type === "bed"
-                  ? "apps"
-                  : "earth"
+                    ? "apps"
+                    : "earth"
               }
               size={20}
               color={theme.textSecondary}
@@ -398,8 +417,8 @@ export default function PlantDetailScreen(): React.JSX.Element {
               {plant.space_type === "pot"
                 ? plant.pot_size || "Pot"
                 : plant.space_type === "bed"
-                ? plant.bed_name || "Bed"
-                : "Ground"}
+                  ? plant.bed_name || "Bed"
+                  : "Ground"}
             </Text>
           </View>
           {plant.planting_date && (
@@ -411,83 +430,145 @@ export default function PlantDetailScreen(): React.JSX.Element {
               </Text>
             </View>
           )}
-          {plant.harvest_season && (
-            <View style={styles.infoRow}>
-              <Ionicons name="sunny" size={20} color={theme.textSecondary} />
-              <Text style={styles.infoText}>
-                Harvest: {plant.harvest_season}
-              </Text>
-            </View>
-          )}
-          {(plant.harvest_start_date || plant.harvest_end_date) && (
+          {plant.health_status && (
             <View style={styles.infoRow}>
               <Ionicons
-                name="calendar-outline"
+                name={
+                  plant.health_status === "healthy"
+                    ? "checkmark-circle"
+                    : plant.health_status === "sick"
+                      ? "close-circle"
+                      : "alert-circle"
+                }
                 size={20}
-                color={theme.textSecondary}
+                color={
+                  plant.health_status === "healthy"
+                    ? theme.success
+                    : plant.health_status === "sick"
+                      ? theme.error
+                      : theme.warning
+                }
               />
-              <Text style={styles.infoText}>
-                {plant.harvest_start_date || ""}
-                {plant.harvest_end_date ? ` - ${plant.harvest_end_date}` : ""}
-              </Text>
-            </View>
-          )}
-          {(plant.expected_harvest_date || computedHarvestDate) && (
-            <View style={styles.infoRow}>
-              <Ionicons name="hourglass" size={20} color={theme.textSecondary} />
-              <Text style={styles.infoText}>
-                Expected Harvest: {formatDateDisplay(plant.expected_harvest_date || computedHarvestDate!)}
-              </Text>
-            </View>
-          )}
-          {plant.mature_height && (
-            <View style={styles.infoRow}>
-              <Ionicons name="resize" size={20} color={theme.textSecondary} />
-              <Text style={styles.infoText}>
-                Mature Height: {plant.mature_height}
+              <Text
+                style={[
+                  styles.infoText,
+                  plant.health_status === "healthy"
+                    ? styles.healthStatusHealthy
+                    : plant.health_status === "sick"
+                      ? styles.healthStatusSick
+                      : styles.healthStatusWarning,
+                ]}
+              >
+                {plant.health_status.charAt(0).toUpperCase() +
+                  plant.health_status.slice(1)}
               </Text>
             </View>
           )}
         </View>
 
+        {/* ── §2 Growth Stage ─────────────────────────────────────── */}
+        {(effectiveStage || plant.growth_stage) && (
+          <View style={styles.careSection}>
+            <Text style={styles.sectionTitle}>🌱 Growth Stage</Text>
+            {effectiveStage && (
+              <>
+                <View style={styles.infoRow}>
+                  <Ionicons name="trending-up" size={20} color={theme.primary} />
+                  <Text style={styles.infoText}>
+                    Stage:{" "}
+                    {effectiveStage.stage.charAt(0).toUpperCase() +
+                      effectiveStage.stage.slice(1)}
+                  </Text>
+                  <View style={styles.growthStageBadge}>
+                    <Text style={styles.growthStageBadgeText}>
+                      {effectiveStage.source === "pinned"
+                        ? "Pinned"
+                        : effectiveStage.source === "coconut"
+                          ? "Age-based"
+                          : effectiveStage.source === "annual_cycle"
+                            ? "Annual cycle"
+                            : effectiveStage.source === "computed"
+                              ? "Auto"
+                              : "Manual"}
+                    </Text>
+                  </View>
+                </View>
+                {!isPinned && effectiveStage.source !== "coconut" && (
+                  <TouchableOpacity
+                    style={styles.growthStageAction}
+                    onPress={() => setPinStageVisible(true)}
+                  >
+                    <Ionicons name="pin-outline" size={16} color={theme.primary} />
+                    <Text style={styles.growthStageActionText}>Pin stage</Text>
+                  </TouchableOpacity>
+                )}
+                {isPinned && (
+                  <TouchableOpacity
+                    style={styles.growthStageAction}
+                    onPress={async () => {
+                      await unpinGrowthStage(plantId);
+                      loadData();
+                    }}
+                  >
+                    <Ionicons name="pin" size={16} color={theme.accent} />
+                    <Text style={styles.growthStageActionText}>Unpin stage</Text>
+                  </TouchableOpacity>
+                )}
+                <GrowthStageTimeline
+                  effectiveStage={effectiveStage}
+                  plantingDate={plant.planting_date}
+                  durations={careProfile?.growthStageDurations}
+                  annualCycleDurations={careProfile?.annualCycleDurations}
+                  isPinned={isPinned}
+                />
+              </>
+            )}
+            {!effectiveStage && plant.growth_stage && (
+              <View style={styles.infoRow}>
+                <Ionicons name="trending-up" size={20} color={theme.primary} />
+                <Text style={styles.infoText}>
+                  Stage:{" "}
+                  {plant.growth_stage.charAt(0).toUpperCase() +
+                    plant.growth_stage.slice(1)}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* ── §3 Care & Schedule ──────────────────────────────────── */}
         <View style={styles.careSection}>
-          <Text style={styles.sectionTitle}>🌱 Care Information</Text>
-          {plant.sunlight && (
-            <View style={styles.infoRow}>
-              <Ionicons name="sunny" size={20} color="#FFA500" />
-              <Text style={styles.infoText}>
-                {plant.sunlight === "full_sun"
-                  ? "☀️ Full Sun"
-                  : plant.sunlight === "partial_sun"
-                  ? "⛅ Partial Sun"
-                  : "🌤️ Shade"}
-              </Text>
+          <Text style={styles.sectionTitle}>📋 Care & Schedule</Text>
+          {/* Last care dates */}
+          {(plant.last_watered_date || plant.last_fertilised_date || plant.last_pruned_date) && (
+            <View style={styles.lastCareGrid}>
+              {plant.last_watered_date && (
+                <View style={styles.lastCareItem}>
+                  <Ionicons name="water" size={22} color={theme.primary} />
+                  <Text style={styles.lastCareLabel}>Watered</Text>
+                  <Text style={styles.lastCareDate}>{formatTimestampDisplay(plant.last_watered_date)}</Text>
+                </View>
+              )}
+              {plant.last_fertilised_date && (
+                <View style={styles.lastCareItem}>
+                  <Ionicons name="nutrition" size={22} color={theme.accent} />
+                  <Text style={styles.lastCareLabel}>Fertilised</Text>
+                  <Text style={styles.lastCareDate}>{formatTimestampDisplay(plant.last_fertilised_date)}</Text>
+                </View>
+              )}
+              {plant.last_pruned_date && (
+                <View style={styles.lastCareItem}>
+                  <Ionicons name="cut" size={22} color={theme.textSecondary} />
+                  <Text style={styles.lastCareLabel}>Pruned</Text>
+                  <Text style={styles.lastCareDate}>{formatTimestampDisplay(plant.last_pruned_date)}</Text>
+                </View>
+              )}
             </View>
           )}
-          {plant.soil_type && (
-            <View style={styles.infoRow}>
-              <Ionicons name="layers" size={20} color="#8B4513" />
-              <Text style={styles.infoText}>
-                Soil:{" "}
-                {plant.soil_type
-                  .replace(/_/g, " ")
-                  .replace(/\b\w/g, (l) => l.toUpperCase())}
-              </Text>
-            </View>
-          )}
-          {plant.water_requirement && (
-            <View style={styles.infoRow}>
-              <Ionicons name="water" size={20} color="#2196F3" />
-              <Text style={styles.infoText}>
-                Water Need:{" "}
-                {plant.water_requirement.charAt(0).toUpperCase() +
-                  plant.water_requirement.slice(1)}
-              </Text>
-            </View>
-          )}
+          {/* Frequencies */}
           {plant.watering_frequency_days && (
             <View style={styles.infoRow}>
-              <Ionicons name="time" size={20} color="#2196F3" />
+              <Ionicons name="water" size={20} color={theme.primary} />
               <Text style={styles.infoText}>
                 Water every {plant.watering_frequency_days} days
               </Text>
@@ -495,7 +576,7 @@ export default function PlantDetailScreen(): React.JSX.Element {
           )}
           {plant.fertilising_frequency_days && (
             <View style={styles.infoRow}>
-              <Ionicons name="nutrition" size={20} color="#FF9800" />
+              <Ionicons name="nutrition" size={20} color={theme.accent} />
               <Text style={styles.infoText}>
                 Fertilise every {plant.fertilising_frequency_days} days
               </Text>
@@ -503,7 +584,7 @@ export default function PlantDetailScreen(): React.JSX.Element {
           )}
           {plant.preferred_fertiliser && (
             <View style={styles.infoRow}>
-              <Ionicons name="leaf" size={20} color="#4CAF50" />
+              <Ionicons name="leaf" size={20} color={theme.success} />
               <Text style={styles.infoText}>
                 Fertiliser:{" "}
                 {plant.preferred_fertiliser
@@ -514,201 +595,36 @@ export default function PlantDetailScreen(): React.JSX.Element {
           )}
           {plant.mulching_used && (
             <View style={styles.infoRow}>
-              <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+              <Ionicons name="checkmark-circle" size={20} color={theme.success} />
               <Text style={styles.infoText}>Mulching applied</Text>
             </View>
           )}
-          {plant.health_status && (
+          {plant.pruning_frequency_days && (
             <View style={styles.infoRow}>
-              <Ionicons
-                name={
-                  plant.health_status === "healthy"
-                    ? "checkmark-circle"
-                    : plant.health_status === "sick"
-                    ? "close-circle"
-                    : "alert-circle"
-                }
-                size={20}
-                color={
-                  plant.health_status === "healthy"
-                    ? theme.success
-                    : plant.health_status === "sick"
-                    ? theme.error
-                    : theme.warning
-                }
-              />
-              <Text
-                style={[
-                  styles.infoText,
-                  plant.health_status === "healthy"
-                    ? styles.healthStatusHealthy
-                    : plant.health_status === "sick"
-                    ? styles.healthStatusSick
-                    : styles.healthStatusWarning,
-                ]}
-              >
-                {plant.health_status.charAt(0).toUpperCase() +
-                  plant.health_status.slice(1)}
+              <Ionicons name="cut" size={20} color={theme.textSecondary} />
+              <Text style={styles.infoText}>
+                Prune every {plant.pruning_frequency_days} days
               </Text>
-            </View>
-          )}
-          {seasonalReminder && (
-            <View style={styles.seasonBox}>
-              <Text style={styles.seasonTitle}>Seasonal Tip</Text>
-              <Text style={styles.seasonText}>{seasonalReminder}</Text>
             </View>
           )}
         </View>
 
-        {/* Last Care Summary */}
-        {(plant.last_watered_date || plant.last_fertilised_date || plant.last_pruned_date) && (
-          <View style={styles.careSection}>
-            <Text style={styles.sectionTitle}>📋 Last Care</Text>
-            <View style={styles.lastCareGrid}>
-              {plant.last_watered_date && (
-                <View style={styles.lastCareItem}>
-                  <Ionicons name="water" size={22} color="#2196F3" />
-                  <Text style={styles.lastCareLabel}>Watered</Text>
-                  <Text style={styles.lastCareDate}>{formatTimestampDisplay(plant.last_watered_date)}</Text>
-                </View>
-              )}
-              {plant.last_fertilised_date && (
-                <View style={styles.lastCareItem}>
-                  <Ionicons name="nutrition" size={22} color="#FF9800" />
-                  <Text style={styles.lastCareLabel}>Fertilised</Text>
-                  <Text style={styles.lastCareDate}>{formatTimestampDisplay(plant.last_fertilised_date)}</Text>
-                </View>
-              )}
-              {plant.last_pruned_date && (
-                <View style={styles.lastCareItem}>
-                  <Ionicons name="cut" size={22} color="#795548" />
-                  <Text style={styles.lastCareLabel}>Pruned</Text>
-                  <Text style={styles.lastCareDate}>{formatTimestampDisplay(plant.last_pruned_date)}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        )}
+        {/* ── §4 Growing Profile ──────────────────────────────────── */}
+        <DetailQuickInfoSection theme={theme} plantType={plant.plant_type} plantVariety={plant.plant_variety || ""} plantCareProfiles={{}} />
 
-        {/* Coconut-Specific Metrics */}
-        {plant.plant_type === "coconut_tree" && (
-          (plant.coconut_fronds_count || plant.nuts_per_month || plant.spathe_count_per_month || plant.last_climbing_date || plant.nut_fall_count) ? (
-          <View style={styles.careSection}>
-            <Text style={styles.sectionTitle}>🥥 Coconut Metrics</Text>
-            <View style={styles.metricsGrid}>
-              {plant.coconut_fronds_count != null && (
-                <View style={styles.metricCard}>
-                  <Ionicons name="leaf" size={22} color="#4CAF50" />
-                  <Text style={styles.metricValue}>{plant.coconut_fronds_count}</Text>
-                  <Text style={styles.metricLabel}>Fronds</Text>
-                  {(plant.coconut_fronds_count < 30 || plant.coconut_fronds_count > 35) && (
-                    <Text style={styles.metricWarning}>
-                      {plant.coconut_fronds_count < 30 ? "Below healthy (30-35)" : "Above typical (30-35)"}
-                    </Text>
-                  )}
-                </View>
-              )}
-              {plant.nuts_per_month != null && (
-                <View style={styles.metricCard}>
-                  <Ionicons name="ellipse" size={22} color="#8B4513" />
-                  <Text style={styles.metricValue}>{plant.nuts_per_month}</Text>
-                  <Text style={styles.metricLabel}>Nuts / Month</Text>
-                </View>
-              )}
-              {plant.spathe_count_per_month != null && (
-                <View style={styles.metricCard}>
-                  <Ionicons name="flower" size={22} color="#FF9800" />
-                  <Text style={styles.metricValue}>{plant.spathe_count_per_month}</Text>
-                  <Text style={styles.metricLabel}>Spathes / Month</Text>
-                </View>
-              )}
-              {plant.nut_fall_count != null && (
-                <View style={styles.metricCard}>
-                  <Ionicons name="arrow-down-circle" size={22} color="#f44336" />
-                  <Text style={styles.metricValue}>{plant.nut_fall_count}</Text>
-                  <Text style={styles.metricLabel}>Nut Falls</Text>
-                  {plant.last_nut_fall_date && (
-                    <Text style={styles.metricLabel}>Last: {plant.last_nut_fall_date}</Text>
-                  )}
-                </View>
-              )}
-            </View>
-            {plant.last_climbing_date && (
-              <View style={[styles.infoRow, styles.infoRowMarginTop]}>
-                <Ionicons name="calendar" size={20} color={theme.textSecondary} />
-                <Text style={styles.infoText}>Last Climbing: {plant.last_climbing_date}</Text>
-              </View>
-            )}
-          </View>
-          ) : null
-        )}
+        {/* ── §5 Nutrition ────────────────────────────────────────── */}
+        <DetailNutritionSection theme={theme} plantType={plant.plant_type} plantVariety={plant.plant_variety || ""} plantCareProfiles={{}} />
 
-        {/* Coconut Age Care Guidance */}
-        {coconutAge && (
-          <View style={styles.careSection}>
-            <Text style={styles.sectionTitle}>🌴 Coconut Age Guidance</Text>
-            <View style={styles.infoRow}>
-              <Ionicons name="time" size={20} color={theme.primary} />
-              <Text style={styles.infoText}>{coconutAge.ageLabel} — {coconutAge.stageLabel}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Ionicons name="analytics" size={20} color={theme.textSecondary} />
-              <Text style={styles.infoText}>Expected Yield: {coconutAge.expectedNutsPerYear}</Text>
-            </View>
-            {coconutAge.careTips.map((tip, i) => (
-              <View key={i} style={styles.careTipItem}>
-                <Text style={styles.careTipBullet}>•</Text>
-                <Text style={styles.careTipText}>{tip}</Text>
-              </View>
-            ))}
-          </View>
-        )}
+        {/* ── §6 Pests & Diseases (guidance + history + alerts) ──── */}
+        <DetailCareGuidanceSection theme={theme} plantType={plant.plant_type} plantVariety={plant.plant_variety || ""} plantCareProfiles={{}} />
 
-        {/* Pest & Disease History + Seasonal Alerts */}
         <PestDiseaseHistorySection
           records={plant.pest_disease_history || []}
-          seasonalAlerts={seasonalPestAlerts}
+          seasonalAlerts={[]}
           styles={styles}
         />
 
-        {/* PHASE 1: Growth & Pruning Section */}
-        {(plant.growth_stage ||
-          plant.pruning_frequency_days ||
-          plant.pruning_notes) && (
-          <View style={styles.careSection}>
-            <Text style={styles.sectionTitle}>🌱 Growth & Pruning</Text>
-            {plant.growth_stage && (
-              <View style={styles.infoRow}>
-                <Ionicons name="trending-up" size={20} color="#9C27B0" />
-                <Text style={styles.infoText}>
-                  Stage:{" "}
-                  {plant.growth_stage.charAt(0).toUpperCase() +
-                    plant.growth_stage.slice(1)}
-                </Text>
-              </View>
-            )}
-            {plant.pruning_frequency_days && (
-              <View style={styles.infoRow}>
-                <Ionicons name="cut" size={20} color="#795548" />
-                <Text style={styles.infoText}>
-                  Prune every {plant.pruning_frequency_days} days
-                </Text>
-              </View>
-            )}
-            {plant.pruning_notes && (
-              <View style={styles.infoRow}>
-                <Ionicons
-                  name="document-text"
-                  size={20}
-                  color={theme.textSecondary}
-                />
-                <Text style={styles.infoText}>{plant.pruning_notes}</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Companion Planting */}
+        {/* ── §7 Companion Planting ───────────────────────────────── */}
         {(companions.length > 0 || incompatible.length > 0) && (
           <View style={styles.careSection}>
             <Text style={styles.sectionTitle}>🤝 Companion Planting</Text>
@@ -739,71 +655,36 @@ export default function PlantDetailScreen(): React.JSX.Element {
           </View>
         )}
 
-        {/* Common Pests & Diseases Awareness */}
-        {(commonPests.length > 0 || commonDiseases.length > 0) && (
+        {/* ── §8 Harvest Info ─────────────────────────────────────── */}
+        {(plant.harvest_season || plant.harvest_start_date || plant.harvest_end_date || plant.expected_harvest_date || computedHarvestDate) && (
           <View style={styles.careSection}>
-            <Text style={styles.sectionTitle}>🔍 Common Pests & Diseases</Text>
-            {commonPests.length > 0 && (
-              <>
-                <Text style={styles.subsectionTitle}>Pests to Watch</Text>
-                <View style={styles.awarenessRow}>
-                  {commonPests.map((p) => (
-                    <View key={p} style={styles.awarenessChip}>
-                      <Text style={styles.awarenessChipText}>🐛 {p}</Text>
-                    </View>
-                  ))}
-                </View>
-              </>
-            )}
-            {commonDiseases.length > 0 && (
-              <>
-                <Text style={styles.subsectionTitle}>Diseases to Watch</Text>
-                <View style={styles.awarenessRow}>
-                  {commonDiseases.map((d) => (
-                    <View key={d} style={styles.awarenessChip}>
-                      <Text style={styles.awarenessChipText}>🦠 {d}</Text>
-                    </View>
-                  ))}
-                </View>
-              </>
-            )}
-          </View>
-        )}
-
-        {/* Coconut Nutrient Deficiency Guide */}
-        {coconutDeficiencies.length > 0 && (
-          <View style={styles.careSection}>
-            <Text style={styles.sectionTitle}>🧪 Nutrient Deficiency Guide</Text>
-            {coconutDeficiencies.map((def) => (
-              <View
-                key={def.nutrient}
-                style={[
-                  styles.nutrientCard,
-                  def.urgency === "high" ? styles.nutrientCardHigh : def.urgency === "medium" ? styles.nutrientCardMedium : styles.nutrientCardLow,
-                ]}
-              >
-                <Text style={styles.nutrientName}>{def.nutrient}</Text>
-                <Text style={styles.nutrientSubTitle}>Symptoms</Text>
-                {def.symptoms.slice(0, 3).map((s, i) => (
-                  <Text key={i} style={styles.nutrientSymptom}>• {s}</Text>
-                ))}
-                <Text style={styles.nutrientSubTitle}>Organic Correction</Text>
-                {def.organicCorrection.slice(0, 2).map((c, i) => (
-                  <Text key={i} style={styles.nutrientCorrection}>✓ {c}</Text>
-                ))}
+            <Text style={styles.sectionTitle}>🍎 Harvest Info</Text>
+            {plant.harvest_season && (
+              <View style={styles.infoRow}>
+                <Ionicons name="sunny" size={20} color={theme.textSecondary} />
+                <Text style={styles.infoText}>Season: {plant.harvest_season}</Text>
               </View>
-            ))}
+            )}
+            {(plant.harvest_start_date || plant.harvest_end_date) && (
+              <View style={styles.infoRow}>
+                <Ionicons name="calendar-outline" size={20} color={theme.textSecondary} />
+                <Text style={styles.infoText}>
+                  {plant.harvest_start_date || ""}
+                  {plant.harvest_end_date ? ` – ${plant.harvest_end_date}` : ""}
+                </Text>
+              </View>
+            )}
+            {(plant.expected_harvest_date || computedHarvestDate) && (
+              <View style={styles.infoRow}>
+                <Ionicons name="hourglass" size={20} color={theme.textSecondary} />
+                <Text style={styles.infoText}>
+                  Expected: {formatDateDisplay(plant.expected_harvest_date || computedHarvestDate!)}
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
-        {plant.notes && (
-          <View style={styles.notesSection}>
-            <Text style={styles.sectionTitle}>Notes</Text>
-            <Text style={styles.notesText}>{plant.notes}</Text>
-          </View>
-        )}
-
-        {/* Harvest History Section */}
         <HarvestHistorySection
           plantType={plant.plant_type}
           harvestEntries={harvestEntries}
@@ -812,6 +693,124 @@ export default function PlantDetailScreen(): React.JSX.Element {
           onViewAll={() => navigation.navigate("Journal")}
         />
 
+        {/* ── §9 Coconut (metrics + age guidance + deficiency) ──── */}
+        {plant.plant_type === "coconut_tree" && (coconutAge || plant.coconut_fronds_count || plant.nuts_per_month || plant.spathe_count_per_month || plant.last_climbing_date || plant.nut_fall_count || coconutDeficiencies.length > 0) && (
+          <View style={styles.careSection}>
+            <Text style={styles.sectionTitle}>🥥 Coconut</Text>
+            {/* Age Guidance */}
+            {coconutAge && (
+              <>
+                <View style={styles.infoRow}>
+                  <Ionicons name="time" size={20} color={theme.primary} />
+                  <Text style={styles.infoText}>{coconutAge.ageLabel} — {coconutAge.stageLabel}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <Ionicons name="analytics" size={20} color={theme.textSecondary} />
+                  <Text style={styles.infoText}>Expected Yield: {coconutAge.expectedNutsPerYear}</Text>
+                </View>
+                {coconutAge.careTips.map((tip, i) => (
+                  <View key={i} style={styles.careTipItem}>
+                    <Text style={styles.careTipBullet}>•</Text>
+                    <Text style={styles.careTipText}>{tip}</Text>
+                  </View>
+                ))}
+              </>
+            )}
+            {/* Metrics */}
+            {(plant.coconut_fronds_count != null || plant.nuts_per_month != null || plant.spathe_count_per_month != null || plant.nut_fall_count != null) && (
+              <>
+                {coconutAge && <View style={styles.sectionDivider} />}
+                <Text style={styles.subsectionTitle}>Metrics</Text>
+                <View style={styles.metricsGrid}>
+                  {plant.coconut_fronds_count != null && (
+                    <View style={styles.metricCard}>
+                      <Ionicons name="leaf" size={22} color={theme.success} />
+                      <Text style={styles.metricValue}>{plant.coconut_fronds_count}</Text>
+                      <Text style={styles.metricLabel}>Fronds</Text>
+                      {(plant.coconut_fronds_count < 30 || plant.coconut_fronds_count > 35) && (
+                        <Text style={styles.metricWarning}>
+                          {plant.coconut_fronds_count < 30 ? "Below healthy (30-35)" : "Above typical (30-35)"}
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                  {plant.nuts_per_month != null && (
+                    <View style={styles.metricCard}>
+                      <Ionicons name="ellipse" size={22} color={theme.textSecondary} />
+                      <Text style={styles.metricValue}>{plant.nuts_per_month}</Text>
+                      <Text style={styles.metricLabel}>Nuts / Month</Text>
+                    </View>
+                  )}
+                  {plant.spathe_count_per_month != null && (
+                    <View style={styles.metricCard}>
+                      <Ionicons name="flower" size={22} color={theme.accent} />
+                      <Text style={styles.metricValue}>{plant.spathe_count_per_month}</Text>
+                      <Text style={styles.metricLabel}>Spathes / Month</Text>
+                    </View>
+                  )}
+                  {plant.nut_fall_count != null && (
+                    <View style={styles.metricCard}>
+                      <Ionicons name="arrow-down-circle" size={22} color={theme.error} />
+                      <Text style={styles.metricValue}>{plant.nut_fall_count}</Text>
+                      <Text style={styles.metricLabel}>Nut Falls</Text>
+                      {plant.last_nut_fall_date && (
+                        <Text style={styles.metricLabel}>Last: {plant.last_nut_fall_date}</Text>
+                      )}
+                    </View>
+                  )}
+                </View>
+                {plant.last_climbing_date && (
+                  <View style={[styles.infoRow, styles.infoRowMarginTop]}>
+                    <Ionicons name="calendar" size={20} color={theme.textSecondary} />
+                    <Text style={styles.infoText}>Last Climbing: {plant.last_climbing_date}</Text>
+                  </View>
+                )}
+              </>
+            )}
+            {/* Nutrient Deficiency Guide */}
+            {coconutDeficiencies.length > 0 && (
+              <>
+                <View style={styles.sectionDivider} />
+                <Text style={styles.subsectionTitle}>Nutrient Deficiency Guide</Text>
+                {coconutDeficiencies.map((def) => (
+                  <View
+                    key={def.nutrient}
+                    style={[
+                      styles.nutrientCard,
+                      def.urgency === "high" ? styles.nutrientCardHigh : def.urgency === "medium" ? styles.nutrientCardMedium : styles.nutrientCardLow,
+                    ]}
+                  >
+                    <Text style={styles.nutrientName}>{def.nutrient}</Text>
+                    <Text style={styles.nutrientSubTitle}>Symptoms</Text>
+                    {def.symptoms.slice(0, 3).map((s, i) => (
+                      <Text key={i} style={styles.nutrientSymptom}>• {s}</Text>
+                    ))}
+                    <Text style={styles.nutrientSubTitle}>Organic Correction</Text>
+                    {def.organicCorrection.slice(0, 2).map((c, i) => (
+                      <Text key={i} style={styles.nutrientCorrection}>✓ {c}</Text>
+                    ))}
+                  </View>
+                ))}
+              </>
+            )}
+          </View>
+        )}
+
+        {/* ── §10 Notes ───────────────────────────────────────────── */}
+        {plant.notes && (
+          <View style={styles.notesSection}>
+            <Text style={styles.sectionTitle}>Notes</Text>
+            <Text style={styles.notesText}>{plant.notes}</Text>
+          </View>
+        )}
+        {plant.pruning_notes && (
+          <View style={styles.notesSection}>
+            <Text style={styles.sectionTitle}>Pruning Notes</Text>
+            <Text style={styles.notesText}>{plant.pruning_notes}</Text>
+          </View>
+        )}
+
+        {/* ── §11 Tasks ───────────────────────────────────────────── */}
         <View style={styles.tasksSection}>
           <Text style={styles.sectionTitle}>Tasks ({tasks.length})</Text>
           {tasks.map((task) => (
@@ -838,6 +837,55 @@ export default function PlantDetailScreen(): React.JSX.Element {
         </View>
       </View>
     </ScrollView>
+    <Modal
+      visible={pinStageVisible}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setPinStageVisible(false)}
+    >
+      <View style={styles.pinModalOverlay}>
+        <TouchableOpacity
+          style={styles.pinModalBackdrop}
+          activeOpacity={1}
+          onPress={() => setPinStageVisible(false)}
+        />
+        <View style={styles.pinModalSheet}>
+          <View style={styles.pinModalHeader}>
+            <Text style={styles.pinModalTitle}>Pin Growth Stage</Text>
+            <TouchableOpacity
+              style={styles.pinModalCloseButton}
+              onPress={() => setPinStageVisible(false)}
+            >
+              <Ionicons name="close" size={18} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+          {GROWTH_STAGES.map((s, index) => (
+            <TouchableOpacity
+              key={s}
+              style={[
+                styles.pinModalItem,
+                index === GROWTH_STAGES.length - 1 && styles.pinModalItemLast,
+              ]}
+              onPress={async () => {
+                setPinStageVisible(false);
+                await pinGrowthStage(plantId, s);
+                loadData();
+              }}
+            >
+              <Ionicons
+                name={GROWTH_STAGE_ICONS[s] as React.ComponentProps<typeof Ionicons>["name"]}
+                size={20}
+                color={theme.primary}
+              />
+              <Text style={styles.pinModalItemText}>
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 }
 

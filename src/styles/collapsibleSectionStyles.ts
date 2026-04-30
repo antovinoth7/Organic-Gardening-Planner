@@ -11,10 +11,6 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       borderWidth: 1,
       borderColor: theme.border,
     },
-    containerComplete: {
-      borderLeftWidth: 3,
-      borderLeftColor: theme.success,
-    },
     header: {
       flexDirection: "row",
       justifyContent: "space-between",

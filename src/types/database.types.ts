@@ -58,6 +58,15 @@ export type Lifecycle = "annual" | "perennial" | "biennial";
 export type ToleranceLevel = "low" | "medium" | "high";
 export type FeedingIntensity = "light" | "medium" | "heavy";
 
+// Growth stage auto-progression (Phase B.4)
+export type GrowthStageDurations = Partial<Record<GrowthStage, number>>;
+export type AnnualCycleDurations = Partial<Record<GrowthStage, number>>;
+export interface GrowthStageHistoryEntry {
+  stage: GrowthStage;
+  pinnedAt: string;
+  unpinnedAt?: string | null;
+}
+
 export interface NumericRange {
   min: number;
   max: number;
@@ -98,6 +107,14 @@ export interface LocationConfig {
   parentLocationProfiles?: Record<string, LocationProfile>;
 }
 
+export interface VarietyDetail {
+  daysToMaturity?: number;
+  /** Values are strings from GROWING_SEASON_OPTIONS in plantLabels.ts */
+  seasonSuitability?: string[];
+  seedSource?: string;
+  notes?: string;
+}
+
 export interface PlantCatalogCategory {
   plants: string[];
   varieties: Record<string, string[]>;
@@ -105,6 +122,8 @@ export interface PlantCatalogCategory {
   tamilNames?: Record<string, string>;
   /** One-line English descriptions keyed by plant name. */
   descriptions?: Record<string, string>;
+  /** Optional metadata keyed by plantName → varietyName → detail. */
+  varietyDetails?: Record<string, Record<string, VarietyDetail>>;
 }
 
 export interface PlantCatalog {
@@ -157,6 +176,10 @@ export interface PlantCareProfile {
   customPests?: string[];
   customDiseases?: string[];
   customBeneficials?: string[];
+  // Growth stage auto-progression (Phase B.4)
+  growthStageDurations?: GrowthStageDurations;
+  annualCycleDurations?: AnnualCycleDurations;
+  floweringStartMonth?: number;
 }
 
 export type PlantCareProfileOverride = Partial<PlantCareProfile>;
@@ -224,6 +247,8 @@ export interface Plant {
   expected_harvest_date?: string | null;
   // PHASE 1: Growth Stage & Pruning
   growth_stage?: GrowthStage | null;
+  growth_stage_pinned?: GrowthStage | null;
+  growth_stage_history?: GrowthStageHistoryEntry[] | null;
   pruning_frequency_days?: number | null;
   last_pruned_date?: string | null;
   pruning_notes?: string | null;
@@ -237,6 +262,10 @@ export interface Plant {
   // Soft delete
   is_deleted?: boolean | null;
   deleted_at?: string | null;
+  // Care task enable/disable toggles (Phase B)
+  watering_enabled?: boolean | null;
+  fertilising_enabled?: boolean | null;
+  pruning_enabled?: boolean | null;
   // Recurring Care Schedule (for auto-generating tasks)
   care_schedule?: {
     water_frequency_days?: number;

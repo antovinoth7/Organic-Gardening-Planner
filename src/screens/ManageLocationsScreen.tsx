@@ -16,6 +16,7 @@ import ThemedDropdown from "../components/ThemedDropdown";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, NavigationProp, ParamListBase } from "@react-navigation/native";
 import { useTheme } from "../theme";
+import type { Theme } from "../theme/colors";
 import {
   DEFAULT_CHILD_LOCATIONS,
   DEFAULT_PARENT_LOCATIONS,
@@ -77,19 +78,19 @@ const isDuplicate = (list: string[], value: string, ignore?: string): boolean =>
   });
 };
 
-const deriveNpkColor = (level?: NutrientLevel | null): string => {
-  if (level === "high") return "#4CAF50";
-  if (level === "medium") return "#FFC107";
-  if (level === "low") return "#F44336";
+const deriveNpkColor = (level: NutrientLevel | null | undefined, theme: Theme): string => {
+  if (level === "high") return theme.success;
+  if (level === "medium") return theme.warning;
+  if (level === "low") return theme.error;
   return "transparent";
 };
 
-const deriveDrainageColor = (level?: DrainageQuality | null): string => {
-  if (level === "excellent") return "#4CAF50";
-  if (level === "good") return "#8BC34A";
-  if (level === "fair") return "#FFC107";
-  if (level === "poor") return "#F44336";
-  return "#9E9E9E";
+const deriveDrainageColor = (level: DrainageQuality | null | undefined, theme: Theme): string => {
+  if (level === "excellent") return theme.success;
+  if (level === "good") return theme.primary;
+  if (level === "fair") return theme.warning;
+  if (level === "poor") return theme.error;
+  return theme.textTertiary;
 };
 
 const hasProfileData = (profile?: LocationProfile): boolean => {
@@ -531,24 +532,23 @@ export default function ManageLocationsScreen(): React.JSX.Element {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 48) + 16 }}
         >
-          <View style={styles.infoCard}>
-            <Ionicons name="map-outline" size={20} color={theme.primary} />
-            <View style={styles.infoContent}>
-              <Text style={styles.infoTitle}>Set up your garden locations</Text>
-              <Text style={styles.infoText}>
-                Each location has a name, short code, and an optional soil profile — pH, soil type, drainage, NPK levels, and more. {"\n"}
-                Example: <Text style={styles.infoHighlight}>Kanyakumari - South</Text>
-              </Text>
-            </View>
-          </View>
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionHeaderText}>
-                <Text style={styles.sectionTitle}>Garden Locations</Text>
-                <Text style={styles.sectionDescription}>
-                  The main locations of your garden.
-                </Text>
+                <TouchableOpacity
+                  style={styles.sectionTitleRow}
+                  onPress={() =>
+                    Alert.alert(
+                      "Garden Locations",
+                      "The main areas of your garden — e.g. Kanyakumari, Backyard. Each area can have a short code and an optional soil profile.",
+                    )
+                  }
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.sectionTitle}>Garden Locations</Text>
+                  <Ionicons name="information-circle-outline" size={14} color={theme.textTertiary} />
+                </TouchableOpacity>
               </View>
               <TouchableOpacity
                 style={styles.sectionAddButton}
@@ -589,16 +589,16 @@ export default function ManageLocationsScreen(): React.JSX.Element {
                           )}
                           {profile?.drainageQuality && (
                             <View style={styles.profileBadge}>
-                              <Ionicons name="water-outline" size={10} color={deriveDrainageColor(profile.drainageQuality)} />
+                              <Ionicons name="water-outline" size={10} color={deriveDrainageColor(profile.drainageQuality, theme)} />
                               <Text style={styles.profileBadgeText}>{profile.drainageQuality}</Text>
                             </View>
                           )}
                           {(profile?.nitrogenLevel || profile?.phosphorusLevel || profile?.potassiumLevel) && (
                             <View style={styles.profileBadge}>
                               <View style={styles.npkDotRow}>
-                                <View style={[styles.npkDot, { backgroundColor: deriveNpkColor(profile?.nitrogenLevel) }]} />
-                                <View style={[styles.npkDot, { backgroundColor: deriveNpkColor(profile?.phosphorusLevel) }]} />
-                                <View style={[styles.npkDot, { backgroundColor: deriveNpkColor(profile?.potassiumLevel) }]} />
+                                <View style={[styles.npkDot, { backgroundColor: deriveNpkColor(profile?.nitrogenLevel, theme) }]} />
+                                <View style={[styles.npkDot, { backgroundColor: deriveNpkColor(profile?.phosphorusLevel, theme) }]} />
+                                <View style={[styles.npkDot, { backgroundColor: deriveNpkColor(profile?.potassiumLevel, theme) }]} />
                               </View>
                               <Text style={styles.profileBadgeText}>NPK</Text>
                             </View>
@@ -646,10 +646,19 @@ export default function ManageLocationsScreen(): React.JSX.Element {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionHeaderText}>
-                <Text style={styles.sectionTitle}>Sections / Directions</Text>
-                <Text style={styles.sectionDescription}>
-                  Directions or zones within each location — North, South, etc.
-                </Text>
+                <TouchableOpacity
+                  style={styles.sectionTitleRow}
+                  onPress={() =>
+                    Alert.alert(
+                      "Sections / Directions",
+                      "Sub-zones shared across all areas — e.g. North, South, East, West. Combine with an area to form a full location: Kanyakumari - South.",
+                    )
+                  }
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.sectionTitle}>Sections / Directions</Text>
+                  <Ionicons name="information-circle-outline" size={14} color={theme.textTertiary} />
+                </TouchableOpacity>
               </View>
               <TouchableOpacity
                 style={styles.sectionAddButton}
@@ -725,8 +734,8 @@ export default function ManageLocationsScreen(): React.JSX.Element {
                   ? editModal.original === "" ? "New Garden Location" : "Edit Garden Location"
                   : "Rename Section"}
               </Text>
-              <TouchableOpacity onPress={() => setEditModal(null)}>
-                <Ionicons name="close" size={20} color={theme.textSecondary} />
+              <TouchableOpacity style={styles.closeButton} onPress={() => setEditModal(null)}>
+                <Ionicons name="close" size={18} color={theme.text} />
               </TouchableOpacity>
             </View>
 
@@ -826,8 +835,8 @@ export default function ManageLocationsScreen(): React.JSX.Element {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Move Plants & Delete</Text>
-              <TouchableOpacity onPress={() => setReassignModal(null)}>
-                <Ionicons name="close" size={20} color={theme.textSecondary} />
+              <TouchableOpacity style={styles.closeButton} onPress={() => setReassignModal(null)}>
+                <Ionicons name="close" size={18} color={theme.text} />
               </TouchableOpacity>
             </View>
 

@@ -21,6 +21,7 @@ interface Props {
 }
 
 const STEP_LABELS = ["What", "Where", "How"];
+const STEP_SUBTITLES = ["Pick your plant", "Choose where it grows", "Set care schedule"];
 
 export function PlantAddWizard({ formState }: Props): React.JSX.Element {
   const {
@@ -103,7 +104,7 @@ export function PlantAddWizard({ formState }: Props): React.JSX.Element {
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Ionicons
-            name={wizardStep > 1 ? "chevron-back" : "close"}
+            name="chevron-back"
             size={22}
             color={theme.textInverse}
           />
@@ -112,7 +113,14 @@ export function PlantAddWizard({ formState }: Props): React.JSX.Element {
           <Text style={formStyles.title}>Add Plant</Text>
           {hasUnsavedChanges && <View style={formStyles.unsavedDot} />}
         </View>
-        <View style={wizardStyles.wizardHeaderSpacer} />
+        <TouchableOpacity
+          onPress={handleBackPress}
+          style={formStyles.headerIconButton}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="close" size={20} color={theme.textInverse} />
+        </TouchableOpacity>
       </View>
 
       <View style={wizardStyles.stepRow}>
@@ -125,11 +133,24 @@ export function PlantAddWizard({ formState }: Props): React.JSX.Element {
               <View style={wizardStyles.stepCol}>
                 <View
                   style={[
-                    wizardStyles.stepDot,
-                    isActive && wizardStyles.stepDotActive,
-                    isComplete && wizardStyles.stepDotComplete,
+                    wizardStyles.stepCircle,
+                    isActive && wizardStyles.stepCircleActive,
+                    isComplete && wizardStyles.stepCircleComplete,
                   ]}
-                />
+                >
+                  {isComplete ? (
+                    <Ionicons name="checkmark" size={14} color={theme.primary} />
+                  ) : (
+                    <Text
+                      style={[
+                        wizardStyles.stepCircleText,
+                        isActive && wizardStyles.stepCircleTextActive,
+                      ]}
+                    >
+                      {step}
+                    </Text>
+                  )}
+                </View>
                 <Text
                   style={[
                     wizardStyles.stepLabel,
@@ -152,6 +173,10 @@ export function PlantAddWizard({ formState }: Props): React.JSX.Element {
           );
         })}
       </View>
+
+      <Text style={wizardStyles.stepSubtitle}>
+        {STEP_SUBTITLES[wizardStep - 1]}
+      </Text>
 
       <KeyboardAvoidingView
         style={wizardStyles.stepContent}
@@ -198,10 +223,6 @@ export function PlantAddWizard({ formState }: Props): React.JSX.Element {
             { paddingBottom: Math.max(insets.bottom, 8) },
           ]}
         >
-          <Text style={wizardStyles.wizardStepCounter}>
-            {wizardStep} / {STEP_LABELS.length}
-          </Text>
-
           {wizardStep === 3 ? (
             <TouchableOpacity
               style={[

@@ -35,7 +35,8 @@ import {
   getCurrentSeason,
   getWateringFrequencyMultiplier,
 } from "../utils/seasonHelpers";
-import { getCoconutAgeInfo } from "../utils/plantHelpers";
+import { getCoconutAgeInfo, getEffectiveGrowthStage } from "../utils/plantHelpers";
+import { getPlantCareProfile } from "../utils/plantCareDefaults";
 
 const TASKS_COLLECTION = "task_templates";
 const TASK_LOGS_COLLECTION = "task_logs";
@@ -729,14 +730,16 @@ export const syncCareTasksForPlant = async (plant: Plant): Promise<void> => {
   if (!plant?.id) return;
 
   const desiredFrequencies = [
-    { taskType: "water" as TaskType, frequency: plant.watering_frequency_days },
+    { taskType: "water" as TaskType, frequency: plant.watering_frequency_days, enabled: plant.watering_enabled !== false },
     {
       taskType: "fertilise" as TaskType,
       frequency: plant.fertilising_frequency_days,
+      enabled: plant.fertilising_enabled !== false,
     },
-    { taskType: "prune" as TaskType, frequency: plant.pruning_frequency_days },
+    { taskType: "prune" as TaskType, frequency: plant.pruning_frequency_days, enabled: plant.pruning_enabled !== false },
   ].filter(
     (item) =>
+      item.enabled &&
       typeof item.frequency === "number" &&
       Number.isFinite(item.frequency) &&
       item.frequency > 0,
@@ -823,8 +826,15 @@ export const calculateTaskPriority = (
     return "critical";
   }
 
+  // Compute effective growth stage (B.4 auto-progression)
+  const profile = getPlantCareProfile(
+    plant.plant_variety ?? "",
+    plant.plant_type,
+  );
+  const effectiveStage = getEffectiveGrowthStage(plant, profile).stage;
+
   // High priority for flowering/fruiting stages
-  if (plant.growth_stage === "flowering" || plant.growth_stage === "fruiting") {
+  if (effectiveStage === "flowering" || effectiveStage === "fruiting") {
     return "high";
   }
 
@@ -842,7 +852,7 @@ export const calculateTaskPriority = (
   }
 
   // Low priority for dormant plants
-  if (plant.growth_stage === "dormant") {
+  if (effectiveStage === "dormant") {
     return "low";
   }
 

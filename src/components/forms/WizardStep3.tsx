@@ -8,6 +8,7 @@ import {
   getFrequencyLabel,
 } from "../../hooks/usePlantFormState";
 import { createStyles } from "../../styles/plantFormStyles";
+import { createEnrichedSectionStyles } from "../../styles/enrichedSectionStyles";
 import type { SunlightLevel, WaterRequirement } from "../../types/database.types";
 
 interface Props {
@@ -36,9 +37,14 @@ export function WizardStep3({ formState }: Props): React.JSX.Element {
     harvestSeason,
     setHarvestSeason,
     harvestSeasonOptions,
+    wateringEnabled,
+    setWateringEnabled,
+    fertilisingEnabled,
+    setFertilisingEnabled,
   } = formState;
 
   const formStyles = useMemo(() => createStyles(theme), [theme]);
+  const enrichedStyles = useMemo(() => createEnrichedSectionStyles(theme), [theme]);
 
   return (
     <View>
@@ -214,13 +220,27 @@ export function WizardStep3({ formState }: Props): React.JSX.Element {
         {"\uD83D\uDCC5"} Watering & Feeding Schedule
       </Text>
 
-      <View style={formStyles.stepperCard}>
-        <View style={formStyles.stepperHeader}>
-          <View style={formStyles.stepperIconWrap}>
-            <Ionicons name="water" size={18} color={theme.primary} />
+      <View style={[formStyles.stepperCard, !wateringEnabled && enrichedStyles.stepperCardDisabled]}>
+        <View style={enrichedStyles.toggleHeader}>
+          <View style={enrichedStyles.toggleHeaderLeft}>
+            <View style={formStyles.stepperIconWrap}>
+              <Ionicons name="water" size={18} color={wateringEnabled ? theme.primary : theme.textTertiary} />
+            </View>
+            <Text style={formStyles.stepperLabel}>Water every</Text>
           </View>
-          <Text style={formStyles.stepperLabel}>Water every</Text>
+          <TouchableOpacity
+            onPress={() => setWateringEnabled(!wateringEnabled)}
+            activeOpacity={0.85}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: wateringEnabled }}
+          >
+            <View style={[formStyles.settingSwitchTrack, wateringEnabled && formStyles.settingSwitchTrackActive]}>
+              <View style={[formStyles.settingSwitchThumb, wateringEnabled && formStyles.settingSwitchThumbActive]} />
+            </View>
+          </TouchableOpacity>
         </View>
+        {wateringEnabled ? (
+          <>
         <View style={formStyles.stepperRow}>
           <TouchableOpacity
             style={formStyles.stepperButton}
@@ -263,20 +283,38 @@ export function WizardStep3({ formState }: Props): React.JSX.Element {
             {getFrequencyLabel(wateringFrequency)}
           </Text>
         ) : null}
+          </>
+        ) : (
+          <Text style={enrichedStyles.toggleDisabledText}>No task · rain-fed or manual</Text>
+        )}
       </View>
 
-      <View style={formStyles.stepperCard}>
-        <View style={formStyles.stepperHeader}>
-          <View
-            style={[
-              formStyles.stepperIconWrap,
-              { backgroundColor: theme.accentLight },
-            ]}
-          >
-            <Ionicons name="nutrition" size={18} color={theme.accent} />
+      <View style={[formStyles.stepperCard, !fertilisingEnabled && enrichedStyles.stepperCardDisabled]}>
+        <View style={enrichedStyles.toggleHeader}>
+          <View style={enrichedStyles.toggleHeaderLeft}>
+            <View
+              style={[
+                formStyles.stepperIconWrap,
+                { backgroundColor: theme.accentLight },
+              ]}
+            >
+              <Ionicons name="nutrition" size={18} color={fertilisingEnabled ? theme.accent : theme.textTertiary} />
+            </View>
+            <Text style={formStyles.stepperLabel}>Feed every</Text>
           </View>
-          <Text style={formStyles.stepperLabel}>Feed every</Text>
+          <TouchableOpacity
+            onPress={() => setFertilisingEnabled(!fertilisingEnabled)}
+            activeOpacity={0.85}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: fertilisingEnabled }}
+          >
+            <View style={[formStyles.settingSwitchTrack, fertilisingEnabled && formStyles.settingSwitchTrackActive]}>
+              <View style={[formStyles.settingSwitchThumb, fertilisingEnabled && formStyles.settingSwitchThumbActive]} />
+            </View>
+          </TouchableOpacity>
         </View>
+        {fertilisingEnabled ? (
+          <>
         <View style={formStyles.stepperRow}>
           <TouchableOpacity
             style={[formStyles.stepperButton, { borderColor: theme.accent }]}
@@ -327,6 +365,10 @@ export function WizardStep3({ formState }: Props): React.JSX.Element {
             {getFrequencyLabel(fertilisingFrequency)}
           </Text>
         ) : null}
+          </>
+        ) : (
+          <Text style={enrichedStyles.toggleDisabledText}>No task · manual feeding only</Text>
+        )}
       </View>
 
       {["vegetable", "herb"].includes(plantType) &&

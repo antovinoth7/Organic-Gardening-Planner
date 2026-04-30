@@ -315,6 +315,16 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       alignItems: "center",
       marginBottom: 12,
     },
+    closeButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: theme.background,
+      borderWidth: 1,
+      borderColor: theme.border,
+      alignItems: "center",
+      justifyContent: "center",
+    },
     modalTitle: {
       fontSize: 18,
       fontWeight: "700",

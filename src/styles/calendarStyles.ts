@@ -132,7 +132,7 @@ export const createStyles = (theme: Theme): ReturnType<typeof StyleSheet.create>
       minWidth: 14,
       height: 14,
       borderRadius: 7,
-      backgroundColor: theme.primary,
+      backgroundColor: theme.accent,
       alignItems: "center",
       justifyContent: "center",
       paddingHorizontal: 2,

@@ -36,6 +36,8 @@ const PlantStack = (): React.JSX.Element => (
     <Stack.Screen name="ArchivedPlants" component={ArchivedPlantsScreen} />
     <Stack.Screen name="PlantDetail" component={PlantDetailScreen} />
     <Stack.Screen name="PlantForm" component={PlantFormScreen} />
+    <Stack.Screen name="PestDetail" component={PestDetailScreen} />
+    <Stack.Screen name="DiseaseDetail" component={DiseaseDetailScreen} />
   </Stack.Navigator>
 );
 

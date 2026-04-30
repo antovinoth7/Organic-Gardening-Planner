@@ -1,4 +1,4 @@
-import { Plant } from "../types/database.types";
+import { Plant, GrowthStage, GrowthStageHistoryEntry } from "../types/database.types";
 import { db, auth, refreshAuthToken } from "../lib/firebase";
 import {
   collection,
@@ -554,4 +554,84 @@ export const savePlantImage = async (
   sourceUri: string,
 ): Promise<SavedImage> => {
   return saveImageLocallyWithFilename(sourceUri, "plant");
+};
+
+/**
+ * Pin a manual growth stage override on a plant.
+ * Records the event in growth_stage_history.
+ */
+export const pinGrowthStage = async (
+  plantId: string,
+  stage: GrowthStage,
+): Promise<void> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Not authenticated");
+
+  await refreshAuthToken();
+
+  const plantRef = doc(db, PLANTS_COLLECTION, plantId);
+  const snap = await withTimeoutAndRetry(
+    () => getDoc(plantRef),
+    { timeoutMs: FIRESTORE_READ_TIMEOUT_MS },
+  );
+  if (!snap.exists()) throw new Error("Plant not found");
+
+  const existing = snap.data() as Plant;
+  const history: GrowthStageHistoryEntry[] = [
+    ...(existing.growth_stage_history ?? []),
+    { stage, pinnedAt: new Date().toISOString() },
+  ];
+
+  await withTimeoutAndRetry(
+    () =>
+      updateDoc(plantRef, {
+        growth_stage_pinned: stage,
+        growth_stage_history: history,
+      } as Record<string, unknown>),
+    { timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS },
+  );
+
+  invalidate(CACHE_KEYS.ALL_PLANTS);
+};
+
+/**
+ * Remove a pinned growth stage override — reverts to computed stage.
+ * Records the unpin timestamp on the last history entry.
+ */
+export const unpinGrowthStage = async (plantId: string): Promise<void> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Not authenticated");
+
+  await refreshAuthToken();
+
+  const plantRef = doc(db, PLANTS_COLLECTION, plantId);
+  const snap = await withTimeoutAndRetry(
+    () => getDoc(plantRef),
+    { timeoutMs: FIRESTORE_READ_TIMEOUT_MS },
+  );
+  if (!snap.exists()) throw new Error("Plant not found");
+
+  const existing = snap.data() as Plant;
+  const history = [...(existing.growth_stage_history ?? [])];
+  // Mark the last pin entry as unpinned
+  if (history.length > 0) {
+    const lastEntry = history[history.length - 1]!;
+    if (!lastEntry.unpinnedAt) {
+      history[history.length - 1] = {
+        ...lastEntry,
+        unpinnedAt: new Date().toISOString(),
+      };
+    }
+  }
+
+  await withTimeoutAndRetry(
+    () =>
+      updateDoc(plantRef, {
+        growth_stage_pinned: null,
+        growth_stage_history: history,
+      } as Record<string, unknown>),
+    { timeoutMs: FIRESTORE_WRITE_TIMEOUT_MS },
+  );
+
+  invalidate(CACHE_KEYS.ALL_PLANTS);
 };
